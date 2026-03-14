@@ -1,0 +1,3 @@
+{
+  "extends": "@project-agap/config/tsconfig.base.json"
+}
