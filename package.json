@@ -15,7 +15,11 @@
     "db:push": "turbo -F @project-agap/db db:push",
     "db:studio": "turbo -F @project-agap/db db:studio",
     "db:generate": "turbo -F @project-agap/db db:generate",
-    "db:migrate": "turbo -F @project-agap/db db:migrate"
+    "db:migrate": "turbo -F @project-agap/db db:migrate",
+    "supabase:start": "supabase start --workdir packages/db",
+    "supabase:stop": "supabase stop --workdir packages/db",
+    "supabase:status": "supabase status --workdir packages/db",
+    "supabase:migration:new": "supabase migration new --workdir packages/db"
   },
   "dependencies": {
     "@project-agap/env": "workspace:*",
