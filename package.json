@@ -20,7 +20,7 @@
     "supabase:stop": "supabase stop --workdir packages/db",
     "supabase:status": "supabase status --workdir packages/db",
     "supabase:migration:new": "supabase migration new --workdir packages/db"
-  },
+  },  
   "dependencies": {
     "@project-agap/env": "workspace:*",
     "dotenv": "catalog:",
