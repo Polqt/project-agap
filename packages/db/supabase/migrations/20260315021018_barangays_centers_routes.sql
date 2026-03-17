@@ -15,7 +15,6 @@ CREATE TABLE public.barangays (
     latitude        DOUBLE PRECISION NOT NULL,                 
     longitude       DOUBLE PRECISION NOT NULL,
     geom            extensions.geography(Point, 4326)
-ies
     GENERATED ALWAYS AS (
         extensions.ST_SetSRID(
             extensions.ST_MakePoint(longitude, latitude), 

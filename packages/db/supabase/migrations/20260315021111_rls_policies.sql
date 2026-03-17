@@ -86,7 +86,7 @@ CREATE POLICY "Authenticated users can read barangays"
 
 CREATE POLICY "Officials can update their own barangay"
     ON public.barangays
-    FOR UPDATED
+    FOR UPDATE
     USING (
         public.is_official_of(id)
     );

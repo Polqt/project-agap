@@ -82,6 +82,7 @@ BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
+$$;
 
 CREATE TRIGGER profiles_updated_at
     BEFORE UPDATE ON public.profiles

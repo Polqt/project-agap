@@ -21,19 +21,21 @@ LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = ''
 AS $$
     SELECT
-        COUNT(*)                                                       AS total_households,
-        COUNT(*) FILTER (WHERE evacuation_status = 'checked_in')       AS checked_in_count,
-        COUNT(*) FILTER (WHERE evacuation_status = 'safe')             AS safe_count,
-        COUNT(*) FILTER (WHERE evacuation_status = 'need_help')        AS need_help_count,
+        COUNT(*)                                                               AS total_households,
+        COUNT(*) FILTER (WHERE evacuation_status = 'checked_in')               AS checked_in_count,
+        COUNT(*) FILTER (WHERE evacuation_status = 'safe')                     AS safe_count,
+        COUNT(*) FILTER (WHERE evacuation_status = 'need_help')                AS need_help_count,
         COUNT(*) FILTER (WHERE evacuation_status IN ('home','unknown','evacuating')) AS unaccounted_count,
-count,
-    COUNT(*) FILTER (
-        WHERE evacuation_status IN ('home','unknown','evacuating')
-          AND cardinality(vulnerability_flags) > 0
-    ) AS vulnerable_unaccounted,
-    COUNT(*) FILTER (WHERE evacuation_status IN ('safe','checked_in') AND is_sms_only = true) AS sms_replied_count
-FROM public.households
-WHERE barangay_id = p_barangay_id;
+        COUNT(*) FILTER (
+            WHERE evacuation_status IN ('home','unknown','evacuating')
+              AND cardinality(vulnerability_flags) > 0
+        )                                                                       AS vulnerable_unaccounted,
+        COUNT(*) FILTER (
+            WHERE evacuation_status IN ('safe','checked_in')
+              AND is_sms_only = true
+        )                                                                       AS sms_replied_count
+    FROM public.households
+    WHERE barangay_id = p_barangay_id;
 $$;
 
 -- Get unaccounted households
@@ -65,7 +67,7 @@ CREATE OR REPLACE FUNCTION public.search_households(
 )
 RETURNS SETOF public.households
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = ''
+SET search_path = 'extensions'
 AS $$
     SELECT *
     FROM public.households

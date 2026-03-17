@@ -12,7 +12,7 @@ CREATE TYPE public.vulnerability_flag AS ENUM (
     'infant',
     'pregnant',
     'solo_parent',
-    'chronic_illness',
+    'chronic_illness'
 );
 
 CREATE TABLE public.households (
@@ -46,9 +46,9 @@ ALTER TABLE public.households
     ADD COLUMN fts tsvector
     GENERATED ALWAYS AS (
         to_tsvector('simple',
-            unaccent(COALESCE(household_head, '')) || ' ' ||
-            unaccent(COALESCE(purok, '')) || ' ' ||
-            unaccent(COALESCE(address, ''))
+            COALESCE(household_head, '') || ' ' ||
+            COALESCE(purok, '') || ' ' ||
+            COALESCE(address, '')
         )
     ) STORED;
 
@@ -71,7 +71,7 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         UPDATE public.barangays
         SET total_households = total_households + 1
-        WHERE id = NEW.barangay_id
+        WHERE id = NEW.barangay_id;
     ELSIF TG_OP = 'DELETE' THEN
         UPDATE public.barangays
         SET total_households = GREATEST(total_households - 1, 0)
