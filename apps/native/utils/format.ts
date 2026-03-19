@@ -22,6 +22,10 @@ export function formatRelativeTime(value?: string | null) {
   }
 
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Wala pa";
+  }
+
   const diffMs = Date.now() - date.getTime();
   const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
 
