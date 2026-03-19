@@ -11,7 +11,7 @@ export const uuidSchema = z.string().uuid();
 
 export const signInSchema = z.object({
   email: z.string().email("Ilagay ang tamang email address."),
-  password: z.string().min(8, "Ilagay ang iyong password."),
+  password: z.string().min(8, "Ang password ay dapat hindi bababa sa 8 characters."),
 });
 
 export const signUpSchema = z.object({
