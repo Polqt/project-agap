@@ -2,16 +2,12 @@ import { z } from "zod";
 
 import { getAuthorizedBarangayId, getSupabaseDataOrThrow } from "../router-helpers.js";
 import { officialProcedure, router } from "../index.js";
+import { barangayIdSchema, uuidSchema } from "../schemas.js";
 import type { DashboardSummary, SmsFollowupItem } from "../supabase.js";
-
-const uuidSchema = z.string().uuid();
-const barangayInputSchema = z.object({
-  barangayId: uuidSchema.optional(),
-});
 
 export const dashboardRouter = router({
   summary: officialProcedure
-    .input(barangayInputSchema)
+    .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
       const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
       const rows = getSupabaseDataOrThrow<DashboardSummary[]>(
@@ -34,7 +30,7 @@ export const dashboardRouter = router({
 
   smsFollowup: officialProcedure
     .input(
-      barangayInputSchema.extend({
+      barangayIdSchema.extend({
         broadcastId: uuidSchema,
         minutesThreshold: z.number().int().positive().max(1440).default(30),
       }),

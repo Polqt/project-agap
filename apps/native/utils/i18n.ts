@@ -1,0 +1,47 @@
+export const T = {
+  appName: "Agap",
+  resident: "Residente",
+  official: "Barangay Official",
+  safe: "Ligtas",
+  need_help: "Kailangan ng Tulong",
+  unaccounted: "Hindi Mahanap",
+  checked_in: "Naka-check in",
+  evacuating: "Lumikas",
+  home: "Nasa bahay",
+  unknown: "Hindi tiyak",
+  noConnection: "Walang koneksyon. Itatago ang mensahe.",
+  pingQueued: "Naka-save. Ipapadala kapag may signal.",
+  pingSuccess: "Natanggap namin ang iyong mensahe.",
+  checkInQueued: "Naka-save ang check-in. Ipapadala kapag may signal.",
+  checkInSuccess: "Matagumpay ang check-in.",
+  tryAgain: "Subukan muli.",
+  loading: "Naglo-load...",
+  forgotPasswordSent: "Nagpadala kami ng reset link sa email mo.",
+  officialAccess: "Official Sign In",
+  residentRegistration: "Resident Registration",
+  roleQuestion: "Sino ka?",
+  roleSubtitle: "Piliin ang role para magpatuloy.",
+  crossPing: "I'm pinging for someone else",
+  noResults: "Walang resulta pa.",
+  allAccountedFor: "Lahat ay naaccounted for",
+  queuedWaiting: "Naghihintay ng signal",
+} as const;
+
+export const STATUS_LABELS = {
+  home: T.home,
+  evacuating: T.evacuating,
+  checked_in: T.checked_in,
+  safe: T.safe,
+  need_help: T.need_help,
+  unknown: T.unknown,
+  welfare_check_dispatched: "May ipinadalang welfare check",
+} as const;
+
+export const VULNERABILITY_LABELS = {
+  elderly: "Elderly",
+  pwd: "PWD",
+  infant: "Infant",
+  pregnant: "Pregnant",
+  solo_parent: "Solo Parent",
+  chronic_illness: "Chronic Illness",
+} as const;

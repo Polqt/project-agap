@@ -2,18 +2,21 @@ import { z } from "zod";
 
 import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers.js";
 import { protectedProcedure, router } from "../index.js";
+import { uuidSchema } from "../schemas.js";
 import type { Profile } from "../supabase.js";
 
 const updateProfileSchema = z
   .object({
     fullName: z.string().trim().min(1).max(160).optional(),
     phoneNumber: z.string().trim().min(1).max(40).nullable().optional(),
+    barangayId: uuidSchema.nullable().optional(),
     purok: z.string().trim().min(1).max(120).nullable().optional(),
   })
   .refine(
     (value) =>
       value.fullName !== undefined ||
       value.phoneNumber !== undefined ||
+      value.barangayId !== undefined ||
       value.purok !== undefined,
     {
       message: "At least one field must be provided.",
@@ -45,6 +48,7 @@ export const profileRouter = router({
       const updatePayload = {
         ...(input.fullName !== undefined ? { full_name: input.fullName } : {}),
         ...(input.phoneNumber !== undefined ? { phone_number: input.phoneNumber } : {}),
+        ...(input.barangayId !== undefined ? { barangay_id: input.barangayId } : {}),
         ...(input.purok !== undefined ? { purok: input.purok } : {}),
       };
 
