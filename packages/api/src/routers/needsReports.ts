@@ -24,6 +24,21 @@ export const needsReportsRouter = router({
   submit: officialProcedure.input(reportSchema).mutation(async ({ ctx, input }) => {
     const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
 
+    if (input.center_id) {
+      getFoundOrThrow<{ id: string } | null>(
+        getSupabaseDataOrThrow<{ id: string } | null>(
+          await ctx.supabase
+            .from("evacuation_centers")
+            .select("id")
+            .eq("id", input.center_id)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to validate evacuation center.",
+        ),
+        "Evacuation center not found.",
+      );
+    }
+
     return getFoundOrThrow(
       getSupabaseDataOrThrow(
         await ctx.supabase
@@ -37,6 +52,7 @@ export const needsReportsRouter = router({
       ),
       "Needs report submission failed.",
     );
+  })
   }),
 
   list: officialProcedure.query(async ({ ctx }) => {
