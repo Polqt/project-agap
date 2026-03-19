@@ -6,11 +6,32 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers.js";
 import { officialProcedure, publicProcedure, router } from "../index.js";
+import { uuidSchema } from "../schemas.js";
 import type { Alert, TableInsert } from "../supabase.js";
 
-const uuidSchema = z.string().uuid();
-
 export const alertsRouter = router({
+  getById: publicProcedure
+    .input(
+      z.object({
+        id: uuidSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return getFoundOrThrow<Alert | null>(
+        getSupabaseDataOrThrow<Alert | null>(
+          await ctx.supabase
+            .from("alerts")
+            .select(
+              "id, barangay_id, source, severity, hazard_type, title, title_filipino, body, body_filipino, signal_level, recommended_actions, recommended_actions_filipino, source_url, issued_at, expires_at, is_active, external_id, created_at",
+            )
+            .eq("id", input.id)
+            .maybeSingle(),
+          "Failed to load alert.",
+        ),
+        "Alert not found.",
+      );
+    }),
+
   listActive: publicProcedure
     .input(
       z.object({

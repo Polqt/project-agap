@@ -7,9 +7,8 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers.js";
 import { officialProcedure, router } from "../index.js";
+import { barangayIdSchema } from "../schemas.js";
 import type { Broadcast, TableInsert } from "../supabase.js";
-
-const uuidSchema = z.string().uuid();
 
 export const broadcastsRouter = router({
   create: officialProcedure
@@ -49,11 +48,7 @@ export const broadcastsRouter = router({
     }),
 
   list: officialProcedure
-    .input(
-      z.object({
-        barangayId: uuidSchema.optional(),
-      }),
-    )
+    .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
       const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
 

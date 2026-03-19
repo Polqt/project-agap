@@ -47,7 +47,7 @@ export async function createContext(req: RequestLike) {
     if (data.user) {
       const { data: p } = await supabase
         .from("profiles")
-        .select("id, role, barangay_id, full_name, phone_number, is_sms_only")
+        .select("id, role, barangay_id, full_name, phone_number, purok, is_sms_only")
         .eq("id", data.user.id)
         .single();
 

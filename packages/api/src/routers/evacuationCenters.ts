@@ -6,9 +6,8 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers.js";
 import { officialProcedure, publicProcedure, router } from "../index.js";
+import { locationSchema, uuidSchema } from "../schemas.js";
 import type { EvacuationCenter, NearbyCenter } from "../supabase.js";
-
-const uuidSchema = z.string().uuid();
 
 export const evacuationCentersRouter = router({
   listByBarangay: publicProcedure
@@ -34,10 +33,13 @@ export const evacuationCentersRouter = router({
     .input(
       z.object({
         barangayId: uuidSchema,
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
         radiusKm: z.number().positive().max(100).default(10),
-      }),
+      }).merge(
+        locationSchema.extend({
+          latitude: z.number().min(-90).max(90),
+          longitude: z.number().min(-180).max(180),
+        }),
+      ),
     )
     .query(async ({ ctx, input }) => {
       return getSupabaseDataOrThrow<NearbyCenter[]>(

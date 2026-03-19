@@ -2,10 +2,11 @@ import { z } from "zod";
 
 import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers.js";
 import { publicProcedure, router } from "../index.js";
+import { uuidSchema } from "../schemas.js";
 import type { Barangay } from "../supabase.js";
 
 const barangayIdSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidSchema,
 });
 
 export const barangaysRouter = router({
