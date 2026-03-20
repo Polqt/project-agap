@@ -2,24 +2,21 @@
 
 import type { User } from "@supabase/supabase-js";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
 export function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    const supabase = createClient();
-
-    // Get initial user
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
       setIsLoading(false);
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -27,14 +24,13 @@ export function useUser() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
-  return { user, isLoading };
+  return { user, isLoading, supabase };
 }
 
 export function useAuthClient() {
-  const { user, isLoading } = useUser();
-  const supabase = createClient();
+  const { user, isLoading, supabase } = useUser();
 
   return {
     user,

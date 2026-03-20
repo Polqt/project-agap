@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { getAuthorizedBarangayId, getSupabaseDataOrThrow } from "../router-helpers.js";
-import { officialProcedure, router } from "../index.js";
-import type { DashboardSummary, SmsFollowupItem } from "../supabase.js";
+import { getAuthorizedBarangayId, getSupabaseDataOrThrow } from "../router-helpers";
+import { officialProcedure, router } from "../index";
+import type { DashboardSummary, SmsFollowupItem } from "../supabase";
 
 const uuidSchema = z.string().uuid();
 const barangayInputSchema = z.object({

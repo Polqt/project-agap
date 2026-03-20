@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useAuthClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
   const [email, setEmail] = useState("");
@@ -49,113 +53,106 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
 
   if (success) {
     return (
-      <div className="mx-auto w-full mt-10 max-w-md p-6 text-center">
-        <h2 className="text-2xl font-bold mb-4">Check your email</h2>
-        <p className="text-gray-600 mb-4">
-          We've sent you a confirmation link. Please check your email to complete your registration.
-        </p>
-        <button onClick={onSwitchToSignIn} className="text-indigo-600 hover:text-indigo-800">
-          Back to Sign In
-        </button>
-      </div>
+      <Card className="mx-auto w-full max-w-md">
+        <CardContent className="py-8 text-center space-y-4">
+          <h2 className="text-2xl font-bold">Check your email</h2>
+          <p className="text-muted-foreground">
+            We've sent you a confirmation link. Please check your email to complete registration.
+          </p>
+          <Button variant="link" onClick={onSwitchToSignIn}>
+            Back to Sign In
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
-      <h2 className="text-2xl font-bold text-center mb-6">Sign Up</h2>
+    <Card className="mx-auto w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-center text-2xl">Sign Up</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="signup-email">Email</Label>
+            <Input
+              id="signup-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+            />
+          </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="signup-password">Password</Label>
+            <Input
+              id="signup-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
 
-        <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-            Confirm Password
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={6}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+          {error && (
+            <p className="text-sm text-destructive" role="alert">{error}</p>
+          )}
 
-        {error && <div className="text-red-600 text-sm">{error}</div>}
+          <Button type="submit" disabled={isLoading} className="w-full">
+            {isLoading ? "Creating account..." : "Sign Up"}
+          </Button>
+        </form>
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          {isLoading ? "Creating account..." : "Sign Up"}
-        </button>
-      </form>
-
-      <div className="mt-4">
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
+            <div className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
             onClick={() => handleOAuthSignIn("github")}
             disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             GitHub
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => handleOAuthSignIn("google")}
             disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             Google
-          </button>
+          </Button>
         </div>
-      </div>
 
-      <button
-        type="button"
-        onClick={onSwitchToSignIn}
-        className="mt-4 w-full text-indigo-600 hover:text-indigo-800 text-sm"
-      >
-        Already have an account? Sign In
-      </button>
-    </div>
+        <Button
+          variant="link"
+          onClick={onSwitchToSignIn}
+          className="w-full"
+        >
+          Already have an account? Sign In
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

@@ -4,9 +4,9 @@ import {
   getFoundOrThrow,
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { officialProcedure, publicProcedure, router } from "../index.js";
-import type { EvacuationCenter, NearbyCenter } from "../supabase.js";
+} from "../router-helpers";
+import { officialProcedure, publicProcedure, router } from "../index";
+import type { EvacuationCenter, NearbyCenter } from "../supabase";
 
 const uuidSchema = z.string().uuid();
 

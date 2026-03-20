@@ -1,8 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import type { Context } from "./context.js";
-import type { ContextProfile } from "./supabase.js";
+import type { Context } from "./context";
+import type { ContextProfile } from "./supabase";
 
 type SupabaseResponse<T> = {
   data: T | null;

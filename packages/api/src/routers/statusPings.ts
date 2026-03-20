@@ -6,9 +6,9 @@ import {
   getProfileBarangayIdOrThrow,
   getProfileOrThrow,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { officialProcedure, protectedProcedure, router } from "../index.js";
-import type { StatusPing, TableInsert } from "../supabase.js";
+} from "../router-helpers";
+import { officialProcedure, protectedProcedure, router } from "../index";
+import type { StatusPing, TableInsert } from "../supabase";
 
 const uuidSchema = z.string().uuid();
 const barangayInputSchema = z.object({

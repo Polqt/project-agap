@@ -1,13 +1,15 @@
-import { publicProcedure, router } from "../index.js";
-import { alertsRouter } from "./alerts.js";
-import { barangaysRouter } from "./barangays.js";
-import { broadcastsRouter } from "./broadcasts.js";
-import { checkInsRouter } from "./checkIns.js";
-import { dashboardRouter } from "./dashboard.js";
-import { evacuationCentersRouter } from "./evacuationCenters.js";
-import { householdsRouter } from "./households.js";
-import { profileRouter } from "./profile.js";
-import { statusPingsRouter } from "./statusPings.js";
+import { publicProcedure, router } from "../index";
+import { alertsRouter } from "./alerts";
+import { barangaysRouter } from "./barangays";
+import { broadcastsRouter } from "./broadcasts";
+import { checkInsRouter } from "./checkIns";
+import { dashboardRouter } from "./dashboard";
+import { evacuationCentersRouter } from "./evacuationCenters";
+import { householdsRouter } from "./households";
+import { needsReportsRouter } from "./needsReports";
+import { profileRouter } from "./profile";
+import { smsLogsRouter } from "./smsLogs";
+import { statusPingsRouter } from "./statusPings";
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
@@ -20,7 +22,9 @@ export const appRouter = router({
   dashboard: dashboardRouter,
   evacuationCenters: evacuationCentersRouter,
   households: householdsRouter,
+  needsReports: needsReportsRouter,
   profile: profileRouter,
+  smsLogs: smsLogsRouter,
   statusPings: statusPingsRouter,
 });
 export type AppRouter = typeof appRouter;

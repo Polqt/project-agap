@@ -5,9 +5,9 @@ import {
   getProfileBarangayIdOrThrow,
   getProfileOrThrow,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { protectedProcedure, router } from "../index.js";
-import type { CheckIn, CheckInByQrResult, TableInsert } from "../supabase.js";
+} from "../router-helpers";
+import { protectedProcedure, router } from "../index";
+import type { CheckIn, CheckInByQrResult, TableInsert } from "../supabase";
 
 const uuidSchema = z.string().uuid();
 const locationSchema = z.object({
