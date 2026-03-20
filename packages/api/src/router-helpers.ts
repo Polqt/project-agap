@@ -1,8 +1,8 @@
-import { TRPCError } from "@trpc/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import type { Context } from "./context";
-import type { ContextProfile } from "./supabase";
+import type { Context } from "./context.js";
+import { ApiError } from "./errors.js";
+import type { ContextProfile } from "./supabase.js";
 
 type SupabaseResponse<T> = {
   data: T | null;
@@ -14,11 +14,18 @@ export function getSupabaseDataOrThrow<T>(
   message: string,
 ): T | null {
   if (result.error) {
-    throw new TRPCError({
-      code: mapSupabaseErrorCode(result.error.code),
-      message,
-      cause: result.error,
-    });
+    const code = mapSupabaseErrorCode(result.error.code);
+
+    switch (code) {
+      case "NOT_FOUND":
+        throw ApiError.notFound(message.replace(/\.$/, ""));
+      case "BAD_REQUEST":
+        throw ApiError.badRequest(message);
+      case "FORBIDDEN":
+        throw ApiError.forbidden(message);
+      default:
+        throw ApiError.internal(message, result.error);
+    }
   }
 
   return result.data;
@@ -26,10 +33,7 @@ export function getSupabaseDataOrThrow<T>(
 
 export function getFoundOrThrow<T>(value: T, message: string): NonNullable<T> {
   if (value === null) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message,
-    });
+    throw ApiError.notFound(message.replace(/\.$/, ""));
   }
 
   return value as NonNullable<T>;
@@ -39,10 +43,7 @@ export function getProfileOrThrow(
   profile: Context["profile"],
 ): NonNullable<Context["profile"]> {
   if (!profile) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "A profile is required to access this resource.",
-    });
+    throw ApiError.forbidden("A profile is required to access this resource.");
   }
 
   return profile;
@@ -50,10 +51,7 @@ export function getProfileOrThrow(
 
 export function getProfileBarangayIdOrThrow(profile: ContextProfile): string {
   if (!profile.barangay_id) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Your profile is not assigned to a barangay.",
-    });
+    throw ApiError.badRequest("Your profile is not assigned to a barangay.");
   }
 
   return profile.barangay_id;
@@ -66,10 +64,7 @@ export function getAuthorizedBarangayId(
   const barangayId = getProfileBarangayIdOrThrow(profile);
 
   if (requestedBarangayId && requestedBarangayId !== barangayId) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You can only access data for your assigned barangay.",
-    });
+    throw ApiError.forbidden("You can only access data for your assigned barangay.");
   }
 
   return requestedBarangayId ?? barangayId;

@@ -3,12 +3,47 @@
     "scheme": "project-agap",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
+    "plugins": [
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Kailangan ng Agap ang camera para sa pag-scan ng QR check-in sa evacuation center."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Kailangan ng Agap ang lokasyon mo para mahanap ang pinakamalapit na evacuation center at makapagpadala ng status ping."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#1A56C4"
+        }
+      ],
+      "expo-barcode-scanner",
+      "expo-secure-store",
+      "expo-sqlite"
+    ],
     "web": {
       "bundler": "metro"
     },
     "name": "project-agap",
     "slug": "project-agap",
-    "plugins": ["expo-font"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ]
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

@@ -21,6 +21,7 @@ export const appRouter = router({
   checkIns: checkInsRouter,
   dashboard: dashboardRouter,
   evacuationCenters: evacuationCentersRouter,
+  evacuationRoutes: evacuationRoutesRouter,
   households: householdsRouter,
   needsReports: needsReportsRouter,
   profile: profileRouter,

@@ -1,38 +1,56 @@
 import "@/global.css";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { HeroUINativeProvider } from "heroui-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
-import { queryClient } from "@/utils/trpc";
+import { AuthProvider } from "@/providers/AuthProvider";
+import { OfflineQueueProvider } from "@/providers/OfflineQueueProvider";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 export const unstable_settings = {
-  initialRouteName: "(drawer)",
+  initialRouteName: "(resident)",
 };
 
-function StackLayout() {
+export default function RootLayout() {
   return (
-    <Stack screenOptions={{}}>
-      <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ title: "Modal", presentation: "modal" }} />
-    </Stack>
-  );
-}
-
-export default function Layout() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <QueryProvider>
           <AppThemeProvider>
             <HeroUINativeProvider>
-              <StackLayout />
+              <AuthProvider>
+                <OfflineQueueProvider>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
+                    <Stack.Screen name="onboarding" />
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(resident)" />
+                    <Stack.Screen name="(official)" />
+                    <Stack.Screen
+                      name="(shared)/check-in"
+                      options={{ presentation: "modal", headerShown: true, title: "Check In" }}
+                    />
+                    <Stack.Screen
+                      name="(shared)/alert-detail"
+                      options={{ presentation: "modal", headerShown: true, title: "Alert" }}
+                    />
+                    <Stack.Screen
+                      name="(shared)/kiosk"
+                      options={{ presentation: "modal", headerShown: true, title: "Kiosk" }}
+                    />
+                    <Stack.Screen
+                      name="(shared)/welfare-check"
+                      options={{ presentation: "modal", headerShown: true, title: "Welfare Check" }}
+                    />
+                  </Stack>
+                </OfflineQueueProvider>
+              </AuthProvider>
             </HeroUINativeProvider>
           </AppThemeProvider>
-        </KeyboardProvider>
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+        </QueryProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

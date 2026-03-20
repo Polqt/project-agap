@@ -5,7 +5,7 @@ import { publicProcedure, router } from "../index";
 import type { Barangay } from "../supabase";
 
 const barangayIdSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidSchema,
 });
 
 export const barangaysRouter = router({
