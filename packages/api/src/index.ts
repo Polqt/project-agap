@@ -1,6 +1,7 @@
-import { initTRPC, TRPCError } from "@trpc/server";
+import { initTRPC } from "@trpc/server";
 
-import type { Context } from "./context";
+import type { Context } from "./context.js";
+import { ApiError } from "./errors.js";
 
 export const t = initTRPC.context<Context>().create();
 
@@ -10,10 +11,7 @@ export const publicProcedure = t.procedure;
 
 const enforceAuthenticated = t.middleware(({ ctx, next }) => {
   if (!ctx.session) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication is required.",
-    });
+    throw ApiError.unauthorized();
   }
 
   return next({
@@ -26,19 +24,13 @@ const enforceAuthenticated = t.middleware(({ ctx, next }) => {
 
 const enforceOfficial = t.middleware(({ ctx, next }) => {
   if (!ctx.session) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Authentication is required.",
-    });
+    throw ApiError.unauthorized();
   }
 
   const profile = ctx.profile;
 
   if (!profile || profile.role !== "official") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Official access is required.",
-    });
+    throw ApiError.forbidden("Official access required.");
   }
 
   return next({

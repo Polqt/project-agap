@@ -113,11 +113,7 @@ export const broadcastsRouter = router({
     }),
 
   list: officialProcedure
-    .input(
-      z.object({
-        barangayId: uuidSchema.optional(),
-      }),
-    )
+    .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
       const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
 
