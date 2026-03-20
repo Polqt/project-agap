@@ -5,10 +5,9 @@ import {
   getProfileBarangayIdOrThrow,
   getProfileOrThrow,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { protectedProcedure, router } from "../index.js";
-import { locationSchema, uuidSchema } from "../schemas.js";
-import type { CheckIn, CheckInByQrResult, TableInsert } from "../supabase.js";
+} from "../router-helpers";
+import { protectedProcedure, router } from "../index";
+import type { CheckIn, CheckInByQrResult, TableInsert } from "../supabase";
 
 export const checkInsRouter = router({
   byQr: protectedProcedure

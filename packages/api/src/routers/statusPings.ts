@@ -6,10 +6,9 @@ import {
   getProfileBarangayIdOrThrow,
   getProfileOrThrow,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { officialProcedure, protectedProcedure, router } from "../index.js";
-import { barangayIdSchema, locationSchema, uuidSchema } from "../schemas.js";
-import type { StatusPing, TableInsert } from "../supabase.js";
+} from "../router-helpers";
+import { officialProcedure, protectedProcedure, router } from "../index";
+import type { StatusPing, TableInsert } from "../supabase";
 
 export const statusPingsRouter = router({
   getLatestMine: protectedProcedure.query(async ({ ctx }) => {

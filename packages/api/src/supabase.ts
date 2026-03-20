@@ -437,6 +437,144 @@ export interface Database {
           sent_at?: string;
         }
       >;
+      sms_logs: TableDefinition<
+        {
+          id: string;
+          barangay_id: string;
+          household_id: string | null;
+          broadcast_id: string | null;
+          direction: "outbound" | "inbound";
+          phone_number: string;
+          message: string;
+          delivery_status: "queued" | "sent" | "delivered" | "failed" | "replied";
+          keyword_reply: "LIGTAS" | "TULONG" | "NASAAN" | "SINO" | "unknown" | null;
+          gateway_message_id: string | null;
+          error_message: string | null;
+          sent_at: string | null;
+          delivered_at: string | null;
+          replied_at: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          barangay_id: string;
+          household_id?: string | null;
+          broadcast_id?: string | null;
+          direction: "outbound" | "inbound";
+          phone_number: string;
+          message: string;
+          delivery_status?: "queued" | "sent" | "delivered" | "failed" | "replied";
+          keyword_reply?: "LIGTAS" | "TULONG" | "NASAAN" | "SINO" | "unknown" | null;
+          gateway_message_id?: string | null;
+          error_message?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          replied_at?: string | null;
+          created_at?: string;
+        },
+        {
+          id?: string;
+          barangay_id?: string;
+          household_id?: string | null;
+          broadcast_id?: string | null;
+          direction?: "outbound" | "inbound";
+          phone_number?: string;
+          message?: string;
+          delivery_status?: "queued" | "sent" | "delivered" | "failed" | "replied";
+          keyword_reply?: "LIGTAS" | "TULONG" | "NASAAN" | "SINO" | "unknown" | null;
+          gateway_message_id?: string | null;
+          error_message?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          replied_at?: string | null;
+          created_at?: string;
+        }
+      >;
+      needs_reports: TableDefinition<
+        {
+          id: string;
+          barangay_id: string;
+          center_id: string | null;
+          submitted_by: string;
+          total_evacuees: number;
+          needs_food_packs: number;
+          needs_water_liters: number;
+          needs_medicine: boolean;
+          needs_blankets: number;
+          medical_cases: string | null;
+          notes: string | null;
+          status: "pending" | "acknowledged" | "resolved";
+          acknowledged_by: string | null;
+          acknowledged_at: string | null;
+          submitted_at: string;
+          updated_at: string | null;
+        },
+        {
+          id?: string;
+          barangay_id: string;
+          center_id?: string | null;
+          submitted_by: string;
+          total_evacuees?: number;
+          needs_food_packs?: number;
+          needs_water_liters?: number;
+          needs_medicine?: boolean;
+          needs_blankets?: number;
+          medical_cases?: string | null;
+          notes?: string | null;
+          status?: "pending" | "acknowledged" | "resolved";
+          acknowledged_by?: string | null;
+          acknowledged_at?: string | null;
+          submitted_at?: string;
+          updated_at?: string | null;
+        },
+        {
+          id?: string;
+          barangay_id?: string;
+          center_id?: string | null;
+          submitted_by?: string;
+          total_evacuees?: number;
+          needs_food_packs?: number;
+          needs_water_liters?: number;
+          needs_medicine?: boolean;
+          needs_blankets?: number;
+          medical_cases?: string | null;
+          notes?: string | null;
+          status?: "pending" | "acknowledged" | "resolved";
+          acknowledged_by?: string | null;
+          acknowledged_at?: string | null;
+          submitted_at?: string;
+          updated_at?: string | null;
+        }
+      >;
+      household_members: TableDefinition<
+        {
+          id: string;
+          household_id: string;
+          full_name: string;
+          age: number | null;
+          vulnerability_flags: VulnerabilityFlag[];
+          notes: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          household_id: string;
+          full_name: string;
+          age?: number | null;
+          vulnerability_flags?: VulnerabilityFlag[];
+          notes?: string | null;
+          created_at?: string;
+        },
+        {
+          id?: string;
+          household_id?: string;
+          full_name?: string;
+          age?: number | null;
+          vulnerability_flags?: VulnerabilityFlag[];
+          notes?: string | null;
+          created_at?: string;
+        }
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -571,3 +709,6 @@ export type DashboardSummary = RpcResult<"get_dashboard_summary">[number];
 export type NearbyCenter = RpcResult<"get_nearby_centers">[number];
 export type CheckInByQrResult = RpcResult<"checkin_by_qr">[number];
 export type SmsFollowupItem = RpcResult<"get_sms_followup_list">[number];
+export type SmsLog = TableRow<"sms_logs">;
+export type NeedsReport = TableRow<"needs_reports">;
+export type HouseholdMember = TableRow<"household_members">;

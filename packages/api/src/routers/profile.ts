@@ -1,9 +1,8 @@
 import { z } from "zod";
 
-import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers.js";
-import { protectedProcedure, router } from "../index.js";
-import { uuidSchema } from "../schemas.js";
-import type { Profile } from "../supabase.js";
+import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers";
+import { protectedProcedure, router } from "../index";
+import type { Profile } from "../supabase";
 
 const updateProfileSchema = z
   .object({
