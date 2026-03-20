@@ -1,16 +1,12 @@
 import * as NetInfo from "@react-native-community/netinfo";
 import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  deleteQueuedAction,
-  insertQueuedAction,
-  listQueuedActions,
-  updateQueuedActionRetries,
-} from "@/services/offline-queue.db";
+
 import { useAuth } from "@/providers/AuthProvider";
 import { connectivityStore } from "@/stores/connectivity.store";
 import { trpcClient } from "@/utils/trpc";
 import { QueuedAction } from "@/types/offline";
+import { deleteQueuedAction, insertQueuedAction, listQueuedActions, updateQueuedActionRetries } from "@/services/offlineQueueDb";
 
 export type OfflineQueueContextValue = {
   enqueue: (action: Omit<QueuedAction, "id" | "createdAt" | "retries">) => Promise<void>;
