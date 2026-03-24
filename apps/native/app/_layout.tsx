@@ -25,25 +25,16 @@ export default function RootLayout() {
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="onboarding" />
+                    <Stack.Screen name="modal" />
                     <Stack.Screen name="(auth)" />
                     <Stack.Screen name="(resident)" />
                     <Stack.Screen name="(official)" />
-                    <Stack.Screen
-                      name="(shared)/check-in"
-                      options={{ presentation: "modal", headerShown: true, title: "Check In" }}
-                    />
-                    <Stack.Screen
-                      name="(shared)/alert-detail"
-                      options={{ presentation: "modal", headerShown: true, title: "Alert" }}
-                    />
-                    <Stack.Screen
-                      name="(shared)/kiosk"
-                      options={{ presentation: "modal", headerShown: true, title: "Kiosk" }}
-                    />
-                    <Stack.Screen
-                      name="(shared)/welfare-check"
-                      options={{ presentation: "modal", headerShown: true, title: "Welfare Check" }}
-                    />
+                    {/*
+                     * Register the whole (shared) group here.
+                     * Individual screen options (modal, title) live inside
+                     * app/(shared)/_layout.tsx so expo-router can resolve them.
+                     */}
+                    <Stack.Screen name="(shared)" options={{ headerShown: false }} />
                   </Stack>
                 </OfflineQueueProvider>
               </AuthProvider>
