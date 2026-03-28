@@ -21,6 +21,7 @@ export function RecentNeedsReportsCard({ reports }: { reports: NeedsReport[] }) 
                 <Text className="mt-2 text-sm text-slate-500">
                   Food: {report.needs_food_packs} packs | Water: {report.needs_water_liters} L | Blankets: {report.needs_blankets}
                 </Text>
+                {report.notes ? <Text className="mt-2 text-sm text-slate-600">{report.notes}</Text> : null}
               </View>
               <Pill label={report.status.toUpperCase()} tone="warning" />
             </View>

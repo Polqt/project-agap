@@ -1,6 +1,6 @@
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
-import { ScreenHeader } from "@/shared/components/ui";
+import { ScreenHeader, SectionCard } from "@/shared/components/ui";
 
 import { BroadcastComposerCard } from "./BroadcastComposerCard";
 import { BroadcastTemplatesCard } from "./BroadcastTemplatesCard";
@@ -8,7 +8,7 @@ import { RecentBroadcastsCard } from "./RecentBroadcastsCard";
 import { useBroadcastPanel } from "../hooks/useBroadcastPanel";
 
 export function BroadcastPanel() {
-  const { form, broadcasts, createBroadcastMutation, handleSubmit } = useBroadcastPanel();
+  const { form, feedback, broadcasts, createBroadcastMutation, handleSubmit } = useBroadcastPanel();
 
   return (
     <View className="flex-1 bg-slate-50 pb-8">
@@ -17,6 +17,11 @@ export function BroadcastPanel() {
         title="Broadcast to your barangay"
         description="Use templates or craft a custom bilingual message, then scope it to the whole barangay or a specific purok."
       />
+      {feedback ? (
+        <SectionCard>
+          <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
+        </SectionCard>
+      ) : null}
       <BroadcastTemplatesCard form={form} />
       <BroadcastComposerCard
         form={form}

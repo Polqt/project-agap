@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { trpc } from "@/services/trpc";
@@ -9,6 +10,7 @@ import { broadcastSchema, type BroadcastFormValues } from "@/types/forms";
 
 export function useBroadcastPanel() {
   const { profile } = useAuth();
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const form = useForm<BroadcastFormValues>({
     resolver: zodResolver(broadcastSchema),
@@ -37,6 +39,7 @@ export function useBroadcastPanel() {
           messageFilipino: "",
           targetPurok: "",
         });
+        setFeedback("Broadcast sent.");
       },
     }),
   );
@@ -58,6 +61,7 @@ export function useBroadcastPanel() {
 
   return {
     form,
+    feedback,
     broadcasts: broadcastsQuery.data ?? [],
     createBroadcastMutation,
     handleSubmit,

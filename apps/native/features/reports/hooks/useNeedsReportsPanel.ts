@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { trpc } from "@/services/trpc";
@@ -9,6 +10,7 @@ import { needsReportSchema, type NeedsReportFormValues } from "@/types/forms";
 
 export function useNeedsReportsPanel() {
   const { profile } = useAuth();
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const form = useForm<NeedsReportFormValues>({
     resolver: zodResolver(needsReportSchema),
@@ -41,6 +43,17 @@ export function useNeedsReportsPanel() {
     trpc.needsReports.submit.mutationOptions({
       onSuccess: () => {
         void reportsQuery.refetch();
+        form.reset({
+          centerId: "",
+          totalEvacuees: "0",
+          needsFoodPacks: "0",
+          needsWaterLiters: "0",
+          needsBlankets: "0",
+          needsMedicine: false,
+          medicalCases: "",
+          notes: "",
+        });
+        setFeedback("Needs report submitted.");
       },
     }),
   );
@@ -66,7 +79,8 @@ export function useNeedsReportsPanel() {
 
   return {
     form,
-    centerIdPlaceholder: centersQuery.data?.[0]?.id ?? "Optional center uuid",
+    feedback,
+    centers: centersQuery.data ?? [],
     reports: reportsQuery.data ?? [],
     submitMutation,
     handleSubmit,
