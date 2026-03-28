@@ -4,10 +4,9 @@ import {
   getFoundOrThrow,
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { officialProcedure, publicProcedure, router } from "../index.js";
-import { uuidSchema } from "../schemas.js";
-import type { Alert, TableInsert } from "../supabase.js";
+} from "../router-helpers";
+import { officialProcedure, publicProcedure, router } from "../index";
+import type { Alert, TableInsert } from "../supabase";
 
 export const alertsRouter = router({
   getById: publicProcedure

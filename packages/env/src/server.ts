@@ -18,8 +18,9 @@ export const env = createEnv({
 
     ANTHROPIC_API_KEY: z.string().min(1),
 
-    // SMS Gateway
-
+    // SMS Gateway (TextBee.dev)
+    TEXTBEE_API_KEY: z.string().min(1),
+    TEXTBEE_DEVICE_ID: z.string().min(1),
     SMS_WEBHOOK_SECRET: z.string().min(16),
   },
   runtimeEnv: process.env,
