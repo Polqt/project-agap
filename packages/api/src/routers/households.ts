@@ -99,6 +99,37 @@ export const householdsRouter = router({
     } satisfies HouseholdWithMembers;
   }),
 
+  getById: protectedProcedure
+    .input(
+      z.object({
+        id: uuidSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const profile = getProfileOrThrow(ctx.profile);
+      const barangayId = getScopedBarangayId(profile);
+
+      const household = getFoundOrThrow<HouseholdRecordWithMembers | null>(
+        getSupabaseDataOrThrow<HouseholdRecordWithMembers | null>(
+          await ctx.supabase
+            .from("households")
+            .select(
+              "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)",
+            )
+            .eq("id", input.id)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to load household.",
+        ),
+        "Household not found.",
+      );
+
+      return {
+        ...household,
+        household_members: household.household_members ?? [],
+      } satisfies HouseholdWithMembers;
+    }),
+
   register: protectedProcedure
     .input(registerHouseholdSchema)
     .mutation(async ({ ctx, input }) => {
