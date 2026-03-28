@@ -12,8 +12,8 @@ type Props = {
 export function CenterPickerCard({ centers, selectedCenterId, onSelect }: Props) {
   return (
     <SectionCard
-      title="Available centers"
-      subtitle="Open centers appear first, but you can still see the full center list."
+      title="Open centers"
+      subtitle="Choose the evacuation center where the household is currently staying."
     >
       {centers.length ? (
         centers.map((center) => (
@@ -33,8 +33,8 @@ export function CenterPickerCard({ centers, selectedCenterId, onSelect }: Props)
         ))
       ) : (
         <EmptyState
-          title="No centers available"
-          description="Center options will appear here once your barangay has published evacuation locations."
+          title="No open centers available"
+          description="Manual and proxy check-in will be ready once your barangay opens an evacuation center."
         />
       )}
     </SectionCard>
