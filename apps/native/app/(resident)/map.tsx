@@ -1,5 +1,5 @@
-import { Container } from "@/components/container";
-import { EvacuationMap } from "@/components/features/map/EvacuationMap";
+import { Container } from "@/shared/components/container";
+import { EvacuationMap } from "@/shared/components/features/map/EvacuationMap";
 
 export default function ResidentMapScreen() {
   return (

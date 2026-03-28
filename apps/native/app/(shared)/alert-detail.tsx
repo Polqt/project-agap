@@ -1,5 +1,5 @@
-import { Container } from "@/components/container";
-import { AlertDetailView } from "@/components/features/shared/AlertDetailView";
+import { Container } from "@/shared/components/container";
+import { AlertDetailView } from "@/shared/components/features/shared/AlertDetailView";
 
 export default function AlertDetailScreen() {
   return (

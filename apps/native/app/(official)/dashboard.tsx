@@ -1,5 +1,5 @@
-import { Container } from "@/components/container";
-import { OfficialDashboard } from "@/components/features/dashboard/OfficialDashboard";
+import { Container } from "@/shared/components/container";
+import { OfficialDashboard } from "@/shared/components/features/dashboard/OfficialDashboard";
 
 export default function DashboardScreen() {
   return (
