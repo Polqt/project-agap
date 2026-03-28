@@ -40,7 +40,7 @@ export const needsReportsRouter = router({
     }
 
     return getFoundOrThrow(
-      getSupabaseDataOrThrow(
+      getSupabaseDataOrThrow<NeedsReport | null>(
         await ctx.supabase
           .from("needs_reports")
           .insert({ ...input, barangay_id: barangayId, submitted_by: ctx.session.id })
@@ -52,7 +52,6 @@ export const needsReportsRouter = router({
       ),
       "Needs report submission failed.",
     );
-  })
   }),
 
   list: officialProcedure.query(async ({ ctx }) => {
