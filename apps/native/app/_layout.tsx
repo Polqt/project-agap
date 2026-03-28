@@ -8,6 +8,7 @@ import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { OfflineQueueProvider } from "@/providers/OfflineQueueProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { RealtimeSyncProvider } from "@/providers/RealtimeSyncProvider";
 
 export const unstable_settings = {
   initialRouteName: "(resident)",
@@ -22,20 +23,22 @@ export default function RootLayout() {
             <HeroUINativeProvider>
               <AuthProvider>
                 <OfflineQueueProvider>
-                  <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="index" />
-                    <Stack.Screen name="onboarding" />
-                    <Stack.Screen name="modal" />
-                    <Stack.Screen name="(auth)" />
-                    <Stack.Screen name="(resident)" />
-                    <Stack.Screen name="(official)" />
-                    {/*
-                     * Register the whole (shared) group here.
-                     * Individual screen options (modal, title) live inside
-                     * app/(shared)/_layout.tsx so expo-router can resolve them.
-                     */}
-                    <Stack.Screen name="(shared)" options={{ headerShown: false }} />
-                  </Stack>
+                  <RealtimeSyncProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="index" />
+                      <Stack.Screen name="onboarding" />
+                      <Stack.Screen name="modal" />
+                      <Stack.Screen name="(auth)" />
+                      <Stack.Screen name="(resident)" />
+                      <Stack.Screen name="(official)" />
+                      {/*
+                       * Register the whole (shared) group here.
+                       * Individual screen options (modal, title) live inside
+                       * app/(shared)/_layout.tsx so expo-router can resolve them.
+                       */}
+                      <Stack.Screen name="(shared)" options={{ headerShown: false }} />
+                    </Stack>
+                  </RealtimeSyncProvider>
                 </OfflineQueueProvider>
               </AuthProvider>
             </HeroUINativeProvider>
