@@ -1,5 +1,5 @@
 import { Container } from "@/shared/components/container";
-import { NeedsReportsPanel } from "@/shared/components/features/reports/NeedsReportsPanel";
+import { NeedsReportsPanel } from "@/features/reports/components/NeedsReportsPanel";
 
 export default function ReportsScreen() {
   return (

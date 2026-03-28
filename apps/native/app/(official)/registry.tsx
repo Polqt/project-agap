@@ -1,5 +1,5 @@
 import { Container } from "@/shared/components/container";
-import { RegistryPanel } from "@/shared/components/features/registry/RegistryPanel";
+import { RegistryPanel } from "@/features/registry/components/RegistryPanel";
 
 export default function RegistryScreen() {
   return (

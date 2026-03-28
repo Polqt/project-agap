@@ -1,5 +1,5 @@
 import { Container } from "@/shared/components/container";
-import { ProfilePanel } from "@/shared/components/features/profile/ProfilePanel";
+import { ProfilePanel } from "@/features/profile/components/ProfilePanel";
 
 export default function ResidentProfileScreen() {
   return (

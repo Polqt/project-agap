@@ -1,5 +1,5 @@
 import { Container } from "@/shared/components/container";
-import { CheckInFlow } from "@/shared/components/features/checkin/CheckInFlow";
+import { CheckInFlow } from "@/features/checkin/components/CheckInFlow";
 
 export default function CheckInScreen() {
   return (

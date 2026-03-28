@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"C:\\\\Users\\\\poyhi\\\\project-agap\\\\apps\\\\native/app/\\(official\\)/\")",
+      "Bash(ls \"C:\\\\Users\\\\poyhi\\\\project-agap\\\\apps\\\\native/app/\\(resident\\)/\")",
+      "Bash(grep -r \"createContext\\\\|useContext\\\\|Provider\" C:Userspoyhiproject-agapappsnative --include=*.tsx --include=*.ts)"
+    ]
+  }
+}
