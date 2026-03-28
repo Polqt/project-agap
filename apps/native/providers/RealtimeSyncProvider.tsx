@@ -2,7 +2,7 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { useEffect, useRef, type PropsWithChildren } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
-import { Notifications } from "@/services/notifications";
+import { scheduleAlertNotificationAsync } from "@/services/notifications";
 import {
   REALTIME_TABLES,
   getRealtimeAlertNotification,
@@ -54,10 +54,7 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
 
             lastAlertIdRef.current = nextAlertId;
 
-            void Notifications.scheduleNotificationAsync({
-              content: getRealtimeAlertNotification(payload),
-              trigger: null,
-            });
+            void scheduleAlertNotificationAsync(getRealtimeAlertNotification(payload));
           }
         },
       );

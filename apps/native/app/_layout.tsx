@@ -1,8 +1,9 @@
 import "@/global.css";
+import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { HeroUINativeProvider } from "heroui-native";
+import { Fragment, type PropsWithChildren } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { AuthProvider } from "@/providers/AuthProvider";
@@ -11,16 +12,37 @@ import { QueryProvider } from "@/providers/QueryProvider";
 import { RealtimeSyncProvider } from "@/providers/RealtimeSyncProvider";
 
 export const unstable_settings = {
-  initialRouteName: "(resident)",
+  initialRouteName: "index",
 };
+
+function isExpoGo() {
+  return Constants.executionEnvironment === "storeClient";
+}
+
+function BootKeyboardProvider({ children }: PropsWithChildren) {
+  if (isExpoGo()) {
+    return <Fragment>{children}</Fragment>;
+  }
+
+  try {
+    const keyboardControllerModule = require("react-native-keyboard-controller") as {
+      KeyboardProvider: React.ComponentType<PropsWithChildren>;
+    };
+    const KeyboardProvider = keyboardControllerModule.KeyboardProvider;
+
+    return <KeyboardProvider>{children}</KeyboardProvider>;
+  } catch {
+    return <Fragment>{children}</Fragment>;
+  }
+}
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <KeyboardProvider>
+      <BootKeyboardProvider>
         <QueryProvider>
           <AppThemeProvider>
-            <HeroUINativeProvider>
+            <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
               <AuthProvider>
                 <OfflineQueueProvider>
                   <RealtimeSyncProvider>
@@ -44,7 +66,7 @@ export default function RootLayout() {
             </HeroUINativeProvider>
           </AppThemeProvider>
         </QueryProvider>
-      </KeyboardProvider>
+      </BootKeyboardProvider>
     </GestureHandlerRootView>
   );
 }
