@@ -1,5 +1,5 @@
-import { RolePicker } from "@/components/features/auth/RolePicker";
+import { OnboardingFlow } from "@/features/auth/components/OnboardingFlow";
 
 export default function OnboardingScreen() {
-  return <RolePicker />;
+  return <OnboardingFlow />;
 }

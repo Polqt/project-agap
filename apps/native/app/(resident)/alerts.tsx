@@ -1,5 +1,5 @@
-import { Container } from "@/components/container";
-import { AlertsFeed } from "@/components/features/alerts/AlertsFeed";
+import { Container } from "@/shared/components/container";
+import { AlertsFeed } from "@/features/alerts/components/AlertsFeed";
 
 export default function ResidentAlertsScreen() {
   return (

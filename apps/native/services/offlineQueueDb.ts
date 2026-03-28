@@ -17,7 +17,7 @@ function mapRow(row: OfflineQueueRow): QueuedAction {
   return {
     id: row.id,
     type: row.type,
-    payload: JSON.parse(row.payload) as Record<string, unknown>,
+    payload: JSON.parse(row.payload) as QueuedAction["payload"],
     createdAt: row.created_at,
     retries: row.retries,
   };

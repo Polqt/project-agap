@@ -1,0 +1,74 @@
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { useEffect, useRef, type PropsWithChildren } from "react";
+
+import { useAuth } from "@/shared/hooks/useAuth";
+import { Notifications } from "@/services/notifications";
+import {
+  REALTIME_TABLES,
+  getRealtimeAlertNotification,
+  matchesRealtimeBarangayScope,
+  shouldNotifyResidentAlert,
+} from "@/services/realtime";
+import { supabase } from "@/services/supabase";
+import { queryClient } from "@/services/trpc";
+
+type RealtimeRow = {
+  id?: string;
+  barangay_id?: string | null;
+  title?: string | null;
+  body?: string | null;
+  is_active?: boolean | null;
+};
+
+export function RealtimeSyncProvider({ children }: PropsWithChildren) {
+  const { profile, isAuthenticated } = useAuth();
+  const lastAlertIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || !profile?.barangay_id) {
+      return;
+    }
+
+    const channel = supabase.channel(`agap-realtime:${profile.role}:${profile.barangay_id}`);
+
+    REALTIME_TABLES.forEach((table) => {
+      channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table },
+        (payload: RealtimePostgresChangesPayload<RealtimeRow>) => {
+          if (!matchesRealtimeBarangayScope(table, profile.barangay_id!, payload)) {
+            return;
+          }
+
+          void queryClient.invalidateQueries();
+
+          if (profile.role === "resident" && table === "alerts" && shouldNotifyResidentAlert(payload)) {
+            const nextAlertId =
+              payload.new && "id" in payload.new && typeof payload.new.id === "string"
+                ? payload.new.id
+                : null;
+
+            if (nextAlertId && nextAlertId === lastAlertIdRef.current) {
+              return;
+            }
+
+            lastAlertIdRef.current = nextAlertId;
+
+            void Notifications.scheduleNotificationAsync({
+              content: getRealtimeAlertNotification(payload),
+              trigger: null,
+            });
+          }
+        },
+      );
+    });
+
+    void channel.subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, profile?.barangay_id, profile?.role]);
+
+  return children;
+}

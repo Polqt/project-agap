@@ -1,196 +1,213 @@
-import type { ContextProfile } from "@project-agap/api/supabase";
-import type { Session } from "@supabase/supabase-js";
+import type { Profile } from "@project-agap/api/supabase";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import * as Linking from "expo-linking";
+import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useRouter, useSegments } from "expo-router";
-
-import { authStore, type AuthStoreState } from "@/stores/auth.store";
+import { AuthContext, type ResidentSignUpInput } from "@/shared/hooks/useAuth";
+import { useNotifications } from "@/shared/hooks/useNotifications";
 import { clearStoredSupabaseSession, supabase } from "@/services/supabase";
-import { queryClient } from "@/providers/QueryProvider";
-import { trpcClient } from "@/utils/trpc";
+import { queryClient } from "@/services/trpc";
+import { resetAppShellStore, setSelectedRole } from "@/stores/app-shell-store";
 
-export interface AuthContextValue {
-  session: Session | null;
-  profile: ContextProfile | null;
-  isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+const profileSelect =
+  "id, role, full_name, phone_number, barangay_id, purok, is_sms_only, created_at, updated_at";
+
+function mapSessionRole(profile: Profile | null) {
+  return profile?.role ?? null;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-async function loadProfile() {
-  return trpcClient.profile.getMe.query();
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<ContextProfile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
-  const segments = useSegments();
-
-  const syncStore = useCallback(
-    (nextState: Partial<AuthStoreState>) => {
-      authStore.setState((state) => ({
-        session: "session" in nextState ? (nextState.session ?? null) : state.session,
-        profile: "profile" in nextState ? (nextState.profile ?? null) : state.profile,
-        isLoading: "isLoading" in nextState ? (nextState.isLoading ?? state.isLoading) : state.isLoading,
-      }));
-    },
-    [],
-  );
 
   const refreshProfile = useCallback(async () => {
-    const nextProfile = await loadProfile();
-    setProfile(nextProfile);
-    syncStore({ profile: nextProfile });
-  }, [syncStore]);
+    const currentUserId = session?.user.id;
 
-  const handleSession = useCallback(
+    if (!currentUserId) {
+      setProfile(null);
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(profileSelect)
+      .eq("id", currentUserId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    setProfile(data);
+    setSelectedRole(data?.role ?? null);
+
+    return data;
+  }, [session?.user.id]);
+
+  const handleSessionChange = useCallback(
     async (nextSession: Session | null) => {
       setSession(nextSession);
-      syncStore({ session: nextSession });
 
       if (!nextSession) {
         setProfile(null);
-        syncStore({ profile: null });
+        setSelectedRole(null);
+        setIsLoading(false);
         return;
       }
 
-      await refreshProfile();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(profileSelect)
+        .eq("id", nextSession.user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      setProfile(data);
+      setSelectedRole(data?.role ?? null);
+      setIsLoading(false);
     },
-    [refreshProfile, syncStore],
+    [],
   );
 
   useEffect(() => {
     let isMounted = true;
 
     async function bootstrap() {
-      try {
-        const {
-          data: { session: currentSession },
-        } = await supabase.auth.getSession();
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setSession(currentSession);
+
+      if (currentSession) {
+        const { data } = await supabase
+          .from("profiles")
+          .select(profileSelect)
+          .eq("id", currentSession.user.id)
+          .maybeSingle();
 
         if (!isMounted) {
           return;
         }
 
-        await handleSession(currentSession);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-          syncStore({ isLoading: false });
-        }
+        setProfile(data);
+        setSelectedRole(data?.role ?? null);
       }
+
+      setIsLoading(false);
     }
 
     void bootstrap();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      try {
-        setIsLoading(true);
-        syncStore({ isLoading: true });
-
-        if (event === "SIGNED_OUT") {
-          await clearStoredSupabaseSession();
-          queryClient.clear();
-          await handleSession(null);
-          router.replace("/onboarding");
-          return;
-        }
-
-        await handleSession(nextSession);
-      } catch {
-        await handleSession(null);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-          syncStore({ isLoading: false });
-        }
-      }
+    } = supabase.auth.onAuthStateChange((_: AuthChangeEvent, nextSession) => {
+      void handleSessionChange(nextSession);
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [handleSession, router, syncStore]);
+  }, [handleSessionChange]);
 
-  useEffect(() => {
-    if (isLoading) {
-      return;
-    }
+  useNotifications(Boolean(session?.user.id && profile?.barangay_id));
 
-    const rootSegment = segments[0];
-    const inAuth = rootSegment === "(auth)";
-    const inOnboarding = rootSegment === "onboarding";
-    const inResident = rootSegment === "(resident)";
-    const inOfficial = rootSegment === "(official)";
-    const inShared = rootSegment === "(shared)";
+  const signIn = useCallback(async ({ email, password }: { email: string; password: string }) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    if (!session) {
-      if (!inAuth && !inOnboarding) {
-        router.replace("/onboarding");
-      }
-      return;
-    }
-
-    if (!profile) {
-      return;
-    }
-
-    if (profile.role === "resident" && !inResident && !inShared) {
-      router.replace("/(resident)/map");
-      return;
-    }
-
-    if (profile.role === "official" && !inOfficial && !inShared) {
-      router.replace("/(official)/dashboard");
-    }
-  }, [isLoading, profile, router, segments, session]);
-
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        throw error;
-      }
-    },
-    [],
-  );
-
-  const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
     if (error) {
       throw error;
     }
   }, []);
 
-  const value = useMemo<AuthContextValue>(
+  const signUpResident = useCallback(
+    async (input: ResidentSignUpInput) => {
+      const { data, error } = await supabase.auth.signUp({
+        email: input.email,
+        password: input.password,
+        options: {
+          data: {
+            role: "resident",
+            full_name: input.fullName,
+            phone_number: input.phoneNumber ?? null,
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          full_name: input.fullName,
+          phone_number: input.phoneNumber ?? null,
+          barangay_id: input.barangayId,
+          purok: input.purok,
+        })
+        .eq("id", data.user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      if (data.session) {
+        setSession(data.session);
+        await refreshProfile();
+      }
+    },
+    [refreshProfile],
+  );
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    await clearStoredSupabaseSession();
+    queryClient.clear();
+    resetAppShellStore();
+  }, []);
+
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: Linking.createURL("/(auth)/sign-in"),
+    });
+
+    if (error) {
+      throw error;
+    }
+  }, []);
+
+  const value = useMemo(
     () => ({
+      isLoading,
       session,
       profile,
-      isLoading,
+      role: mapSessionRole(profile),
+      isAuthenticated: Boolean(session),
       signIn,
+      signUpResident,
       signOut,
+      resetPassword,
       refreshProfile,
     }),
-    [isLoading, profile, refreshProfile, session, signIn, signOut],
+    [isLoading, profile, refreshProfile, resetPassword, session, signIn, signOut, signUpResident],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-
-  return context;
 }

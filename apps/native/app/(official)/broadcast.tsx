@@ -1,5 +1,5 @@
-import { Container } from "@/components/container";
-import { BroadcastPanel } from "@/components/features/broadcast/BroadcastPanel";
+import { Container } from "@/shared/components/container";
+import { BroadcastPanel } from "@/features/broadcast/components/BroadcastPanel";
 
 export default function BroadcastScreen() {
   return (

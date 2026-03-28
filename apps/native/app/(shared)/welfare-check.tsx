@@ -1,4 +1,4 @@
-import { Container } from "@/components/container";
+import { Container } from "@/shared/components/container";
 import { Text, View } from "react-native";
 
 export default function WelfareCheckScreen() {

@@ -1,163 +1,98 @@
-import * as NetInfo from "@react-native-community/netinfo";
-import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import NetInfo from "@react-native-community/netinfo";
+import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 
+import { OfflineQueueContext } from "@/shared/hooks/useOfflineQueue";
+import {
+  deleteQueuedAction,
+  insertQueuedAction,
+  listQueuedActions,
+  updateQueuedActionRetries,
+} from "@/services/offlineQueueDb";
+import { isExpiredQueuedAction, replayQueuedAction } from "@/services/offlineQueueActions";
+import { setPendingQueueCount } from "@/stores/app-shell-store";
+import type { QueuedAction } from "@/types/offline";
 
-import { useAuth } from "@/providers/AuthProvider";
-import { connectivityStore } from "@/stores/connectivity.store";
-import { trpcClient } from "@/utils/trpc";
-import { QueuedAction } from "@/types/offline";
-import { deleteQueuedAction, insertQueuedAction, listQueuedActions, updateQueuedActionRetries } from "@/services/offlineQueueDb";
-
-export type OfflineQueueContextValue = {
-  enqueue: (action: Omit<QueuedAction, "id" | "createdAt" | "retries">) => Promise<void>;
-  queueSize: number;
-  isFlushing: boolean;
-};
-
-export const OfflineQueueContext = createContext<OfflineQueueContextValue | null>(null);
-
-function createQueueId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+function getRetryDelayMs(retries: number) {
+  return Math.min(2 ** retries * 250, 5000);
 }
 
-function sleep(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-async function executeQueuedAction(action: QueuedAction) {
-  if (action.type === "status_ping") {
-    await trpcClient.statusPings.submit.mutate(action.payload as never);
-    return;
-  }
-
-  const mutation = action.payload.mutation;
-  const input = action.payload.input;
-
-  if (mutation === "byQr") {
-    await trpcClient.checkIns.byQr.mutate(input as never);
-    return;
-  }
-
-  if (mutation === "proxy") {
-    await trpcClient.checkIns.proxy.mutate(input as never);
-    return;
-  }
-
-  await trpcClient.checkIns.manual.mutate((input ?? action.payload) as never);
-}
-
-export function OfflineQueueProvider({ children }: { children: React.ReactNode }) {
-  const { session } = useAuth();
-  const [queue, setQueue] = useState<QueuedAction[]>([]);
+export function OfflineQueueProvider({ children }: PropsWithChildren) {
+  const [pendingActions, setPendingActions] = useState<QueuedAction[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
   const [isFlushing, setIsFlushing] = useState(false);
-  const isMountedRef = useRef(true);
-  const isFlushingRef = useRef(false);
 
-  const refreshQueue = useCallback(async () => {
-    const nextQueue = await listQueuedActions();
-
-    if (!isMountedRef.current) {
-      return [];
-    }
-
-    setQueue(nextQueue);
-    connectivityStore.setState((state) => ({
-      ...state,
-      queueSize: nextQueue.length,
-    }));
-    return nextQueue;
+  const refreshPendingActions = useCallback(async () => {
+    const actions = await listQueuedActions();
+    setPendingActions(actions);
+    setPendingQueueCount(actions.length);
+    return actions;
   }, []);
 
+  const queueAction = useCallback(
+    async (action: QueuedAction) => {
+      await insertQueuedAction(action);
+      await refreshPendingActions();
+    },
+    [refreshPendingActions],
+  );
+
   const flushQueue = useCallback(async () => {
-    if (!session || isFlushingRef.current) {
+    if (isFlushing) {
       return;
     }
 
-    const networkState = await NetInfo.fetch();
-    const isOnline = !!networkState.isConnected && !!networkState.isInternetReachable;
-    connectivityStore.setState((state) => ({
-      ...state,
-      isOnline,
-    }));
-
-    if (!isOnline) {
-      return;
-    }
-
-    isFlushingRef.current = true;
     setIsFlushing(true);
 
     try {
-      const pendingQueue = await refreshQueue();
+      const actions = await listQueuedActions();
 
-      for (const action of pendingQueue) {
+      for (const action of actions) {
+        if (isExpiredQueuedAction(action)) {
+          await deleteQueuedAction(action.id);
+          continue;
+        }
+
         try {
-          await executeQueuedAction(action);
+          await replayQueuedAction(action);
           await deleteQueuedAction(action.id);
         } catch {
           const nextRetries = action.retries + 1;
-
-          if (nextRetries >= 3) {
-            await deleteQueuedAction(action.id);
-          } else {
-            await updateQueuedActionRetries(action.id, nextRetries);
-            await sleep(2 ** action.retries * 1000);
-          }
+          await updateQueuedActionRetries(action.id, nextRetries);
+          await new Promise((resolve) => {
+            setTimeout(resolve, getRetryDelayMs(nextRetries));
+          });
         }
       }
-
-      await refreshQueue();
     } finally {
-      isFlushingRef.current = false;
-      if (isMountedRef.current) {
-        setIsFlushing(false);
-      }
+      await refreshPendingActions();
+      setIsFlushing(false);
     }
-  }, [refreshQueue, session]);
+  }, [isFlushing, refreshPendingActions]);
 
   useEffect(() => {
-    isMountedRef.current = true;
-    void refreshQueue();
+    void refreshPendingActions();
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const isOnline = !!state.isConnected && !!state.isInternetReachable;
-      connectivityStore.setState((current) => ({
-        ...current,
-        isOnline,
-      }));
+      const nextOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
+      setIsOnline(nextOnline);
 
-      if (isOnline) {
+      if (nextOnline) {
         void flushQueue();
       }
     });
 
-    return () => {
-      isMountedRef.current = false;
-      unsubscribe();
-    };
-  }, [flushQueue, refreshQueue]);
+    return unsubscribe;
+  }, [flushQueue, refreshPendingActions]);
 
-  const enqueue = useCallback<OfflineQueueContextValue["enqueue"]>(
-    async (action) => {
-      await insertQueuedAction({
-        id: createQueueId(),
-        createdAt: Date.now(),
-        retries: 0,
-        ...action,
-      });
-
-      await refreshQueue();
-    },
-    [refreshQueue],
-  );
-
-  const value = useMemo<OfflineQueueContextValue>(
+  const value = useMemo(
     () => ({
-      enqueue,
-      queueSize: queue.length,
+      isOnline,
       isFlushing,
+      pendingActions,
+      queueAction,
+      flushQueue,
     }),
-    [enqueue, isFlushing, queue.length],
+    [flushQueue, isFlushing, isOnline, pendingActions, queueAction],
   );
 
   return <OfflineQueueContext.Provider value={value}>{children}</OfflineQueueContext.Provider>;
