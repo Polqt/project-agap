@@ -1,8 +1,8 @@
+import Constants from "expo-constants";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import { Text, View } from "react-native";
 
 import { AppButton, EmptyState, Pill, ScreenHeader, SectionCard } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -12,6 +12,8 @@ import { trpc } from "@/services/trpc";
 import { formatDistanceKm, haversineDistanceKm } from "@/shared/utils/geo";
 import type { CachedResidentMapData } from "@/types/map";
 
+type ReactNativeMapsModule = typeof import("react-native-maps");
+
 const FALLBACK_REGION = {
   latitude: 10.7202,
   longitude: 122.5621,
@@ -19,11 +21,28 @@ const FALLBACK_REGION = {
   longitudeDelta: 0.12,
 };
 
+function isExpoGo() {
+  return Constants.executionEnvironment === "storeClient";
+}
+
+function getReactNativeMapsModule() {
+  if (isExpoGo()) {
+    return null;
+  }
+
+  try {
+    return require("react-native-maps") as ReactNativeMapsModule;
+  } catch {
+    return null;
+  }
+}
+
 export function EvacuationMap() {
   const router = useRouter();
   const { profile } = useAuth();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const [cachedData, setCachedData] = useState<CachedResidentMapData | null>(null);
+  const mapsModule = useMemo(() => getReactNativeMapsModule(), []);
 
   const routesQuery = useQuery(
     trpc.evacuationRoutes.listByBarangay.queryOptions(
@@ -86,6 +105,10 @@ export function EvacuationMap() {
     longitudeDelta: FALLBACK_REGION.longitudeDelta,
   };
 
+  const MapViewComponent = mapsModule?.default;
+  const MarkerComponent = mapsModule?.Marker;
+  const PolylineComponent = mapsModule?.Polyline;
+
   return (
     <View className="flex-1 bg-slate-50 pb-8">
       <ScreenHeader
@@ -94,42 +117,60 @@ export function EvacuationMap() {
         description="Map markers, route overlays, and cached center data stay visible even when connectivity gets weak."
       />
 
-      <SectionCard title="Map" subtitle={cachedData && !centersQuery.data?.length ? "Showing cached center and route data." : "Live center and route data for your barangay."}>
-        <View className="h-96 overflow-hidden rounded-3xl">
-          <MapView style={{ flex: 1 }} initialRegion={region}>
-            {location ? <Marker coordinate={location} title="Your location" pinColor="#2563eb" /> : null}
-            {sortedCenters.map((center) => (
-              <Marker
-                key={center.id}
-                coordinate={{ latitude: center.latitude, longitude: center.longitude }}
-                title={center.name}
-                description={center.address}
-                pinColor={center.is_open ? "#16a34a" : "#f59e0b"}
-              />
-            ))}
-            {routes.map((route) => {
-              const coordinates = Array.isArray((route.route_geojson as { coordinates?: unknown[] }).coordinates)
-                ? ((route.route_geojson as { coordinates: [number, number][] }).coordinates ?? []).map(([longitude, latitude]) => ({
-                    latitude,
-                    longitude,
-                  }))
-                : [];
-
-              if (!coordinates.length) {
-                return null;
-              }
-
-              return (
-                <Polyline
-                  key={route.id}
-                  coordinates={coordinates}
-                  strokeColor={route.color_hex || "#1d4ed8"}
-                  strokeWidth={4}
+      <SectionCard
+        title="Map"
+        subtitle={
+          cachedData && !centersQuery.data?.length
+            ? "Showing cached center and route data."
+            : "Live center and route data for your barangay."
+        }
+      >
+        {MapViewComponent && MarkerComponent && PolylineComponent ? (
+          <View className="h-96 overflow-hidden rounded-3xl">
+            <MapViewComponent className="flex-1" initialRegion={region}>
+              {location ? (
+                <MarkerComponent coordinate={location} title="Your location" pinColor="#2563eb" />
+              ) : null}
+              {sortedCenters.map((center) => (
+                <MarkerComponent
+                  key={center.id}
+                  coordinate={{ latitude: center.latitude, longitude: center.longitude }}
+                  title={center.name}
+                  description={center.address}
+                  pinColor={center.is_open ? "#16a34a" : "#f59e0b"}
                 />
-              );
-            })}
-          </MapView>
-        </View>
+              ))}
+              {routes.map((route) => {
+                const coordinates = Array.isArray((route.route_geojson as { coordinates?: unknown[] }).coordinates)
+                  ? ((route.route_geojson as { coordinates: [number, number][] }).coordinates ?? []).map(
+                      ([longitude, latitude]) => ({
+                        latitude,
+                        longitude,
+                      }),
+                    )
+                  : [];
+
+                if (!coordinates.length) {
+                  return null;
+                }
+
+                return (
+                  <PolylineComponent
+                    key={route.id}
+                    coordinates={coordinates}
+                    strokeColor={route.color_hex || "#1d4ed8"}
+                    strokeWidth={4}
+                  />
+                );
+              })}
+            </MapViewComponent>
+          </View>
+        ) : (
+          <EmptyState
+            title="Map preview unavailable in Expo Go"
+            description="Use a development build to view the interactive map. The center list below still works for navigation and check-in."
+          />
+        )}
       </SectionCard>
 
       <SectionCard title="Center list" subtitle="Sorted by distance when location is available.">

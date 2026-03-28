@@ -36,7 +36,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       .maybeSingle();
 
     if (error) {
-      throw error;
+      setProfile(null);
+      setSelectedRole(null);
+      return null;
     }
 
     setProfile(data);
@@ -47,28 +49,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const handleSessionChange = useCallback(
     async (nextSession: Session | null) => {
-      setSession(nextSession);
-
       if (!nextSession) {
+        setSession(null);
         setProfile(null);
         setSelectedRole(null);
         setIsLoading(false);
         return;
       }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(profileSelect)
-        .eq("id", nextSession.user.id)
-        .maybeSingle();
+      try {
+        setSession(nextSession);
 
-      if (error) {
-        throw error;
+        const { data, error } = await supabase
+          .from("profiles")
+          .select(profileSelect)
+          .eq("id", nextSession.user.id)
+          .maybeSingle();
+
+        if (error) {
+          setProfile(null);
+          setSelectedRole(null);
+          return;
+        }
+
+        setProfile(data);
+        setSelectedRole(data?.role ?? null);
+      } catch {
+        setSession(null);
+        setProfile(null);
+        setSelectedRole(null);
+      } finally {
+        setIsLoading(false);
       }
-
-      setProfile(data);
-      setSelectedRole(data?.role ?? null);
-      setIsLoading(false);
     },
     [],
   );
@@ -77,32 +89,49 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let isMounted = true;
 
     async function bootstrap() {
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession();
-
-      if (!isMounted) {
-        return;
-      }
-
-      setSession(currentSession);
-
-      if (currentSession) {
-        const { data } = await supabase
-          .from("profiles")
-          .select(profileSelect)
-          .eq("id", currentSession.user.id)
-          .maybeSingle();
+      try {
+        const {
+          data: { session: currentSession },
+        } = await supabase.auth.getSession();
 
         if (!isMounted) {
           return;
         }
 
-        setProfile(data);
-        setSelectedRole(data?.role ?? null);
-      }
+        setSession(currentSession);
 
-      setIsLoading(false);
+        if (currentSession) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select(profileSelect)
+            .eq("id", currentSession.user.id)
+            .maybeSingle();
+
+          if (!isMounted) {
+            return;
+          }
+
+          if (error) {
+            setProfile(null);
+            setSelectedRole(null);
+          } else {
+            setProfile(data);
+            setSelectedRole(data?.role ?? null);
+          }
+        }
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setSession(null);
+        setProfile(null);
+        setSelectedRole(null);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
     }
 
     void bootstrap();
@@ -110,7 +139,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_: AuthChangeEvent, nextSession) => {
-      void handleSessionChange(nextSession);
+      void handleSessionChange(nextSession).catch(() => {
+        setSession(null);
+        setProfile(null);
+        setSelectedRole(null);
+        setIsLoading(false);
+      });
     });
 
     return () => {

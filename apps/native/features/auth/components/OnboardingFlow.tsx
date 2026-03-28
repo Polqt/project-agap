@@ -1,7 +1,7 @@
 import { useStore } from "@tanstack/react-store";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { AppButton, Pill, ScreenHeader, SectionCard } from "@/shared/components/ui";
@@ -36,7 +36,11 @@ export function OnboardingFlow() {
   }, [isAuthenticated, isLoading, role, router]);
 
   return (
-    <View className="flex-1 bg-slate-50">
+    <ScrollView
+      className="flex-1 bg-slate-50"
+      contentContainerClassName="grow pb-8"
+      showsVerticalScrollIndicator={false}
+    >
       <ScreenHeader
         eyebrow="Agap"
         title="Handa. Ligtas. Agap."
@@ -89,6 +93,6 @@ export function OnboardingFlow() {
           </Text>
         </SectionCard>
       </View>
-    </View>
+    </ScrollView>
   );
 }
