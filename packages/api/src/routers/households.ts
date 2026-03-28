@@ -5,22 +5,9 @@ import {
   getProfileOrThrow,
   getPaginationRange,
   getSupabaseDataOrThrow,
-} from "../router-helpers.js";
-import { ApiError } from "../errors.js";
-import { officialProcedure, protectedProcedure, router } from "../index.js";
-import {
-  barangayIdSchema,
-  paginationSchema,
-  uuidSchema,
-  vulnerabilityFlagSchema,
-} from "../schemas.js";
-import type {
-  Household,
-  HouseholdMember,
-  HouseholdWithMembers,
-  TableInsert,
-  VulnerabilityFlag,
-} from "../supabase.js";
+} from "../router-helpers";
+import { officialProcedure, router } from "../index";
+import type { Household, TableInsert } from "../supabase";
 import { z } from "zod";
 const householdMemberInputSchema = z.object({
   id: uuidSchema.optional(),
@@ -275,6 +262,105 @@ export const householdsRouter = router({
         }),
         "Failed to load unaccounted households.",
       ) ?? [];
+    }),
+
+  upsert: officialProcedure
+    .input(
+      z.object({
+        id: uuidSchema.optional(),
+        householdHead: z.string().trim().min(1),
+        purok: z.string().trim().min(1),
+        address: z.string().trim().optional(),
+        phoneNumber: z.string().trim().optional(),
+        totalMembers: z.number().int().min(1),
+        vulnerabilityFlags: z.array(
+          z.enum(["elderly", "pwd", "infant", "pregnant", "solo_parent", "chronic_illness"]),
+        ),
+        isSmsOnly: z.boolean(),
+        notes: z.string().trim().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      if (input.id) {
+        const household = getFoundOrThrow<Household | null>(
+          getSupabaseDataOrThrow<Household | null>(
+            await ctx.supabase
+              .from("households")
+              .update({
+                household_head: input.householdHead,
+                purok: input.purok,
+                address: input.address ?? "",
+                phone_number: input.phoneNumber ?? null,
+                total_members: input.totalMembers,
+                vulnerability_flags: input.vulnerabilityFlags,
+                is_sms_only: input.isSmsOnly,
+                notes: input.notes ?? null,
+              })
+              .eq("id", input.id)
+              .eq("barangay_id", barangayId)
+              .select(
+                "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
+              )
+              .maybeSingle(),
+            "Failed to update household.",
+          ),
+          "Household not found.",
+        );
+
+        return household;
+      }
+
+      const insertPayload: TableInsert<"households"> = {
+        barangay_id: barangayId,
+        registered_by: ctx.session.id,
+        household_head: input.householdHead,
+        purok: input.purok,
+        address: input.address ?? "",
+        phone_number: input.phoneNumber ?? null,
+        total_members: input.totalMembers,
+        vulnerability_flags: input.vulnerabilityFlags,
+        is_sms_only: input.isSmsOnly,
+        notes: input.notes ?? null,
+      };
+
+      const household = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .insert(insertPayload)
+            .select(
+              "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
+            )
+            .maybeSingle(),
+          "Failed to create household.",
+        ),
+        "Household creation failed.",
+      );
+
+      return household;
+    }),
+
+  delete: officialProcedure
+    .input(
+      z.object({
+        householdId: uuidSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      getSupabaseDataOrThrow<null>(
+        await ctx.supabase
+          .from("households")
+          .delete()
+          .eq("id", input.householdId)
+          .eq("barangay_id", barangayId),
+        "Failed to delete household.",
+      );
+
+      return { success: true };
     }),
 
   updateStatus: officialProcedure

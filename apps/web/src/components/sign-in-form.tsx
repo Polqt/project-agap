@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useAuthClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () => void }) {
   const [email, setEmail] = useState("");
@@ -40,84 +44,78 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
   };
 
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
-      <h2 className="text-2xl font-bold text-center mb-6">Sign In</h2>
+    <Card className="mx-auto w-full max-w-md">
+      <CardHeader>
+        <CardTitle className="text-center text-2xl">Sign In</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+            />
+          </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+          {error && (
+            <p className="text-sm text-destructive" role="alert">{error}</p>
+          )}
 
-        {error && <div className="text-red-600 text-sm">{error}</div>}
+          <Button type="submit" disabled={isLoading} className="w-full">
+            {isLoading ? "Signing in..." : "Sign In"}
+          </Button>
+        </form>
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          {isLoading ? "Signing in..." : "Sign In"}
-        </button>
-      </form>
-
-      <div className="mt-4">
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
+            <div className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
             onClick={() => handleOAuthSignIn("github")}
             disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             GitHub
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => handleOAuthSignIn("google")}
             disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             Google
-          </button>
+          </Button>
         </div>
-      </div>
 
-      <button
-        type="button"
-        onClick={onSwitchToSignUp}
-        className="mt-4 w-full text-indigo-600 hover:text-indigo-800 text-sm"
-      >
-        Need an account? Sign Up
-      </button>
-    </div>
+        <Button
+          variant="link"
+          onClick={onSwitchToSignUp}
+          className="w-full"
+        >
+          Need an account? Sign Up
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
