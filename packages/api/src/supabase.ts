@@ -36,6 +36,11 @@ export type PingStatus = "safe" | "need_help";
 export type AlertSource = "pagasa" | "phivolcs" | "ldrrmo" | "manual";
 export type AlertSeverity = "info" | "advisory" | "watch" | "warning" | "danger";
 export type BroadcastType = "evacuate_now" | "stay_alert" | "all_clear" | "custom";
+export type CheckInMethod = "qr" | "manual" | "proxy" | "sms";
+export type SmsDirection = "outbound" | "inbound";
+export type SmsDeliveryStatus = "queued" | "sent" | "delivered" | "failed" | "replied";
+export type SmsKeyword = "LIGTAS" | "TULONG" | "NASAAN" | "SINO" | "unknown";
+export type NeedsReportStatus = "pending" | "acknowledged" | "resolved";
 export type PushPlatform = "ios" | "android";
 
 export interface Database {
@@ -170,6 +175,53 @@ export interface Database {
           updated_at?: string | null;
         }
       >;
+      evacuation_routes: TableDefinition<
+        {
+          id: string;
+          barangay_id: string;
+          center_id: string;
+          name: string;
+          purok_origin: string | null;
+          route_geojson: Record<string, unknown>;
+          distance_meters: number | null;
+          estimated_walk_minutes: number | null;
+          color_hex: string;
+          is_accessible: boolean;
+          notes: string | null;
+          created_at: string;
+          updated_at: string | null;
+        },
+        {
+          id?: string;
+          barangay_id: string;
+          center_id: string;
+          name: string;
+          purok_origin?: string | null;
+          route_geojson: Record<string, unknown>;
+          distance_meters?: number | null;
+          estimated_walk_minutes?: number | null;
+          color_hex?: string;
+          is_accessible?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string | null;
+        },
+        {
+          id?: string;
+          barangay_id?: string;
+          center_id?: string;
+          name?: string;
+          purok_origin?: string | null;
+          route_geojson?: Record<string, unknown>;
+          distance_meters?: number | null;
+          estimated_walk_minutes?: number | null;
+          color_hex?: string;
+          is_accessible?: boolean;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string | null;
+        }
+      >;
       households: TableDefinition<
         {
           id: string;
@@ -220,6 +272,35 @@ export interface Database {
           updated_at?: string | null;
         }
       >;
+      household_members: TableDefinition<
+        {
+          id: string;
+          household_id: string;
+          full_name: string;
+          age: number | null;
+          vulnerability_flags: VulnerabilityFlag[];
+          notes: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          household_id: string;
+          full_name: string;
+          age?: number | null;
+          vulnerability_flags?: VulnerabilityFlag[];
+          notes?: string | null;
+          created_at?: string;
+        },
+        {
+          id?: string;
+          household_id?: string;
+          full_name?: string;
+          age?: number | null;
+          vulnerability_flags?: VulnerabilityFlag[];
+          notes?: string | null;
+          created_at?: string;
+        }
+      >;
       check_ins: TableDefinition<
         {
           id: string;
@@ -227,7 +308,7 @@ export interface Database {
           center_id: string;
           resident_id: string | null;
           household_id: string | null;
-          method: "qr" | "manual" | "proxy" | "sms";
+          method: CheckInMethod;
           checked_in_at: string;
           latitude: number | null;
           longitude: number | null;
@@ -239,7 +320,7 @@ export interface Database {
           center_id: string;
           resident_id?: string | null;
           household_id?: string | null;
-          method?: "qr" | "manual" | "proxy" | "sms";
+          method?: CheckInMethod;
           checked_in_at?: string;
           latitude?: number | null;
           longitude?: number | null;
@@ -251,7 +332,7 @@ export interface Database {
           center_id?: string;
           resident_id?: string | null;
           household_id?: string | null;
-          method?: "qr" | "manual" | "proxy" | "sms";
+          method?: CheckInMethod;
           checked_in_at?: string;
           latitude?: number | null;
           longitude?: number | null;
@@ -437,6 +518,115 @@ export interface Database {
           sent_at?: string;
         }
       >;
+      sms_logs: TableDefinition<
+        {
+          id: string;
+          barangay_id: string;
+          household_id: string | null;
+          broadcast_id: string | null;
+          direction: SmsDirection;
+          phone_number: string;
+          message: string;
+          delivery_status: SmsDeliveryStatus;
+          keyword_reply: SmsKeyword | null;
+          gateway_message_id: string | null;
+          error_message: string | null;
+          sent_at: string | null;
+          delivered_at: string | null;
+          replied_at: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          barangay_id: string;
+          household_id?: string | null;
+          broadcast_id?: string | null;
+          direction: SmsDirection;
+          phone_number: string;
+          message: string;
+          delivery_status?: SmsDeliveryStatus;
+          keyword_reply?: SmsKeyword | null;
+          gateway_message_id?: string | null;
+          error_message?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          replied_at?: string | null;
+          created_at?: string;
+        },
+        {
+          id?: string;
+          barangay_id?: string;
+          household_id?: string | null;
+          broadcast_id?: string | null;
+          direction?: SmsDirection;
+          phone_number?: string;
+          message?: string;
+          delivery_status?: SmsDeliveryStatus;
+          keyword_reply?: SmsKeyword | null;
+          gateway_message_id?: string | null;
+          error_message?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          replied_at?: string | null;
+          created_at?: string;
+        }
+      >;
+      needs_reports: TableDefinition<
+        {
+          id: string;
+          barangay_id: string;
+          center_id: string | null;
+          submitted_by: string;
+          total_evacuees: number;
+          needs_food_packs: number;
+          needs_water_liters: number;
+          needs_medicine: boolean;
+          needs_blankets: number;
+          medical_cases: string | null;
+          notes: string | null;
+          status: NeedsReportStatus;
+          acknowledged_by: string | null;
+          acknowledged_at: string | null;
+          submitted_at: string;
+          updated_at: string | null;
+        },
+        {
+          id?: string;
+          barangay_id: string;
+          center_id?: string | null;
+          submitted_by: string;
+          total_evacuees?: number;
+          needs_food_packs?: number;
+          needs_water_liters?: number;
+          needs_medicine?: boolean;
+          needs_blankets?: number;
+          medical_cases?: string | null;
+          notes?: string | null;
+          status?: NeedsReportStatus;
+          acknowledged_by?: string | null;
+          acknowledged_at?: string | null;
+          submitted_at?: string;
+          updated_at?: string | null;
+        },
+        {
+          id?: string;
+          barangay_id?: string;
+          center_id?: string | null;
+          submitted_by?: string;
+          total_evacuees?: number;
+          needs_food_packs?: number;
+          needs_water_liters?: number;
+          needs_medicine?: boolean;
+          needs_blankets?: number;
+          medical_cases?: string | null;
+          notes?: string | null;
+          status?: NeedsReportStatus;
+          acknowledged_by?: string | null;
+          acknowledged_at?: string | null;
+          submitted_at?: string;
+          updated_at?: string | null;
+        }
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -541,6 +731,9 @@ export interface Database {
       alert_source: AlertSource;
       alert_severity: AlertSeverity;
       broadcast_type: BroadcastType;
+      sms_direction: SmsDirection;
+      sms_delivery_status: SmsDeliveryStatus;
+      sms_keyword: SmsKeyword;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -562,11 +755,18 @@ export type ContextProfile = Pick<
 >;
 export type Barangay = TableRow<"barangays">;
 export type EvacuationCenter = TableRow<"evacuation_centers">;
+export type EvacuationRoute = TableRow<"evacuation_routes">;
 export type Household = TableRow<"households">;
+export type HouseholdMember = TableRow<"household_members">;
+export type HouseholdWithMembers = Household & {
+  household_members: HouseholdMember[];
+};
 export type CheckIn = TableRow<"check_ins">;
 export type StatusPing = TableRow<"status_pings">;
 export type Alert = TableRow<"alerts">;
 export type Broadcast = TableRow<"broadcasts">;
+export type SmsLog = TableRow<"sms_logs">;
+export type NeedsReport = TableRow<"needs_reports">;
 export type DashboardSummary = RpcResult<"get_dashboard_summary">[number];
 export type NearbyCenter = RpcResult<"get_nearby_centers">[number];
 export type CheckInByQrResult = RpcResult<"checkin_by_qr">[number];
