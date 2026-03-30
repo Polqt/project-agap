@@ -2,10 +2,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FlashList } from "@shopify/flash-list";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, type TextInput, View } from "react-native";
 
+import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { AppButton, Pill, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { getErrorMessage } from "@/shared/utils/errors";
@@ -21,6 +22,13 @@ export function SignUpForm() {
   const [barangayQuery, setBarangayQuery] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const fullNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+  const barangaySearchRef = useRef<TextInput>(null);
+  const purokRef = useRef<TextInput>(null);
 
   const form = useForm<ResidentSignUpFormValues>({
     resolver: zodResolver(residentSignUpSchema),
@@ -101,7 +109,7 @@ export function SignUpForm() {
   });
 
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
+    <AuthFormScroll>
       <ScreenHeader
         eyebrow="Resident sign-up"
         title="Create your resident account"
@@ -126,10 +134,15 @@ export function SignUpForm() {
               name="fullName"
               render={({ field, fieldState }) => (
                 <TextField
+                  ref={fullNameRef}
                   label="Full name"
                   value={field.value ?? ""}
                   onChangeText={field.onChange}
                   placeholder="Juan Dela Cruz"
+                  textContentType="name"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => phoneRef.current?.focus()}
                   error={fieldState.error?.message}
                 />
               )}
@@ -139,11 +152,16 @@ export function SignUpForm() {
               name="phoneNumber"
               render={({ field, fieldState }) => (
                 <TextField
+                  ref={phoneRef}
                   label="Phone number"
                   value={field.value ?? ""}
                   onChangeText={field.onChange}
                   placeholder="09xxxxxxxxx"
                   keyboardType="phone-pad"
+                  textContentType="telephoneNumber"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => emailRef.current?.focus()}
                   error={fieldState.error?.message}
                 />
               )}
@@ -153,11 +171,18 @@ export function SignUpForm() {
               name="email"
               render={({ field, fieldState }) => (
                 <TextField
+                  ref={emailRef}
                   label="Email"
                   value={field.value}
                   onChangeText={field.onChange}
                   placeholder="you@example.com"
                   keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
                   error={fieldState.error?.message}
                 />
               )}
@@ -167,11 +192,17 @@ export function SignUpForm() {
               name="password"
               render={({ field, fieldState }) => (
                 <TextField
+                  ref={passwordRef}
                   label="Password"
                   value={field.value}
                   onChangeText={field.onChange}
                   placeholder="Create a password"
                   secureTextEntry
+                  textContentType="newPassword"
+                  autoComplete="password-new"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
                   error={fieldState.error?.message}
                 />
               )}
@@ -181,11 +212,16 @@ export function SignUpForm() {
               name="confirmPassword"
               render={({ field, fieldState }) => (
                 <TextField
+                  ref={confirmPasswordRef}
                   label="Confirm password"
                   value={field.value}
                   onChangeText={field.onChange}
                   placeholder="Repeat your password"
                   secureTextEntry
+                  textContentType="newPassword"
+                  autoComplete="password-new"
+                  returnKeyType="done"
+                  onSubmitEditing={() => void nextStep()}
                   error={fieldState.error?.message}
                 />
               )}
@@ -196,10 +232,13 @@ export function SignUpForm() {
         {step === 1 ? (
           <View className="gap-4">
             <TextField
+              ref={barangaySearchRef}
               label="Search barangay"
               value={barangayQuery}
               onChangeText={setBarangayQuery}
               placeholder="Search by barangay or municipality"
+              returnKeyType="search"
+              autoCorrect={false}
             />
             <Controller
               control={form.control}
@@ -239,10 +278,13 @@ export function SignUpForm() {
               name="purok"
               render={({ field, fieldState }) => (
                 <TextField
+                  ref={purokRef}
                   label="Purok"
                   value={field.value ?? ""}
                   onChangeText={field.onChange}
                   placeholder="Purok 3"
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleSubmit()}
                   error={fieldState.error?.message}
                   helperText="You can edit this later from your profile."
                 />
@@ -264,6 +306,6 @@ export function SignUpForm() {
           <Text className="text-sm font-medium text-blue-700">Go to sign in</Text>
         </Pressable>
       </SectionCard>
-    </View>
+    </AuthFormScroll>
   );
 }

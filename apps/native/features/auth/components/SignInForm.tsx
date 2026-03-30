@@ -1,10 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, type TextInput, View } from "react-native";
 import { useStore } from "@tanstack/react-store";
 
+import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { AppButton, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { getErrorMessage } from "@/shared/utils/errors";
@@ -18,6 +19,8 @@ export function SignInForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -70,7 +73,7 @@ export function SignInForm() {
   };
 
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
+    <AuthFormScroll>
       <ScreenHeader
         eyebrow={selectedRole === "official" ? "Official sign-in" : "Sign in"}
         title="Welcome back"
@@ -84,11 +87,18 @@ export function SignInForm() {
             name="email"
             render={({ field, fieldState }) => (
               <TextField
+                ref={emailRef}
                 label="Email"
                 value={field.value}
                 onChangeText={field.onChange}
                 placeholder="you@example.com"
                 keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                textContentType="emailAddress"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => passwordRef.current?.focus()}
                 error={fieldState.error?.message}
               />
             )}
@@ -98,11 +108,16 @@ export function SignInForm() {
             name="password"
             render={({ field, fieldState }) => (
               <TextField
+                ref={passwordRef}
                 label="Password"
                 value={field.value}
                 onChangeText={field.onChange}
                 placeholder="Enter your password"
                 secureTextEntry
+                textContentType="password"
+                autoComplete="password"
+                returnKeyType="done"
+                onSubmitEditing={() => void handleSubmit()}
                 error={fieldState.error?.message}
               />
             )}
@@ -127,6 +142,6 @@ export function SignInForm() {
           </Text>
         </Pressable>
       </SectionCard>
-    </View>
+    </AuthFormScroll>
   );
 }

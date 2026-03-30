@@ -14,11 +14,12 @@ import type { CachedResidentMapData } from "@/types/map";
 
 type ReactNativeMapsModule = typeof import("react-native-maps");
 
+/** Barangay Banago, Bacolod City — aligns with pilot seed centroid (~PhilAtlas). */
 const FALLBACK_REGION = {
-  latitude: 10.7202,
-  longitude: 122.5621,
-  latitudeDelta: 0.12,
-  longitudeDelta: 0.12,
+  latitude: 10.7036,
+  longitude: 122.9501,
+  latitudeDelta: 0.04,
+  longitudeDelta: 0.04,
 };
 
 function isExpoGo() {

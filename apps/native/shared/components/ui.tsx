@@ -1,4 +1,12 @@
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { forwardRef } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  Text,
+  TextInput,
+  type TextInputProps,
+  View,
+} from "react-native";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 type PillTone = "neutral" | "info" | "success" | "warning" | "danger";
@@ -106,31 +114,38 @@ export function AppButton({
   );
 }
 
-export function TextField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  secureTextEntry,
-  keyboardType,
-  multiline,
-  error,
-  helperText,
-}: {
+export type TextFieldProps = {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder?: string;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address" | "phone-pad" | "number-pad";
+  keyboardType?: TextInputProps["keyboardType"];
   multiline?: boolean;
   error?: string;
   helperText?: string;
-}) {
+} & Omit<TextInputProps, "value" | "onChangeText" | "defaultValue" | "children">;
+
+export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
+  {
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    secureTextEntry,
+    keyboardType,
+    multiline,
+    error,
+    helperText,
+    ...textInputProps
+  },
+  ref,
+) {
   return (
     <View className="gap-2">
       <Text className="text-sm font-medium text-slate-700">{label}</Text>
       <TextInput
+        ref={ref}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -140,12 +155,13 @@ export function TextField({
         textAlignVertical={multiline ? "top" : "center"}
         className={`rounded-2xl border px-4 py-3 text-base text-slate-950 ${multiline ? "min-h-28" : "min-h-14"} ${error ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50"}`}
         placeholderTextColor="#94a3b8"
+        {...textInputProps}
       />
       {error ? <Text className="text-sm text-rose-600">{error}</Text> : null}
       {!error && helperText ? <Text className="text-sm text-slate-500">{helperText}</Text> : null}
     </View>
   );
-}
+});
 
 export function Pill({ label, tone = "neutral" }: { label: string; tone?: PillTone }) {
   return (
