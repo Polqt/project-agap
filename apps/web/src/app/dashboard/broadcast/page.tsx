@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { ExternalAlerts } from "./external-alerts";
 
 type BroadcastType = "evacuate_now" | "stay_alert" | "all_clear" | "custom";
 
@@ -98,7 +99,7 @@ function typeBadge(type: BroadcastType) {
   }
 }
 
-const CHAR_LIMIT = 160;
+const CHAR_LIMIT = 1600;
 
 export default function BroadcastPage() {
   const queryClient = useQueryClient();
@@ -146,8 +147,8 @@ export default function BroadcastPage() {
 
   const finalMessage = selectedTemplate
     ? customNote
-      ? `${selectedTemplate.messageEng}\n\n${customNote}`
-      : selectedTemplate.messageEng
+      ? `${selectedTemplate.messageFil}\n\n${customNote}\n\nSumagot "LIGTAS" kung ligtas ka na.`
+      : `${selectedTemplate.messageFil}\n\nSumagot "LIGTAS" kung ligtas ka na.`
     : "";
 
   const finalMessageFil = selectedTemplate
@@ -156,14 +157,19 @@ export default function BroadcastPage() {
       : selectedTemplate.messageFil
     : "";
 
+  // Calculate available characters for custom note
+  const templateAndReplyLength = selectedTemplate
+    ? selectedTemplate.messageFil.length + '\n\nSumagot "LIGTAS" kung ligtas ka na.'.length + 2 // +2 for \n\n
+    : 0;
+  const availableForCustomNote = Math.max(0, CHAR_LIMIT - templateAndReplyLength);
+
   const handleSend = useCallback(() => {
     if (!selectedType) return;
     createBroadcast.mutate({
       broadcastType: selectedType,
       message: finalMessage,
-      messageFilipino: finalMessageFil || undefined,
     });
-  }, [selectedType, finalMessage, finalMessageFil, createBroadcast]);
+  }, [selectedType, finalMessage, createBroadcast]);
 
   const resetForm = useCallback(() => {
     setSelectedType(null);
@@ -235,30 +241,43 @@ export default function BroadcastPage() {
 
       {/* Free-text Override */}
       {selectedType && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">
-              Custom note <span className="text-muted-foreground">(optional)</span>
-            </label>
-            <span
-              className={`text-xs tabular-nums ${
-                customNote.length > CHAR_LIMIT
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {customNote.length}/{CHAR_LIMIT}
-            </span>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">
+                Custom note <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <span
+                className={`text-xs tabular-nums ${
+                  finalMessage.length > CHAR_LIMIT
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {finalMessage.length}/{CHAR_LIMIT}
+              </span>
+            </div>
+            <textarea
+              value={customNote}
+              onChange={(e) => setCustomNote(e.target.value)}
+              rows={3}
+              className="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full resize-none rounded-none border bg-transparent px-2.5 py-2 text-xs outline-none transition-colors focus-visible:ring-1"
+              placeholder={`Append a custom message to the broadcast… (${availableForCustomNote} chars available)`}
+            />
+            <p className="text-xs text-muted-foreground">
+              {availableForCustomNote} characters available for custom note (modern SMS supports up to {CHAR_LIMIT} chars)
+            </p>
           </div>
-          <textarea
-            value={customNote}
-            onChange={(e) => {
-              if (e.target.value.length <= CHAR_LIMIT) setCustomNote(e.target.value);
-            }}
-            rows={3}
-            className="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full resize-none rounded-none border bg-transparent px-2.5 py-2 text-xs outline-none transition-colors focus-visible:ring-1"
-            placeholder="Append a custom message to the broadcast…"
-          />
+          
+          <div className="space-y-3 pt-2">
+            <p className="text-sm font-medium">Add data from external sources</p>
+            <ExternalAlerts
+              onAppendNote={(text) => {
+                const newNote = customNote ? `${customNote}\n\n${text}` : text;
+                setCustomNote(newNote);
+              }}
+            />
+          </div>
         </div>
       )}
 
