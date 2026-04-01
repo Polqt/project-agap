@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { LogIn, LogOut } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { useAuthClient } from "@/lib/auth-client";
 
 export default function UserMenu() {
@@ -15,29 +17,34 @@ export default function UserMenu() {
   };
 
   if (isLoading) {
-    return <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />;
+    return <div className="h-7 w-24 animate-pulse rounded-full border border-border bg-muted" />;
   }
 
   if (!user) {
     return (
-      <button
+      <Button
+        size="sm"
         onClick={() => router.push("/login")}
-        className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+        className="rounded-full px-3"
       >
+        <LogIn className="h-3.5 w-3.5" />
         Sign In
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex items-center gap-4">
-      <span className="text-sm text-gray-700">{user.email}</span>
-      <button
+    <div className="flex items-center gap-2">
+      <span className="hidden max-w-40 truncate text-xs text-muted-foreground lg:block">{user.email}</span>
+      <Button
+        variant="outline"
+        size="sm"
         onClick={handleSignOut}
-        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+        className="rounded-full px-3"
       >
+        <LogOut className="h-3.5 w-3.5" />
         Sign Out
-      </button>
+      </Button>
     </div>
   );
 }

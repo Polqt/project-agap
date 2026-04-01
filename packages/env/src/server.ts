@@ -23,6 +23,11 @@ export const env = createEnv({
     TEXTBEE_DEVICE_ID: z.string().min(1),
     SMS_WEBHOOK_SECRET: z.string().min(16),
   },
-  runtimeEnv: process.env,
+  runtimeEnv: {
+    ...process.env,
+    // Same values as NEXT_PUBLIC_* for the web app; omit SUPABASE_* in .env if you prefer.
+    SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  },
   emptyStringAsUndefined: true,
 });
