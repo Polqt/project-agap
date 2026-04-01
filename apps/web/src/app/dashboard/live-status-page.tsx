@@ -36,7 +36,9 @@ type EvacuationStatus =
   | "checked_in"
   | "safe"
   | "need_help"
-  | "unknown";
+  | "unknown"
+  | "welfare_check_dispatched"
+  | "not_home";
 
 type Household = {
   id: string;
@@ -70,6 +72,14 @@ const STATUS_BADGE: Record<EvacuationStatus, { label: string; className: string 
     label: "Evacuating",
     className: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   },
+  welfare_check_dispatched: {
+    label: "Welfare dispatch",
+    className: "bg-orange-500/15 text-orange-800 dark:text-orange-300",
+  },
+  not_home: {
+    label: "Not home",
+    className: "bg-slate-500/15 text-slate-700 dark:text-slate-300",
+  },
 };
 
 const VULNERABILITY_LABELS: Record<VulnerabilityFlag, string> = {
@@ -102,17 +112,18 @@ function formatTimestamp(dateStr: string) {
 }
 
 function isUnaccounted(status: EvacuationStatus) {
-  return status === "unknown" || status === "home";
+  return status === "unknown" || status === "home" || status === "not_home";
 }
 
 function getSortPriority(h: Household): number {
   if (h.evacuation_status === "need_help") return 0;
-  if (isUnaccounted(h.evacuation_status) && h.vulnerability_flags.length > 0) return 1;
-  if (isUnaccounted(h.evacuation_status)) return 2;
-  if (h.evacuation_status === "evacuating") return 3;
-  if (h.evacuation_status === "checked_in") return 4;
-  if (h.evacuation_status === "safe") return 5;
-  return 4;
+  if (h.evacuation_status === "welfare_check_dispatched") return 1;
+  if (isUnaccounted(h.evacuation_status) && h.vulnerability_flags.length > 0) return 2;
+  if (isUnaccounted(h.evacuation_status)) return 3;
+  if (h.evacuation_status === "evacuating") return 4;
+  if (h.evacuation_status === "checked_in") return 5;
+  if (h.evacuation_status === "safe") return 6;
+  return 5;
 }
 
 function getChannel(h: Household) {

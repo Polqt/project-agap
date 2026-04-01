@@ -11,7 +11,10 @@ type Props = {
   isLoading: boolean;
   isUpdating: boolean;
   updatingHouseholdId?: string;
+  isAssigningWelfare?: boolean;
+  assigningWelfareHouseholdId?: string;
   onUpdateStatus: (householdId: string, evacuationStatus: EvacuationStatus) => void;
+  onAssignWelfare?: (householdId: string) => void;
 };
 
 export function RegistryListCard({
@@ -19,7 +22,10 @@ export function RegistryListCard({
   isLoading,
   isUpdating,
   updatingHouseholdId,
+  isAssigningWelfare,
+  assigningWelfareHouseholdId,
   onUpdateStatus,
+  onAssignWelfare,
 }: Props) {
   return (
     <SectionCard title="Registry list" subtitle="Residents and SMS-only households live in the same accountability surface.">
@@ -32,7 +38,9 @@ export function RegistryListCard({
             key={household.id}
             household={household}
             isUpdating={isUpdating && updatingHouseholdId === household.id}
+            isAssigningWelfare={Boolean(isAssigningWelfare && assigningWelfareHouseholdId === household.id)}
             onUpdateStatus={onUpdateStatus}
+            onAssignWelfare={onAssignWelfare}
           />
         ))
       ) : (

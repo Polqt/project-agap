@@ -17,10 +17,18 @@ const statusActions: Array<{
 type Props = {
   household: Household;
   isUpdating: boolean;
+  isAssigningWelfare?: boolean;
   onUpdateStatus: (householdId: string, evacuationStatus: EvacuationStatus) => void;
+  onAssignWelfare?: (householdId: string) => void;
 };
 
-export function RegistryHouseholdCard({ household, isUpdating, onUpdateStatus }: Props) {
+export function RegistryHouseholdCard({
+  household,
+  isUpdating,
+  isAssigningWelfare,
+  onUpdateStatus,
+  onAssignWelfare,
+}: Props) {
   return (
     <View className="mb-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
       <View className="flex-row items-start justify-between gap-4">
@@ -40,6 +48,15 @@ export function RegistryHouseholdCard({ household, isUpdating, onUpdateStatus }:
         </View>
       </View>
       <View className="mt-4 gap-3">
+        {onAssignWelfare ? (
+          <AppButton
+            label="Assign welfare visit"
+            onPress={() => onAssignWelfare(household.id)}
+            variant="secondary"
+            loading={isAssigningWelfare}
+            disabled={isUpdating}
+          />
+        ) : null}
         {statusActions.map((action) => (
           <AppButton
             key={action.value}
@@ -47,6 +64,7 @@ export function RegistryHouseholdCard({ household, isUpdating, onUpdateStatus }:
             onPress={() => onUpdateStatus(household.id, action.value)}
             variant={action.variant}
             loading={isUpdating}
+            disabled={isAssigningWelfare}
           />
         ))}
       </View>

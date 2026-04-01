@@ -5,6 +5,7 @@ import { broadcastsRouter } from "./broadcasts";
 import { checkInsRouter } from "./checkIns";
 import { dashboardRouter } from "./dashboard";
 import { evacuationCentersRouter } from "./evacuationCenters";
+import { evacuationRoutesRouter } from "./evacuationRoutes";
 import { householdsRouter } from "./households";
 import { needsReportsRouter } from "./needsReports";
 import { profileRouter } from "./profile";

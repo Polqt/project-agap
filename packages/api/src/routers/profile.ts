@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers";
 import { protectedProcedure, router } from "../index";
+import { uuidSchema } from "../schemas.js";
 import type { Profile } from "../supabase";
 
 const updateProfileSchema = z

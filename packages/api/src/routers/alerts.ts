@@ -6,6 +6,7 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, publicProcedure, router } from "../index";
+import { uuidSchema } from "../schemas.js";
 import type { Alert, TableInsert } from "../supabase";
 
 export const alertsRouter = router({

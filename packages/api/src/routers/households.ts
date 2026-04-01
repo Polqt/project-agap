@@ -1,3 +1,6 @@
+import { z } from "zod";
+
+import { ApiError } from "../errors.js";
 import {
   getAuthorizedBarangayId,
   getFoundOrThrow,
@@ -5,10 +8,26 @@ import {
   getProfileOrThrow,
   getPaginationRange,
   getSupabaseDataOrThrow,
-} from "../router-helpers";
-import { officialProcedure, router } from "../index";
-import type { Household, TableInsert } from "../supabase";
-import { z } from "zod";
+} from "../router-helpers.js";
+import { officialProcedure, protectedProcedure, router } from "../index.js";
+import {
+  barangayIdSchema,
+  paginationSchema,
+  uuidSchema,
+  vulnerabilityFlagSchema,
+} from "../schemas.js";
+import type {
+  Household,
+  HouseholdMember,
+  HouseholdWithMembers,
+  TableInsert,
+  WelfareDispatchQueueItem,
+} from "../supabase.js";
+import type { EvacuationStatus, VulnerabilityFlag } from "../supabase/types.js";
+
+const householdBaseSelect =
+  "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, welfare_assigned_profile_id, welfare_assigned_at, created_at, updated_at";
+
 const householdMemberInputSchema = z.object({
   id: uuidSchema.optional(),
   fullName: z.string().trim().min(1).max(160),
@@ -16,6 +35,7 @@ const householdMemberInputSchema = z.object({
   vulnerabilityFlags: z.array(vulnerabilityFlagSchema).max(6).default([]),
   notes: z.string().trim().max(300).nullable().optional(),
 });
+
 const registerHouseholdSchema = z
   .object({
     householdHead: z.string().trim().min(2).max(160),
@@ -59,6 +79,15 @@ function getScopedBarangayId(
   return barangayId;
 }
 
+function appendRedispatchNote(existing: string | null) {
+  const tag = "[Welfare: redispatch requested]";
+  if (existing?.includes(tag)) {
+    return existing;
+  }
+  const base = existing?.trim() ? `${existing.trim()}\n` : "";
+  return `${base}${tag}`;
+}
+
 export const householdsRouter = router({
   getMine: protectedProcedure.query(async ({ ctx }) => {
     const profile = getProfileOrThrow(ctx.profile);
@@ -68,7 +97,7 @@ export const householdsRouter = router({
       await ctx.supabase
         .from("households")
         .select(
-          "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)",
+          `${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
         )
         .eq("barangay_id", barangayId)
         .eq("registered_by", ctx.session.id)
@@ -101,7 +130,7 @@ export const householdsRouter = router({
           await ctx.supabase
             .from("households")
             .select(
-              "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)",
+              `${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
             )
             .eq("id", input.id)
             .eq("barangay_id", barangayId)
@@ -154,16 +183,12 @@ export const householdsRouter = router({
                 .update(basePayload)
                 .eq("id", existingHousehold.id)
                 .eq("registered_by", ctx.session.id)
-                .select(
-                  "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
-                )
+                .select(householdBaseSelect)
                 .maybeSingle()
             : await ctx.supabase
                 .from("households")
                 .insert(basePayload)
-                .select(
-                  "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
-                )
+                .select(householdBaseSelect)
                 .maybeSingle(),
           "Failed to save household.",
         ),
@@ -214,10 +239,7 @@ export const householdsRouter = router({
 
       const query = await ctx.supabase
         .from("households")
-        .select(
-          "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
-          { count: "exact" },
-        )
+        .select(householdBaseSelect, { count: "exact" })
         .eq("barangay_id", barangayId)
         .order("household_head", { ascending: true })
         .range(from, to);
@@ -264,6 +286,162 @@ export const householdsRouter = router({
       ) ?? [];
     }),
 
+  listWelfareDispatchQueue: officialProcedure
+    .input(barangayIdSchema)
+    .query(async ({ ctx, input }) => {
+      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+
+      const rows =
+        getSupabaseDataOrThrow<WelfareDispatchQueueItem[]>(
+          await ctx.supabase.rpc("get_welfare_dispatch_queue", {
+            p_barangay_id: barangayId,
+          }),
+          "Failed to load welfare dispatch queue.",
+        ) ?? [];
+
+      return rows;
+    }),
+
+  listMyWelfareAssignments: officialProcedure
+    .input(barangayIdSchema)
+    .query(async ({ ctx, input }) => {
+      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+
+      return getSupabaseDataOrThrow<Household[]>(
+        await ctx.supabase
+          .from("households")
+          .select(householdBaseSelect)
+          .eq("barangay_id", barangayId)
+          .eq("welfare_assigned_profile_id", ctx.session.id)
+          .eq("evacuation_status", "welfare_check_dispatched")
+          .order("welfare_assigned_at", { ascending: true, nullsFirst: false })
+          .order("household_head", { ascending: true }),
+        "Failed to load welfare assignments.",
+      ) ?? [];
+    }),
+
+  assignWelfareVisit: officialProcedure
+    .input(
+      z.object({
+        householdId: uuidSchema,
+        assigneeProfileId: uuidSchema.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const assigneeId = input.assigneeProfileId ?? ctx.session.id;
+
+      const assignee = getFoundOrThrow(
+        getSupabaseDataOrThrow<{ id: string; role: string; barangay_id: string | null } | null>(
+          await ctx.supabase
+            .from("profiles")
+            .select("id, role, barangay_id")
+            .eq("id", assigneeId)
+            .maybeSingle(),
+          "Failed to validate assignee.",
+        ),
+        "Assignee not found.",
+      );
+
+      if (assignee.role !== "official" || assignee.barangay_id !== barangayId) {
+        throw ApiError.forbidden("Assignee must be an official in this barangay.");
+      }
+
+      const now = new Date().toISOString();
+      const household = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .update({
+              evacuation_status: "welfare_check_dispatched",
+              welfare_assigned_profile_id: assigneeId,
+              welfare_assigned_at: now,
+            })
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .select(householdBaseSelect)
+            .maybeSingle(),
+          "Failed to assign welfare visit.",
+        ),
+        "Household not found.",
+      );
+
+      return household;
+    }),
+
+  recordWelfareOutcome: officialProcedure
+    .input(
+      z.object({
+        householdId: uuidSchema,
+        outcome: z.enum(["safe", "need_help", "not_home", "dispatch_again"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      const current = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .select(householdBaseSelect)
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to load household.",
+        ),
+        "Household not found.",
+      );
+
+      if (current.evacuation_status !== "welfare_check_dispatched") {
+        throw ApiError.badRequest("Household is not in welfare dispatch status.");
+      }
+
+      let nextStatus: EvacuationStatus;
+      let notes = current.notes;
+      const clearWelfare = {
+        welfare_assigned_profile_id: null as string | null,
+        welfare_assigned_at: null as string | null,
+      };
+
+      switch (input.outcome) {
+        case "safe":
+          nextStatus = "safe";
+          break;
+        case "need_help":
+          nextStatus = "need_help";
+          break;
+        case "not_home":
+          nextStatus = "not_home";
+          break;
+        case "dispatch_again":
+          nextStatus = "unknown";
+          notes = appendRedispatchNote(current.notes);
+          break;
+        default:
+          throw ApiError.badRequest("Invalid outcome.");
+      }
+
+      const household = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .update({
+              evacuation_status: nextStatus,
+              notes,
+              ...clearWelfare,
+            })
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .select(householdBaseSelect)
+            .maybeSingle(),
+          "Failed to record welfare outcome.",
+        ),
+        "Household not found.",
+      );
+
+      return household;
+    }),
+
   upsert: officialProcedure
     .input(
       z.object({
@@ -300,9 +478,7 @@ export const householdsRouter = router({
               })
               .eq("id", input.id)
               .eq("barangay_id", barangayId)
-              .select(
-                "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
-              )
+              .select(householdBaseSelect)
               .maybeSingle(),
             "Failed to update household.",
           ),
@@ -330,9 +506,7 @@ export const householdsRouter = router({
           await ctx.supabase
             .from("households")
             .insert(insertPayload)
-            .select(
-              "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
-            )
+            .select(householdBaseSelect)
             .maybeSingle(),
           "Failed to create household.",
         ),
@@ -374,28 +548,36 @@ export const householdsRouter = router({
           "safe",
           "need_help",
           "unknown",
+          "not_home",
           "welfare_check_dispatched",
         ]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
-      const nextStatus =
+      const now = new Date().toISOString();
+
+      const patch =
         input.evacuationStatus === "welfare_check_dispatched"
-          ? "need_help"
-          : input.evacuationStatus;
+          ? {
+              evacuation_status: input.evacuationStatus as EvacuationStatus,
+              welfare_assigned_profile_id: ctx.session.id,
+              welfare_assigned_at: now,
+            }
+          : {
+              evacuation_status: input.evacuationStatus as EvacuationStatus,
+              welfare_assigned_profile_id: null,
+              welfare_assigned_at: null,
+            };
+
       const household = getFoundOrThrow<Household | null>(
         getSupabaseDataOrThrow<Household | null>(
           await ctx.supabase
             .from("households")
-            .update({
-              evacuation_status: nextStatus,
-            })
+            .update(patch)
             .eq("id", input.householdId)
             .eq("barangay_id", barangayId)
-            .select(
-              "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at",
-            )
+            .select(householdBaseSelect)
             .maybeSingle(),
           "Failed to update household status.",
         ),

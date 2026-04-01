@@ -7,6 +7,7 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, publicProcedure, router } from "../index";
+import { locationSchema, uuidSchema } from "../schemas.js";
 import type { EvacuationCenter, NearbyCenter } from "../supabase";
 
 export const evacuationCentersRouter = router({
