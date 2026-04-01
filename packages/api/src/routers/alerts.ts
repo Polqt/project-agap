@@ -1,54 +1,88 @@
 import { z } from "zod";
 
 import {
+  getAuthorizedBarangayId,
   getFoundOrThrow,
+  getProfileOrThrow,
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
-import { officialProcedure, publicProcedure, router } from "../index";
+import { ApiError } from "../errors";
+import { officialProcedure, protectedProcedure, router } from "../index";
+import { uuidSchema } from "../schemas";
 import type { Alert, TableInsert } from "../supabase";
 
+const alertColumns =
+  "id, barangay_id, source, severity, hazard_type, title, title_filipino, body, body_filipino, signal_level, recommended_actions, recommended_actions_filipino, source_url, issued_at, expires_at, is_active, external_id, created_at";
+
+function isAlertExpired(expiresAt: string | null) {
+  if (!expiresAt) {
+    return false;
+  }
+
+  return new Date(expiresAt).getTime() < Date.now();
+}
+
+function isAlertVisibleToBarangay(alert: Alert, barangayId: string) {
+  if (!alert.is_active || isAlertExpired(alert.expires_at)) {
+    return false;
+  }
+
+  return alert.barangay_id === null || alert.barangay_id === barangayId;
+}
+
 export const alertsRouter = router({
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(
       z.object({
         id: uuidSchema,
       }),
     )
     .query(async ({ ctx, input }) => {
-      return getFoundOrThrow<Alert | null>(
+      const profile = getProfileOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(profile);
+
+      const alert = getFoundOrThrow<Alert | null>(
         getSupabaseDataOrThrow<Alert | null>(
           await ctx.supabase
             .from("alerts")
-            .select(
-              "id, barangay_id, source, severity, hazard_type, title, title_filipino, body, body_filipino, signal_level, recommended_actions, recommended_actions_filipino, source_url, issued_at, expires_at, is_active, external_id, created_at",
-            )
+            .select(alertColumns)
             .eq("id", input.id)
             .maybeSingle(),
           "Failed to load alert.",
         ),
         "Alert not found.",
       );
+
+      if (!isAlertVisibleToBarangay(alert, barangayId)) {
+        throw ApiError.notFound("Alert not found.");
+      }
+
+      return alert;
     }),
 
-  listActive: publicProcedure
+  listActive: protectedProcedure
     .input(
       z.object({
-        barangayId: uuidSchema,
+        barangayId: uuidSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      return getSupabaseDataOrThrow<Alert[]>(
+      const profile = getProfileOrThrow(ctx.profile);
+      const barangayId = getAuthorizedBarangayId(profile, input.barangayId);
+
+      const alerts =
+        getSupabaseDataOrThrow<Alert[]>(
         await ctx.supabase
           .from("alerts")
-          .select(
-            "id, barangay_id, source, severity, hazard_type, title, title_filipino, body, body_filipino, signal_level, recommended_actions, recommended_actions_filipino, source_url, issued_at, expires_at, is_active, external_id, created_at",
-          )
+          .select(alertColumns)
           .eq("is_active", true)
-          .or(`barangay_id.eq.${input.barangayId},barangay_id.is.null`)
+          .or(`barangay_id.eq.${barangayId},barangay_id.is.null`)
           .order("issued_at", { ascending: false }),
         "Failed to list active alerts.",
-      ) ?? [];
+        ) ?? [];
+
+      return alerts.filter((alert) => !isAlertExpired(alert.expires_at));
     }),
 
   createManual: officialProcedure
@@ -93,9 +127,7 @@ export const alertsRouter = router({
           await ctx.supabase
             .from("alerts")
             .insert(insertPayload)
-            .select(
-              "id, barangay_id, source, severity, hazard_type, title, title_filipino, body, body_filipino, signal_level, recommended_actions, recommended_actions_filipino, source_url, issued_at, expires_at, is_active, external_id, created_at",
-            )
+            .select(alertColumns)
             .maybeSingle(),
           "Failed to create manual alert.",
         ),

@@ -8,6 +8,7 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, protectedProcedure, router } from "../index";
+import { barangayIdSchema, locationSchema, uuidSchema } from "../schemas";
 import type { StatusPing, TableInsert } from "../supabase";
 
 export const statusPingsRouter = router({

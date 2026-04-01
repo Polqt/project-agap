@@ -1,7 +1,7 @@
 import { initTRPC } from "@trpc/server";
 
-import type { Context } from "./context.js";
-import { ApiError } from "./errors.js";
+import type { Context } from "./context";
+import { ApiError } from "./errors";
 
 export const t = initTRPC.context<Context>().create();
 

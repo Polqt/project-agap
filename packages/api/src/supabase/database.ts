@@ -14,7 +14,7 @@ import type {
   TableDefinition,
   VulnerabilityFlag,
   EvacuationStatus,
-} from "./types.js";
+} from "./types";
 
 export interface Database {
   public: {

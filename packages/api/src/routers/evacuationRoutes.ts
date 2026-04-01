@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { getSupabaseDataOrThrow } from "../router-helpers.js";
-import { publicProcedure, router } from "../index.js";
-import { uuidSchema } from "../schemas.js";
-import type { EvacuationRoute } from "../supabase.js";
+import { getSupabaseDataOrThrow } from "../router-helpers";
+import { publicProcedure, router } from "../index";
+import { uuidSchema } from "../schemas";
+import type { EvacuationRoute } from "../supabase";
 
 export const evacuationRoutesRouter = router({
   listByBarangay: publicProcedure

@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { AppButton, EmptyState, Pill, ScreenHeader, SectionCard } from "@/shared/components/ui";
+import { AppButton, EmptyState, InfoRow, Pill, ScreenHeader, SectionCard } from "@/shared/components/ui";
 import { formatDateTime } from "@/shared/utils/date";
 
 import { AlertLanguageToggle } from "./AlertLanguageToggle";
@@ -8,7 +8,21 @@ import { useAlertDetail } from "../hooks/useAlertDetail";
 import { getAlertSignalLabel, getAlertSourceLabel, getAlertTone, isAlertStale } from "../utils";
 
 export function AlertDetailView() {
-  const { alertId, alert, alertCopy, isLoading, language, setLanguage, shareAlert } = useAlertDetail();
+  const {
+    alertId,
+    alert,
+    alertCopy,
+    isLoading,
+    isRefreshing,
+    isError,
+    errorMessage,
+    language,
+    setLanguage,
+    feedback,
+    refreshAlert,
+    shareAlert,
+    openSourceUrl,
+  } = useAlertDetail();
 
   if (!alertId) {
     return (
@@ -33,11 +47,25 @@ export function AlertDetailView() {
         eyebrow="Alert detail"
         title={alertCopy?.title ?? "Loading alert"}
         description={alert?.hazard_type ? `${alert.hazard_type} update` : "Active barangay alert"}
-        action={alert ? <AppButton label="Share" onPress={() => void shareAlert()} variant="ghost" /> : undefined}
+        action={
+          <View className="gap-2">
+            {alert ? <AppButton label="Share" onPress={() => void shareAlert()} variant="ghost" /> : null}
+            <AppButton label="Refresh" onPress={() => void refreshAlert()} variant="ghost" loading={isRefreshing} />
+          </View>
+        }
       />
 
       {alert && alertCopy ? (
         <>
+          {signalLabel ? (
+            <SectionCard title="Signal level" subtitle="Prominent advisory indicator for residents.">
+              <Text className="text-3xl font-bold text-amber-700">{signalLabel}</Text>
+              <Text className="mt-3 text-sm leading-6 text-slate-600">
+                Follow barangay and agency guidance immediately if your area is affected by this signal level.
+              </Text>
+            </SectionCard>
+          ) : null}
+
           <SectionCard
             title="Overview"
             subtitle={`Issued ${formatDateTime(alert.issued_at)}`}
@@ -53,6 +81,12 @@ export function AlertDetailView() {
             <Text className="text-sm leading-7 text-slate-700">{alertCopy.body}</Text>
           </SectionCard>
 
+          <SectionCard title="Alert information">
+            <InfoRow label="Source" value={getAlertSourceLabel(alert.source)} />
+            <InfoRow label="Issued" value={formatDateTime(alert.issued_at)} />
+            <InfoRow label="Expires" value={formatDateTime(alert.expires_at)} />
+          </SectionCard>
+
           <SectionCard title="Recommended actions">
             <Text className="text-sm leading-7 text-slate-700">
               {alertCopy.recommendedActions || "No specific recommended actions were attached to this alert."}
@@ -62,19 +96,33 @@ export function AlertDetailView() {
           {alert.source_url ? (
             <SectionCard title="Source link">
               <Text className="text-sm leading-7 text-blue-700">{alert.source_url}</Text>
+              <View className="mt-4">
+                <AppButton label="Open source" onPress={() => void openSourceUrl()} variant="ghost" />
+              </View>
+            </SectionCard>
+          ) : null}
+
+          {feedback ? (
+            <SectionCard title="Alert action status">
+              <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
             </SectionCard>
           ) : null}
         </>
       ) : (
         <SectionCard>
           <EmptyState
-            title={isLoading ? "Loading alert" : "Alert unavailable"}
+            title={isLoading || isRefreshing ? "Loading alert" : "Alert unavailable"}
             description={
-              isLoading
+              isLoading || isRefreshing
                 ? "Agap is fetching the full advisory details for this notification."
-                : "The requested alert could not be loaded."
+                : errorMessage ?? "The requested alert could not be loaded."
             }
           />
+          {isError ? (
+            <View className="mt-4">
+              <AppButton label="Try again" onPress={() => void refreshAlert()} variant="ghost" />
+            </View>
+          ) : null}
         </SectionCard>
       )}
     </View>

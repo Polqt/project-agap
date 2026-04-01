@@ -1,7 +1,7 @@
 import type { Alert } from "@project-agap/api/supabase";
 
 import { ALERT_STALE_HOURS } from "./constants";
-import type { AlertLanguage } from "./types";
+import type { AlertCopy, AlertLanguage } from "./types";
 
 export function getAlertTone(severity: string) {
   switch (severity) {
@@ -53,7 +53,7 @@ export function getAlertSourceLabel(source: Alert["source"]) {
   }
 }
 
-export function getAlertCopy(alert: Alert, language: AlertLanguage) {
+export function getAlertCopy(alert: Alert, language: AlertLanguage): AlertCopy {
   const isFilipino = language === "filipino";
 
   return {
@@ -63,6 +63,16 @@ export function getAlertCopy(alert: Alert, language: AlertLanguage) {
       ? alert.recommended_actions_filipino || alert.recommended_actions || ""
       : alert.recommended_actions || alert.recommended_actions_filipino || "",
   };
+}
+
+export function getAlertPreview(alert: Alert, language: AlertLanguage) {
+  const copy = getAlertCopy(alert, language);
+
+  if (copy.body.length <= 180) {
+    return copy.body;
+  }
+
+  return `${copy.body.slice(0, 177).trimEnd()}...`;
 }
 
 export function buildAlertShareMessage(alert: Alert, language: AlertLanguage) {

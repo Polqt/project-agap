@@ -7,6 +7,7 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { protectedProcedure, router } from "../index";
+import { locationSchema, uuidSchema } from "../schemas";
 import type { CheckIn, CheckInByQrResult, TableInsert } from "../supabase";
 
 export const checkInsRouter = router({

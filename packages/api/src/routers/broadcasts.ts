@@ -7,6 +7,7 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, router } from "../index";
+import { barangayIdSchema } from "../schemas";
 import type { Broadcast, TableInsert } from "../supabase";
 import { sendSms } from "../textbee";
 

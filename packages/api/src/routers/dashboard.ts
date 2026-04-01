@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { getAuthorizedBarangayId, getSupabaseDataOrThrow } from "../router-helpers";
 import { officialProcedure, router } from "../index";
+import { barangayIdSchema, uuidSchema } from "../schemas";
 import type { DashboardSummary, SmsFollowupItem } from "../supabase";
 
 export const dashboardRouter = router({

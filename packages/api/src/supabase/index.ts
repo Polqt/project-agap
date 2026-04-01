@@ -1,3 +1,3 @@
-export * from "./types.js";
-export * from "./database.js";
-export * from "./helpers.js";
+export * from "./types";
+export * from "./database";
+export * from "./helpers";

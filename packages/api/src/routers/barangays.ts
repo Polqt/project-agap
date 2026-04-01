@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers";
 import { publicProcedure, router } from "../index";
-import { uuidSchema } from "../schemas.js";
+import { uuidSchema } from "../schemas";
 import type { Barangay } from "../supabase";
 
 /** Pilot barangay; keep in sync with packages/db/supabase/migrations/20260330120000_seed_barangay_banago.sql */
