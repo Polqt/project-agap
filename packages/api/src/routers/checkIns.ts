@@ -7,13 +7,8 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { protectedProcedure, router } from "../index";
+import { locationSchema, uuidSchema } from "../schemas";
 import type { CheckIn, CheckInByQrResult, TableInsert } from "../supabase";
-
-const uuidSchema = z.string().uuid();
-const locationSchema = z.object({
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-});
 
 export const checkInsRouter = router({
   byQr: protectedProcedure
@@ -128,6 +123,80 @@ export const checkInsRouter = router({
           "Failed to create manual check-in.",
         ),
         "Manual check-in failed.",
+      );
+
+      return checkIn;
+    }),
+
+  proxy: protectedProcedure
+    .input(
+      z
+        .object({
+          centerId: uuidSchema,
+          householdId: uuidSchema,
+          memberIds: z.array(uuidSchema).max(20).default([]),
+          notes: z.string().trim().max(500).nullish(),
+        })
+        .merge(locationSchema),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const profile = getProfileOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(profile);
+
+      getFoundOrThrow<{ id: string } | null>(
+        getSupabaseDataOrThrow<{ id: string } | null>(
+          await ctx.supabase
+            .from("evacuation_centers")
+            .select("id")
+            .eq("id", input.centerId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to validate evacuation center.",
+        ),
+        "Evacuation center not found.",
+      );
+
+      getFoundOrThrow<{ id: string } | null>(
+        getSupabaseDataOrThrow<{ id: string } | null>(
+          await ctx.supabase
+            .from("households")
+            .select("id")
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to validate household for proxy check-in.",
+        ),
+        "Household not found.",
+      );
+
+      const memberNotes =
+        input.memberIds.length > 0
+          ? `Proxy members: ${input.memberIds.join(", ")}`
+          : null;
+
+      const insertPayload: TableInsert<"check_ins"> = {
+        barangay_id: barangayId,
+        center_id: input.centerId,
+        resident_id: ctx.session.id,
+        household_id: input.householdId,
+        method: "proxy",
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
+        notes: [input.notes ?? null, memberNotes].filter(Boolean).join("\n") || null,
+      };
+
+      const checkIn = getFoundOrThrow<CheckIn | null>(
+        getSupabaseDataOrThrow<CheckIn | null>(
+          await ctx.supabase
+            .from("check_ins")
+            .insert(insertPayload)
+            .select(
+              "id, barangay_id, center_id, resident_id, household_id, method, checked_in_at, latitude, longitude, notes",
+            )
+            .maybeSingle(),
+          "Failed to create proxy check-in.",
+        ),
+        "Proxy check-in failed.",
       );
 
       return checkIn;

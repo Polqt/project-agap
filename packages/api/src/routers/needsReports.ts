@@ -54,8 +54,20 @@ export const needsReportsRouter = router({
         "Needs report submission failed.",
       );
 
-      return report;
-    }),
+    return getFoundOrThrow(
+      getSupabaseDataOrThrow<NeedsReport | null>(
+        await ctx.supabase
+          .from("needs_reports")
+          .insert({ ...input, barangay_id: barangayId, submitted_by: ctx.session.id })
+          .select(
+            "id, barangay_id, center_id, submitted_by, total_evacuees, needs_food_packs, needs_water_liters, needs_medicine, needs_blankets, medical_cases, notes, status, acknowledged_by, acknowledged_at, submitted_at, updated_at",
+          )
+          .maybeSingle(),
+        "Failed to submit needs report.",
+      ),
+      "Needs report submission failed.",
+    );
+  }),
 
   list: officialProcedure
     .input(

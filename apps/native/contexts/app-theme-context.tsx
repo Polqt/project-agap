@@ -1,55 +1,39 @@
-import React, { createContext, useCallback, useContext, useMemo } from "react";
-import { Uniwind, useUniwind } from "uniwind";
+import { createContext, useContext, useMemo, useState, type PropsWithChildren } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-type ThemeName = "light" | "dark";
-
-type AppThemeContextType = {
-  currentTheme: string;
+type AppThemeContextValue = {
   isLight: boolean;
-  isDark: boolean;
-  setTheme: (theme: ThemeName) => void;
   toggleTheme: () => void;
 };
 
-const AppThemeContext = createContext<AppThemeContextType | undefined>(undefined);
+const AppThemeContext = createContext<AppThemeContextValue | null>(null);
 
-export const AppThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const { theme } = useUniwind();
-
-  const isLight = useMemo(() => {
-    return theme === "light";
-  }, [theme]);
-
-  const isDark = useMemo(() => {
-    return theme === "dark";
-  }, [theme]);
-
-  const setTheme = useCallback((newTheme: ThemeName) => {
-    Uniwind.setTheme(newTheme);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    Uniwind.setTheme(theme === "light" ? "dark" : "light");
-  }, [theme]);
+export function AppThemeProvider({ children }: PropsWithChildren) {
+  const [isLight, setIsLight] = useState(true);
 
   const value = useMemo(
     () => ({
-      currentTheme: theme,
       isLight,
-      isDark,
-      setTheme,
-      toggleTheme,
+      toggleTheme: () => {
+        setIsLight((current) => !current);
+      },
     }),
-    [theme, isLight, isDark, setTheme, toggleTheme],
+    [isLight],
   );
 
-  return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
-};
+  return (
+    <SafeAreaProvider>
+      <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>
+    </SafeAreaProvider>
+  );
+}
 
 export function useAppTheme() {
   const context = useContext(AppThemeContext);
+
   if (!context) {
-    throw new Error("useAppTheme must be used within AppThemeProvider");
+    throw new Error("useAppTheme must be used within AppThemeProvider.");
   }
+
   return context;
 }

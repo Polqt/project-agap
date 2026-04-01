@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import {
@@ -6,9 +7,8 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, publicProcedure, router } from "../index";
+import { locationSchema, uuidSchema } from "../schemas";
 import type { EvacuationCenter, NearbyCenter } from "../supabase";
-
-const uuidSchema = z.string().uuid();
 
 export const evacuationCentersRouter = router({
   listByBarangay: publicProcedure
@@ -34,10 +34,13 @@ export const evacuationCentersRouter = router({
     .input(
       z.object({
         barangayId: uuidSchema,
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
         radiusKm: z.number().positive().max(100).default(10),
-      }),
+      }).merge(
+        locationSchema.extend({
+          latitude: z.number().min(-90).max(90),
+          longitude: z.number().min(-180).max(180),
+        }),
+      ),
     )
     .query(async ({ ctx, input }) => {
       return getSupabaseDataOrThrow<NearbyCenter[]>(
@@ -72,6 +75,33 @@ export const evacuationCentersRouter = router({
             )
             .maybeSingle(),
           "Failed to update evacuation center.",
+        ),
+        "Evacuation center not found.",
+      );
+
+      return center;
+    }),
+
+  rotateQrToken: officialProcedure
+    .input(
+      z.object({
+        centerId: uuidSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const center = getFoundOrThrow<EvacuationCenter | null>(
+        getSupabaseDataOrThrow<EvacuationCenter | null>(
+          await ctx.supabase
+            .from("evacuation_centers")
+            .update({ qr_code_token: randomUUID() })
+            .eq("id", input.centerId)
+            .eq("barangay_id", barangayId)
+            .select(
+              "id, barangay_id, name, address, latitude, longitude, capacity, is_open, contact_number, notes, qr_code_token, current_occupancy, created_at, updated_at",
+            )
+            .maybeSingle(),
+          "Failed to rotate center QR token.",
         ),
         "Evacuation center not found.",
       );

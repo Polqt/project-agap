@@ -8,18 +8,27 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, protectedProcedure, router } from "../index";
+import { barangayIdSchema, locationSchema, uuidSchema } from "../schemas";
 import type { StatusPing, TableInsert } from "../supabase";
 
-const uuidSchema = z.string().uuid();
-const barangayInputSchema = z.object({
-  barangayId: uuidSchema.optional(),
-});
-const locationSchema = z.object({
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-});
-
 export const statusPingsRouter = router({
+  getLatestMine: protectedProcedure.query(async ({ ctx }) => {
+    const ping = getSupabaseDataOrThrow<StatusPing | null>(
+      await ctx.supabase
+        .from("status_pings")
+        .select(
+          "id, barangay_id, resident_id, household_id, status, channel, latitude, longitude, message, is_resolved, resolved_by, resolved_at, pinged_at",
+        )
+        .eq("resident_id", ctx.session.id)
+        .order("pinged_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      "Failed to load latest status ping.",
+    );
+
+    return ping;
+  }),
+
   submit: protectedProcedure
     .input(
       z
@@ -112,7 +121,7 @@ export const statusPingsRouter = router({
     }),
 
   listUnresolved: officialProcedure
-    .input(barangayInputSchema)
+    .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
       const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
 

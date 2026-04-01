@@ -1,38 +1,72 @@
 import "@/global.css";
-import { QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { HeroUINativeProvider } from "heroui-native";
+import { Fragment, type PropsWithChildren } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
-import { queryClient } from "@/utils/trpc";
+import { AuthProvider } from "@/providers/AuthProvider";
+import { OfflineQueueProvider } from "@/providers/OfflineQueueProvider";
+import { QueryProvider } from "@/providers/QueryProvider";
+import { RealtimeSyncProvider } from "@/providers/RealtimeSyncProvider";
 
 export const unstable_settings = {
-  initialRouteName: "(drawer)",
+  initialRouteName: "index",
 };
 
-function StackLayout() {
-  return (
-    <Stack screenOptions={{}}>
-      <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ title: "Modal", presentation: "modal" }} />
-    </Stack>
-  );
+function isExpoGo() {
+  return Constants.executionEnvironment === "storeClient";
 }
 
-export default function Layout() {
+function BootKeyboardProvider({ children }: PropsWithChildren) {
+  if (isExpoGo()) {
+    return <Fragment>{children}</Fragment>;
+  }
+
+  try {
+    const keyboardControllerModule = require("react-native-keyboard-controller") as {
+      KeyboardProvider: React.ComponentType<PropsWithChildren>;
+    };
+    const KeyboardProvider = keyboardControllerModule.KeyboardProvider;
+
+    return <KeyboardProvider>{children}</KeyboardProvider>;
+  } catch {
+    return <Fragment>{children}</Fragment>;
+  }
+}
+
+export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <BootKeyboardProvider>
+        <QueryProvider>
           <AppThemeProvider>
-            <HeroUINativeProvider>
-              <StackLayout />
+            <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
+              <AuthProvider>
+                <OfflineQueueProvider>
+                  <RealtimeSyncProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="index" />
+                      <Stack.Screen name="onboarding" />
+                      <Stack.Screen name="modal" />
+                      <Stack.Screen name="(auth)" />
+                      <Stack.Screen name="(resident)" />
+                      <Stack.Screen name="(official)" />
+                      {/*
+                       * Register the whole (shared) group here.
+                       * Individual screen options (modal, title) live inside
+                       * app/(shared)/_layout.tsx so expo-router can resolve them.
+                       */}
+                      <Stack.Screen name="(shared)" options={{ headerShown: false }} />
+                    </Stack>
+                  </RealtimeSyncProvider>
+                </OfflineQueueProvider>
+              </AuthProvider>
             </HeroUINativeProvider>
           </AppThemeProvider>
-        </KeyboardProvider>
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+        </QueryProvider>
+      </BootKeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

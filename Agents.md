@@ -55,10 +55,18 @@ project-agap/
 
 - `pnpm install` - Install dependencies
 - `pnpm dev` - Start development server
+- `pnpm dev:web` - Start the Next.js app that serves the `/api/trpc` backend on port 3001
+- `pnpm dev:native` - Start the Expo React Native app
 - `pnpm build` - Build for production
 - `pnpm test` - Run tests
 - `pnpm db:push` - Push database schema
 - `pnpm db:studio` - Open database UI
+
+## Local Mobile Connectivity
+
+- The native app reaches the backend through the Next.js tRPC route in `apps/web/src/app/api/trpc/[trpc]/route.ts`
+- For physical-device testing, `apps/native/.env` must set `EXPO_PUBLIC_SERVER_URL` to the laptop's LAN IP, not `localhost`
+- Mobile testing requires both the web server and Expo dev server to be running
 
 ## Maintenance
 
