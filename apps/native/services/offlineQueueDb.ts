@@ -7,7 +7,9 @@ const CREATE_QUEUE_TABLE_SQL = `
     type TEXT NOT NULL,
     payload TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    retries INTEGER DEFAULT 0
+    retries INTEGER DEFAULT 0,
+    failed_at INTEGER,
+    last_error TEXT
   );
 `;
 
@@ -20,6 +22,8 @@ function mapRow(row: OfflineQueueRow): QueuedAction {
     payload: JSON.parse(row.payload) as QueuedAction["payload"],
     createdAt: row.created_at,
     retries: row.retries,
+    failedAt: row.failed_at,
+    lastError: row.last_error,
   };
 }
 
@@ -37,7 +41,7 @@ export async function getOfflineQueueDatabase() {
 export async function listQueuedActions() {
   const database = await getOfflineQueueDatabase();
   const rows = await database.getAllAsync<OfflineQueueRow>(
-    "SELECT id, type, payload, created_at, retries FROM offline_queue ORDER BY created_at ASC",
+    "SELECT id, type, payload, created_at, retries, failed_at, last_error FROM offline_queue ORDER BY created_at ASC",
   );
 
   return rows.map(mapRow);
@@ -46,12 +50,14 @@ export async function listQueuedActions() {
 export async function insertQueuedAction(action: QueuedAction) {
   const database = await getOfflineQueueDatabase();
   await database.runAsync(
-    "INSERT OR REPLACE INTO offline_queue (id, type, payload, created_at, retries) VALUES (?, ?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO offline_queue (id, type, payload, created_at, retries, failed_at, last_error) VALUES (?, ?, ?, ?, ?, ?, ?)",
     action.id,
     action.type,
     JSON.stringify(action.payload),
     action.createdAt,
     action.retries,
+    action.failedAt,
+    action.lastError,
   );
 }
 
@@ -63,4 +69,14 @@ export async function deleteQueuedAction(id: string) {
 export async function updateQueuedActionRetries(id: string, retries: number) {
   const database = await getOfflineQueueDatabase();
   await database.runAsync("UPDATE offline_queue SET retries = ? WHERE id = ?", retries, id);
+}
+
+export async function markQueuedActionFailed(id: string, error: string) {
+  const database = await getOfflineQueueDatabase();
+  await database.runAsync(
+    "UPDATE offline_queue SET failed_at = ?, last_error = ? WHERE id = ?",
+    Date.now(),
+    error,
+    id,
+  );
 }
