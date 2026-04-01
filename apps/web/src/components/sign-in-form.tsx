@@ -2,15 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ArrowRight, Mail, UserRound } from "lucide-react";
 
 import { useAuthClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () => void }) {
+export default function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { signInWithEmail, signInWithOAuth } = useAuthClient();
+  const { signInWithEmail } = useAuthClient();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,95 +33,53 @@ export default function SignInForm({ onSwitchToSignUp }: { onSwitchToSignUp: () 
     }
   };
 
-  const handleOAuthSignIn = async (provider: "google" | "github") => {
-    setIsLoading(true);
-    setError(null);
-    const { error } = await signInWithOAuth(provider);
-    if (error) {
-      setError(error.message);
-      setIsLoading(false);
-    }
-  };
-
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
-      <h2 className="text-2xl font-bold text-center mb-6">Sign In</h2>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
-          <input
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="email" className="text-xs">Email</Label>
+        <div className="relative">
+          <Mail className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
             id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="you@example.com"
+            className="h-10 pl-8 text-sm"
           />
         </div>
+      </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
-          <input
+      <div className="space-y-1.5">
+        <Label htmlFor="password" className="text-xs">Password</Label>
+        <div className="relative">
+          <UserRound className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            className="h-10 pl-8 text-sm"
           />
-        </div>
-
-        {error && <div className="text-red-600 text-sm">{error}</div>}
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          {isLoading ? "Signing in..." : "Sign In"}
-        </button>
-      </form>
-
-      <div className="mt-4">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or continue with</span>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            onClick={() => handleOAuthSignIn("github")}
-            disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            GitHub
-          </button>
-          <button
-            onClick={() => handleOAuthSignIn("google")}
-            disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            Google
-          </button>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onSwitchToSignUp}
-        className="mt-4 w-full text-indigo-600 hover:text-indigo-800 text-sm"
+      {error && (
+        <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+
+      <Button
+        type="submit"
+        disabled={isLoading}
+        className="h-10 w-full justify-between px-3 text-sm"
       >
-        Need an account? Sign Up
-      </button>
-    </div>
+        {isLoading ? "Signing in..." : "Sign In"}
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Button>
+    </form>
   );
 }

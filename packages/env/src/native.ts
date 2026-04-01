@@ -5,6 +5,9 @@ export const env = createEnv({
   clientPrefix: "EXPO_PUBLIC_",
   client: {
     EXPO_PUBLIC_SERVER_URL: z.url(),
+    EXPO_PUBLIC_SUPABASE_URL: z.url(),
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+    EXPO_PUBLIC_APP_ENV: z.enum(["development", "preview", "production"]).default("development"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

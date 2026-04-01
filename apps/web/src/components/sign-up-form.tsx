@@ -2,8 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ArrowRight, CheckCircle2, Github, KeyRound, Mail, UserRound } from "lucide-react";
 
 import { useAuthClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
   const [email, setEmail] = useState("");
@@ -49,113 +53,128 @@ export default function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () 
 
   if (success) {
     return (
-      <div className="mx-auto w-full mt-10 max-w-md p-6 text-center">
-        <h2 className="text-2xl font-bold mb-4">Check your email</h2>
-        <p className="text-gray-600 mb-4">
-          We've sent you a confirmation link. Please check your email to complete your registration.
+      <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-5 text-center">
+        <CheckCircle2 className="mx-auto h-8 w-8 text-green-600" />
+        <h2 className="text-lg font-semibold">Check your email</h2>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+            We've sent you a confirmation link. Please check your email to complete registration.
         </p>
-        <button onClick={onSwitchToSignIn} className="text-indigo-600 hover:text-indigo-800">
+        <Button variant="link" onClick={onSwitchToSignIn} className="h-auto py-0.5 text-xs">
           Back to Sign In
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full mt-10 max-w-md p-6">
-      <h2 className="text-2xl font-bold text-center mb-6">Sign Up</h2>
+    <div className="space-y-5">
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Official Onboarding</p>
+        <h2 className="text-xl font-semibold">Create your account</h2>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Register to access dashboards, status updates, and emergency coordination tools.
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="signup-email" className="text-xs">Email</Label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="signup-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="h-10 pl-8 text-sm"
+            />
+          </div>
         </div>
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
+        <div className="space-y-1.5">
+          <Label htmlFor="signup-password" className="text-xs">Password</Label>
+          <div className="relative">
+            <KeyRound className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="signup-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="h-10 pl-8 text-sm"
+            />
+          </div>
         </div>
 
-        <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-            Confirm Password
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={6}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
+        <div className="space-y-1.5">
+          <Label htmlFor="confirm-password" className="text-xs">Confirm Password</Label>
+          <div className="relative">
+            <UserRound className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+              className="h-10 pl-8 text-sm"
+            />
+          </div>
         </div>
 
-        {error && <div className="text-red-600 text-sm">{error}</div>}
+        {error && (
+          <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+            {error}
+          </p>
+        )}
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
-          {isLoading ? "Creating account..." : "Sign Up"}
-        </button>
+        <Button type="submit" disabled={isLoading} className="h-10 w-full justify-between px-3 text-sm">
+          {isLoading ? "Creating account..." : "Create Account"}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
       </form>
 
-      <div className="mt-4">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or continue with</span>
-          </div>
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border" />
         </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            onClick={() => handleOAuthSignIn("github")}
-            disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            GitHub
-          </button>
-          <button
-            onClick={() => handleOAuthSignIn("google")}
-            disabled={isLoading}
-            className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            Google
-          </button>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onSwitchToSignIn}
-        className="mt-4 w-full text-indigo-600 hover:text-indigo-800 text-sm"
-      >
-        Already have an account? Sign In
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleOAuthSignIn("github")}
+          disabled={isLoading}
+          className="h-10 text-sm"
+        >
+          <Github className="h-3.5 w-3.5" />
+          GitHub
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleOAuthSignIn("google")}
+          disabled={isLoading}
+          className="h-10 text-sm"
+        >
+          Google
+        </Button>
+      </div>
+
+        <Button
+          variant="link"
+          onClick={onSwitchToSignIn}
+          className="h-auto w-full py-1 text-xs"
+        >
+          Already have an account? Sign In
+        </Button>
     </div>
   );
 }
