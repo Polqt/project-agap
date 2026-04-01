@@ -32,7 +32,7 @@ function verifySignature(body: string, signature: string | null, secret: string)
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
-async function sendAutoReply(recipient: string, message: string, barangayId: string, supabase: ReturnType<typeof createClient>) {
+async function sendAutoReply(recipient: string, message: string, barangayId: string, supabase: any) {
   const apiKey = process.env.TEXTBEE_API_KEY;
   const deviceId = process.env.TEXTBEE_DEVICE_ID;
   if (!apiKey || !deviceId) return null;
@@ -50,7 +50,7 @@ async function sendAutoReply(recipient: string, message: string, barangayId: str
     const data = success ? await res.json() : null;
     const messageId = data?.messageId ?? data?.id ?? null;
 
-    await supabase.from("sms_logs").insert({
+    await (supabase as any).from("sms_logs").insert({
       barangay_id: barangayId,
       direction: "outbound" as const,
       phone_number: recipient,
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, matched: false });
   }
 
-  const { error: insertError } = await supabase.from("sms_logs").insert({
+  const { error: insertError } = await (supabase as any).from("sms_logs").insert({
     barangay_id: barangayId,
     household_id: household?.id ?? null,
     direction: "inbound" as const,
