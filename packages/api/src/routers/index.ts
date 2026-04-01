@@ -7,6 +7,7 @@ import { dashboardRouter } from "./dashboard";
 import { evacuationCentersRouter } from "./evacuationCenters";
 import { evacuationRoutesRouter } from "./evacuationRoutes";
 import { householdsRouter } from "./households";
+import { incidentReportsRouter } from "./incidentReports";
 import { needsReportsRouter } from "./needsReports";
 import { profileRouter } from "./profile";
 import { smsLogsRouter } from "./smsLogs";
@@ -24,6 +25,7 @@ export const appRouter = router({
   evacuationCenters: evacuationCentersRouter,
   evacuationRoutes: evacuationRoutesRouter,
   households: householdsRouter,
+  incidentReports: incidentReportsRouter,
   needsReports: needsReportsRouter,
   profile: profileRouter,
   smsLogs: smsLogsRouter,

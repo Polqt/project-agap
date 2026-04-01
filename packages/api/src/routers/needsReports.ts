@@ -19,13 +19,13 @@ export const needsReportsRouter = router({
     .input(
       z.object({
         centerId: uuidSchema.optional(),
-        totalEvacuees: z.number(),
-        needsFoodPacks: z.number(),
-        needsWaterLiters: z.number(),
+        totalEvacuees: z.number().int().min(0),
+        needsFoodPacks: z.number().int().min(0),
+        needsWaterLiters: z.number().int().min(0),
         needsMedicine: z.boolean(),
-        needsBlankets: z.number(),
-        medicalCases: z.string().optional(),
-        notes: z.string().optional(),
+        needsBlankets: z.number().int().min(0),
+        medicalCases: z.string().trim().max(1000).optional(),
+        notes: z.string().trim().max(2000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -42,7 +42,7 @@ export const needsReportsRouter = router({
         notes: input.notes ?? null,
       };
 
-      const report = getFoundOrThrow<NeedsReport | null>(
+      return getFoundOrThrow<NeedsReport | null>(
         getSupabaseDataOrThrow<NeedsReport | null>(
           await ctx.supabase
             .from("needs_reports")
@@ -53,21 +53,7 @@ export const needsReportsRouter = router({
         ),
         "Needs report submission failed.",
       );
-
-    return getFoundOrThrow(
-      getSupabaseDataOrThrow<NeedsReport | null>(
-        await ctx.supabase
-          .from("needs_reports")
-          .insert({ ...input, barangay_id: barangayId, submitted_by: ctx.session.id })
-          .select(
-            "id, barangay_id, center_id, submitted_by, total_evacuees, needs_food_packs, needs_water_liters, needs_medicine, needs_blankets, medical_cases, notes, status, acknowledged_by, acknowledged_at, submitted_at, updated_at",
-          )
-          .maybeSingle(),
-        "Failed to submit needs report.",
-      ),
-      "Needs report submission failed.",
-    );
-  }),
+    }),
 
   list: officialProcedure
     .input(
