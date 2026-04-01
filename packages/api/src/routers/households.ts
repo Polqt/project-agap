@@ -6,9 +6,13 @@ import {
   getPaginationRange,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
-import { officialProcedure, router } from "../index";
-import type { Household, TableInsert } from "../supabase";
 import { z } from "zod";
+import { ApiError } from "../errors";
+import { officialProcedure, protectedProcedure, router } from "../index";
+import { barangayIdSchema, paginationSchema, uuidSchema, vulnerabilityFlagSchema } from "../schemas";
+import type { Household, HouseholdMember, HouseholdWithMembers, TableInsert } from "../supabase";
+import type { VulnerabilityFlag } from "../supabase/types";
+
 const householdMemberInputSchema = z.object({
   id: uuidSchema.optional(),
   fullName: z.string().trim().min(1).max(160),

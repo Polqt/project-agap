@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAlertShareMessage,
   getAlertCopy,
+  getAlertPreview,
   getAlertSignalLabel,
   isAlertStale,
 } from "../../../../apps/native/features/alerts/utils";
@@ -54,5 +55,18 @@ describe("alerts utils", () => {
     expect(message).toContain("Signal level: Signal 3");
     expect(message).toContain("Source: Official");
     expect(message).toContain("More info: https://example.com/alert");
+  });
+
+  it("creates a shortened alert preview for long bodies", () => {
+    const preview = getAlertPreview(
+      {
+        ...baseAlert,
+        body: "a".repeat(220),
+      },
+      "english",
+    );
+
+    expect(preview.length).toBeLessThanOrEqual(180);
+    expect(preview.endsWith("...")).toBe(true);
   });
 });

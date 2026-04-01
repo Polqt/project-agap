@@ -1,8 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FlashList } from "@shopify/flash-list";
-import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Pressable, Text, type TextInput, View } from "react-native";
 
@@ -10,16 +8,16 @@ import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { AppButton, Pill, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { getErrorMessage } from "@/shared/utils/errors";
-import { trpc } from "@/services/trpc";
 import { residentSignUpSchema, type ResidentSignUpFormValues } from "@/types/forms";
 
 const personalFields = ["email", "password", "confirmPassword", "fullName"] as const;
+const PILOT_BARANGAY_BANAGO_ID = "c0ffee00-baaa-4aaa-8aaa-0000bac0d001";
+const PILOT_BARANGAY_LABEL = "Barangay Banago, Bacolod City";
 
 export function SignUpForm() {
   const router = useRouter();
   const { signUpResident, role, isAuthenticated, isLoading } = useAuth();
   const [step, setStep] = useState(0);
-  const [barangayQuery, setBarangayQuery] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fullNameRef = useRef<TextInput>(null);
@@ -27,7 +25,6 @@ export function SignUpForm() {
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
-  const barangaySearchRef = useRef<TextInput>(null);
   const purokRef = useRef<TextInput>(null);
 
   const form = useForm<ResidentSignUpFormValues>({
@@ -38,30 +35,10 @@ export function SignUpForm() {
       confirmPassword: "",
       fullName: "",
       phoneNumber: "",
-      barangayId: "",
+      barangayId: PILOT_BARANGAY_BANAGO_ID,
       purok: "",
     },
   });
-
-  const barangaysQuery = useQuery(
-    trpc.barangays.listAll.queryOptions(undefined, {
-      staleTime: 1000 * 60 * 5,
-    }),
-  );
-
-  const filteredBarangays = useMemo(() => {
-    const query = barangayQuery.trim().toLowerCase();
-
-    if (!query) {
-      return barangaysQuery.data ?? [];
-    }
-
-    return (barangaysQuery.data ?? []).filter((barangay) => {
-      return `${barangay.name} ${barangay.municipality} ${barangay.province}`
-        .toLowerCase()
-        .includes(query);
-    });
-  }, [barangayQuery, barangaysQuery.data]);
 
   useEffect(() => {
     if (isLoading || !isAuthenticated || !role) {
@@ -71,19 +48,19 @@ export function SignUpForm() {
     router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
   }, [isAuthenticated, isLoading, role, router]);
 
+  useEffect(() => {
+    form.setValue("barangayId", PILOT_BARANGAY_BANAGO_ID, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
+    });
+  }, [form]);
+
   const nextStep = async () => {
     if (step === 0) {
       const isValid = await form.trigger(personalFields);
       if (isValid) {
         setStep(1);
-      }
-      return;
-    }
-
-    if (step === 1) {
-      const isValid = await form.trigger("barangayId");
-      if (isValid) {
-        setStep(2);
       }
     }
   };
@@ -113,19 +90,17 @@ export function SignUpForm() {
       <ScreenHeader
         eyebrow="Resident sign-up"
         title="Create your resident account"
-        description="This is a short three-step flow: personal info, barangay selection, then purok assignment."
+        description="This is a short two-step flow for Banago residents: personal info, then purok assignment."
       />
 
       <SectionCard
-        title={`Step ${step + 1} of 3`}
+        title={`Step ${step + 1} of 2`}
         subtitle={
           step === 0
             ? "Start with your personal details and login credentials."
-            : step === 1
-              ? "Pick the barangay where your household belongs."
-              : "Finish your setup with your purok."
+            : "Finish your setup with your purok."
         }
-        right={<Pill label={step === 0 ? "Personal" : step === 1 ? "Barangay" : "Purok"} tone="info" />}
+        right={<Pill label={step === 0 ? "Personal" : "Purok"} tone="info" />}
       >
         {step === 0 ? (
           <View className="gap-4">
@@ -231,48 +206,16 @@ export function SignUpForm() {
 
         {step === 1 ? (
           <View className="gap-4">
-            <TextField
-              ref={barangaySearchRef}
-              label="Search barangay"
-              value={barangayQuery}
-              onChangeText={setBarangayQuery}
-              placeholder="Search by barangay or municipality"
-              returnKeyType="search"
-              autoCorrect={false}
-            />
-            <Controller
-              control={form.control}
-              name="barangayId"
-              render={({ field, fieldState }) => (
-                <View className="gap-2">
-                  <Text className="text-sm font-medium text-slate-700">Barangay list</Text>
-                  <View className="h-80 rounded-2xl border border-slate-200 bg-slate-50">
-                    <FlashList
-                      data={filteredBarangays}
-                      renderItem={({ item }) => (
-                        <Pressable
-                          onPress={() => field.onChange(item.id)}
-                          className={`border-b border-slate-200 px-4 py-4 ${field.value === item.id ? "bg-blue-50" : ""}`}
-                        >
-                          <Text className="text-base font-semibold text-slate-950">{item.name}</Text>
-                          <Text className="mt-1 text-sm text-slate-500">
-                            {item.municipality}, {item.province}
-                          </Text>
-                        </Pressable>
-                      )}
-                    />
-                  </View>
-                  {fieldState.error?.message ? (
-                    <Text className="text-sm text-rose-600">{fieldState.error.message}</Text>
-                  ) : null}
-                </View>
-              )}
-            />
-          </View>
-        ) : null}
-
-        {step === 2 ? (
-          <View className="gap-4">
+            <View className="gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
+              <Text className="text-sm font-medium text-slate-700">Assigned pilot barangay</Text>
+              <Text className="text-base font-semibold text-slate-950">{PILOT_BARANGAY_LABEL}</Text>
+              <Text className="text-sm text-slate-600">
+                Agap v1 currently supports resident registration for Banago only, so your account will be assigned here automatically.
+              </Text>
+            </View>
+            {form.formState.errors.barangayId?.message ? (
+              <Text className="text-sm text-rose-600">{form.formState.errors.barangayId.message}</Text>
+            ) : null}
             <Controller
               control={form.control}
               name="purok"
@@ -296,8 +239,8 @@ export function SignUpForm() {
 
         <View className="mt-6 flex-row gap-3">
           {step > 0 ? <AppButton label="Back" onPress={() => setStep((value) => value - 1)} variant="ghost" /> : null}
-          {step < 2 ? <AppButton label="Continue" onPress={() => void nextStep()} /> : null}
-          {step === 2 ? <AppButton label="Create account" onPress={handleSubmit} loading={isSubmitting} /> : null}
+          {step < 1 ? <AppButton label="Continue" onPress={() => void nextStep()} /> : null}
+          {step === 1 ? <AppButton label="Create account" onPress={handleSubmit} loading={isSubmitting} /> : null}
         </View>
       </SectionCard>
 

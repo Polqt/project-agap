@@ -1,8 +1,8 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import type { Context } from "./context.js";
-import { ApiError } from "./errors.js";
-import type { ContextProfile } from "./supabase.js";
+import type { Context } from "./context";
+import { ApiError } from "./errors";
+import type { ContextProfile } from "./supabase";
 
 type SupabaseResponse<T> = {
   data: T | null;

@@ -46,6 +46,43 @@ pnpm run dev
 Open [http://localhost:3001](http://localhost:3001) in your browser to see the fullstack application.
 Use the Expo Go app to run the mobile application.
 
+## Native Connectivity
+
+The React Native app calls the tRPC backend through the Next.js route at `/api/trpc`.
+That means mobile testing needs the web app running, not just Expo.
+
+For local development:
+
+1. Start the web/API server:
+
+```bash
+pnpm run dev:web
+```
+
+2. Start the Expo app:
+
+```bash
+pnpm run dev:native
+```
+
+3. In `apps/native/.env`, set `EXPO_PUBLIC_SERVER_URL` to your laptop's LAN IP on port `3001`, not `localhost`.
+
+Example:
+
+```bash
+EXPO_PUBLIC_SERVER_URL=http://192.168.1.47:3001
+```
+
+4. Make sure your phone and laptop are on the same Wi-Fi network.
+
+5. Verify the backend from your phone browser:
+
+```text
+http://192.168.1.47:3001/api/trpc/healthCheck
+```
+
+If the mobile app uses `http://localhost:3001`, a physical phone will fail to reach the backend and screens like Alerts will show `Network request failed`.
+
 ## Project Structure
 
 ```

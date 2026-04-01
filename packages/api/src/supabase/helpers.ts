@@ -1,4 +1,4 @@
-import type { Database } from "./database.js";
+import type { Database } from "./database";
 
 export type TableRow<Name extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][Name]["Row"];
