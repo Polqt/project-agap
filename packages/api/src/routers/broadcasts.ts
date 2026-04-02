@@ -11,8 +11,6 @@ import { barangayIdSchema } from "../schemas";
 import type { Broadcast, TableInsert } from "../supabase";
 import { sendSms } from "../textbee";
 
-const uuidSchema = z.string().uuid();
-
 const broadcastColumns =
   "id, barangay_id, sent_by, broadcast_type, message, message_filipino, target_purok, push_sent_count, sms_sent_count, sent_at";
 
@@ -71,7 +69,7 @@ export const broadcastsRouter = router({
 
       let smsSentCount = 0;
 
-      const smsResults = await Promise.allSettled(
+      await Promise.allSettled(
         recipients.map(async (household) => {
           const result = await sendSms(household.phone_number, smsMessage);
 

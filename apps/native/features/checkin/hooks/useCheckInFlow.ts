@@ -10,7 +10,13 @@ import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 
 import type { CheckInMode } from "../types";
 
-export function useCheckInFlow() {
+export type UseCheckInFlowOptions = {
+  /** Shared tablet walk-in flow: QR + manual only, larger UI in CheckInFlow. */
+  kioskMode?: boolean;
+};
+
+export function useCheckInFlow(options?: UseCheckInFlowOptions) {
+  const kioskMode = options?.kioskMode ?? false;
   const { profile } = useAuth();
   const { isOnline, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
@@ -85,6 +91,12 @@ export function useCheckInFlow() {
   useEffect(() => {
     setSelectedProxyMemberIds([]);
   }, [selectedProxyHouseholdId]);
+
+  useEffect(() => {
+    if (kioskMode && mode === "proxy") {
+      setMode("manual");
+    }
+  }, [kioskMode, mode]);
 
   function handleProxyHouseholdSelect(householdId: string) {
     setSelectedProxyHouseholdId(householdId);
@@ -257,5 +269,6 @@ export function useCheckInFlow() {
     submitQrCheckIn,
     submitProxyCheckIn,
     handleQrFallback,
+    kioskMode,
   };
 }

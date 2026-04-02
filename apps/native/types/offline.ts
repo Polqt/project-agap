@@ -1,8 +1,16 @@
+export type WelfareOutcomeQueued = "safe" | "need_help" | "not_home" | "dispatch_again";
+
+export type WelfareRecordOutcomeQueuePayload = {
+  householdId: string;
+  outcome: WelfareOutcomeQueued;
+};
+
 export type OfflineActionType =
   | "status-ping.submit"
   | "check-in.qr"
   | "check-in.manual"
-  | "check-in.proxy";
+  | "check-in.proxy"
+  | "welfare.recordOutcome";
 
 export type StatusPingQueuePayload = {
   householdId?: string | null;
@@ -41,6 +49,7 @@ export type OfflinePayloadMap = {
   "check-in.qr": CheckInQrQueuePayload;
   "check-in.manual": CheckInManualQueuePayload;
   "check-in.proxy": CheckInProxyQueuePayload;
+  "welfare.recordOutcome": WelfareRecordOutcomeQueuePayload;
 };
 
 export type QueuedAction<TType extends OfflineActionType = OfflineActionType> = {

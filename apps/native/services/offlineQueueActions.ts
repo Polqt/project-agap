@@ -5,6 +5,7 @@ import type {
   CheckInQrQueuePayload,
   QueuedAction,
   StatusPingQueuePayload,
+  WelfareRecordOutcomeQueuePayload,
 } from "@/types/offline";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,6 +44,11 @@ export async function replayQueuedAction(action: QueuedAction) {
       return;
     case "check-in.proxy":
       await trpcClient.checkIns.proxy.mutate(action.payload as CheckInProxyQueuePayload);
+      return;
+    case "welfare.recordOutcome":
+      await trpcClient.households.recordWelfareOutcome.mutate(
+        action.payload as WelfareRecordOutcomeQueuePayload,
+      );
       return;
     default:
       throw new Error("Unsupported queued action.");
