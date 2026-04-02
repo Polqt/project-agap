@@ -12,6 +12,8 @@ type RealtimeRecord = {
   barangay_id?: string | null;
   title?: string | null;
   body?: string | null;
+  message?: string | null;
+  broadcast_type?: string | null;
   is_active?: boolean | null;
 };
 
@@ -43,5 +45,20 @@ export function getRealtimeAlertNotification(payload: RealtimePayloadLike) {
   return {
     title: payload.new.title || "New barangay alert",
     body: payload.new.body || "Open Agap to view the latest advisory details.",
+  };
+}
+
+export function shouldNotifyResidentBroadcast(payload: RealtimePayloadLike) {
+  return payload.eventType === "INSERT";
+}
+
+export function getRealtimeBroadcastNotification(payload: RealtimePayloadLike) {
+  const typeLabel = payload.new.broadcast_type
+    ? payload.new.broadcast_type.replaceAll("_", " ").toUpperCase()
+    : "Barangay update";
+
+  return {
+    title: typeLabel,
+    body: payload.new.message || "Open Agap to read the latest barangay broadcast.",
   };
 }

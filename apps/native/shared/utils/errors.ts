@@ -14,13 +14,34 @@ export function getErrorMessage(error: unknown, fallback = "Something went wrong
 }
 
 export function isOfflineLikeError(error: unknown) {
-  const message = getErrorMessage(error, "").toLowerCase();
+  if (error instanceof TRPCClientError) {
+    // If tRPC returned a code, the request reached the server and should not be queued as offline.
+    if (error.data?.code) {
+      return false;
+    }
+  }
+
+  const message = getErrorMessage(error, "");
+  const causeMessage =
+    error instanceof Error && typeof error.cause === "object" && error.cause
+      ? String((error.cause as { message?: unknown }).message ?? "")
+      : "";
+
+  return hasNetworkSignature(message) || hasNetworkSignature(causeMessage);
+}
+
+function hasNetworkSignature(message: string) {
+  const value = message.toLowerCase();
 
   return (
-    message.includes("network request failed") ||
-    message.includes("network error") ||
-    message.includes("fetch failed") ||
-    message.includes("offline")
+    value.includes("network request failed") ||
+    value.includes("network error") ||
+    value.includes("fetch failed") ||
+    value.includes("failed to fetch") ||
+    value.includes("connection refused") ||
+    value.includes("timed out") ||
+    value.includes("econnrefused") ||
+    value.includes("offline")
   );
 }
 

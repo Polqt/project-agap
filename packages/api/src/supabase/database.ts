@@ -94,13 +94,13 @@ export interface Database {
         Args: { p_barangay_id: string; p_query: string };
         Returns: Database["public"]["Tables"]["households"]["Row"][];
       };
-      get_nearby_centers: NearbyCentersRpc;
-      checkin_by_qr: CheckinByQrRpc;
-      resolve_need_help_ping: ResolveNeedHelpPingRpc;
-      get_sms_followup_list: SmsFollowupListRpc;
-      get_welfare_dispatch_queue: WelfareDispatchQueueRpc;
-      upsert_push_token: UpsertPushTokenRpc;
-    };
+        get_nearby_centers: NearbyCentersRpc;
+        checkin_by_qr: CheckinByQrRpc;
+        resolve_need_help_ping: ResolveNeedHelpPingRpc;
+        get_sms_followup_list: SmsFollowupListRpc;
+        get_welfare_dispatch_queue: WelfareDispatchQueueRpc;
+        upsert_push_token: UpsertPushTokenRpc;
+      };
     Enums: {
       app_role: AppRole;
       vulnerability_flag: VulnerabilityFlag;

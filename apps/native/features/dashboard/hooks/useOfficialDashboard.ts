@@ -52,11 +52,6 @@ export function useOfficialDashboard() {
     ),
   );
 
-  const isLoading =
-    summaryQuery.isLoading ||
-    unresolvedQuery.isLoading ||
-    centersQuery.isLoading ||
-    unaccountedQuery.isLoading;
   const welfareDispatchQuery = useQuery(
     trpc.households.listWelfareDispatchQueue.queryOptions(
       { barangayId: profile?.barangay_id ?? undefined },
@@ -66,6 +61,13 @@ export function useOfficialDashboard() {
       },
     ),
   );
+
+  const isLoading =
+    summaryQuery.isLoading ||
+    unresolvedQuery.isLoading ||
+    centersQuery.isLoading ||
+    unaccountedQuery.isLoading ||
+    welfareDispatchQuery.isLoading;
 
   const resolveMutation = useMutation(
     trpc.statusPings.resolve.mutationOptions({
