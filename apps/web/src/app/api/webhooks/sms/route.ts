@@ -32,6 +32,19 @@ function verifySignature(body: string, signature: string | null, secret: string)
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
+function normalizePhoneVariants(value: string) {
+  const normalized = value.replace(/\s+/g, "");
+  const variants = new Set([normalized]);
+
+  if (normalized.startsWith("+63")) {
+    variants.add(normalized.replace(/^\+63/, "0"));
+  } else if (normalized.startsWith("0")) {
+    variants.add(normalized.replace(/^0/, "+63"));
+  }
+
+  return Array.from(variants);
+}
+
 async function sendAutoReply(recipient: string, message: string, barangayId: string, supabase: any) {
   const apiKey = process.env.TEXTBEE_API_KEY;
   const deviceId = process.env.TEXTBEE_DEVICE_ID;
@@ -115,12 +128,13 @@ export async function POST(req: NextRequest) {
     auth: { persistSession: false },
   });
 
-  const normalizedPhone = sender.replace(/\s+/g, "");
+  const phoneVariants = normalizePhoneVariants(sender);
+  const normalizedPhone = phoneVariants[0];
 
   const { data: household } = await supabase
     .from("households")
     .select("id, barangay_id, household_head, evacuation_status")
-    .or(`phone_number.eq.${normalizedPhone},phone_number.eq.${normalizedPhone.replace(/^\+63/, "0")}`)
+    .or(phoneVariants.map((phone) => `phone_number.eq.${phone}`).join(","))
     .limit(1)
     .maybeSingle();
 
@@ -134,16 +148,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, matched: false });
   }
 
+  const { data: latestOutbound } = await supabase
+    .from("sms_logs")
+    .select("id, broadcast_id, delivered_at")
+    .eq("barangay_id", barangayId)
+    .eq("direction", "outbound")
+    .or(phoneVariants.map((phone) => `phone_number.eq.${phone}`).join(","))
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const replyTimestamp = receivedAt ?? new Date().toISOString();
+
+  if (latestOutbound?.id) {
+    await supabase
+      .from("sms_logs")
+      .update({
+        delivery_status: "replied",
+        replied_at: replyTimestamp,
+        delivered_at: latestOutbound.delivered_at ?? replyTimestamp,
+      })
+      .eq("id", latestOutbound.id);
+  }
+
   const { error: insertError } = await (supabase as any).from("sms_logs").insert({
     barangay_id: barangayId,
     household_id: household?.id ?? null,
+    broadcast_id: latestOutbound?.broadcast_id ?? null,
     direction: "inbound" as const,
     phone_number: normalizedPhone,
     message,
     delivery_status: "replied" as const,
     keyword_reply: keyword,
     gateway_message_id: smsId ?? null,
-    replied_at: receivedAt ?? new Date().toISOString(),
+    replied_at: replyTimestamp,
   });
 
   if (insertError) {
@@ -153,8 +191,8 @@ export async function POST(req: NextRequest) {
 
   let autoReplied = false;
 
-  // LIGTAS → mark household as safe
-  // TULONG → mark household as need_help (urgent)
+  // LIGTAS -> mark household as safe
+  // TULONG -> mark household as need_help (urgent)
   const newStatus = STATUS_FROM_KEYWORD[keyword];
   if (household && newStatus && household.evacuation_status !== newStatus) {
     await supabase
@@ -183,7 +221,7 @@ export async function POST(req: NextRequest) {
     autoReplied = true;
   }
 
-  // NASAAN → auto-reply with nearest evacuation center address
+  // NASAAN -> auto-reply with nearest evacuation center address
   if (keyword === "NASAAN") {
     const { data: centers } = await supabase
       .from("evacuation_centers")
@@ -220,7 +258,7 @@ export async function POST(req: NextRequest) {
     autoReplied = true;
   }
 
-  // SINO → auto-reply with barangay captain info
+  // SINO -> auto-reply with barangay captain info
   if (keyword === "SINO") {
     const { data: barangay } = await supabase
       .from("barangays")

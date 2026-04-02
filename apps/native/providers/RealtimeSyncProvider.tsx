@@ -6,8 +6,10 @@ import { scheduleAlertNotificationAsync } from "@/services/notifications";
 import {
   REALTIME_TABLES,
   getRealtimeAlertNotification,
+  getRealtimeBroadcastNotification,
   matchesRealtimeBarangayScope,
   shouldNotifyResidentAlert,
+  shouldNotifyResidentBroadcast,
 } from "@/services/realtime";
 import { supabase } from "@/services/supabase";
 import { queryClient } from "@/services/trpc";
@@ -17,12 +19,15 @@ type RealtimeRow = {
   barangay_id?: string | null;
   title?: string | null;
   body?: string | null;
+  message?: string | null;
+  broadcast_type?: string | null;
   is_active?: boolean | null;
 };
 
 export function RealtimeSyncProvider({ children }: PropsWithChildren) {
   const { profile, isAuthenticated } = useAuth();
   const lastAlertIdRef = useRef<string | null>(null);
+  const lastBroadcastIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !profile?.barangay_id) {
@@ -77,6 +82,21 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
             lastAlertIdRef.current = nextAlertId;
 
             void scheduleAlertNotificationAsync(getRealtimeAlertNotification(payload));
+          }
+
+          if (profile.role === "resident" && table === "broadcasts" && shouldNotifyResidentBroadcast(payload)) {
+            const nextBroadcastId =
+              payload.new && "id" in payload.new && typeof payload.new.id === "string"
+                ? payload.new.id
+                : null;
+
+            if (nextBroadcastId && nextBroadcastId === lastBroadcastIdRef.current) {
+              return;
+            }
+
+            lastBroadcastIdRef.current = nextBroadcastId;
+
+            void scheduleAlertNotificationAsync(getRealtimeBroadcastNotification(payload));
           }
         },
       );

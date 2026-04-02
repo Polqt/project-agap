@@ -23,9 +23,8 @@ export function NeedsReportsPanel() {
 
   return (
     <ScreenShell
-      eyebrow="5.3.4 Needs reports"
-      title="Submit shelter needs"
-      description="Capture evacuee counts and urgent supply needs from the field so the barangay can escalate quickly."
+      title="Reports"
+      description="Shelter needs and latest submissions."
       feedback={feedback ?? incidentFeedback}
     >
       <SectionCard>

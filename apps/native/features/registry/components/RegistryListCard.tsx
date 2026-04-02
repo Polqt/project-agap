@@ -1,54 +1,60 @@
-import { Text } from "react-native";
+import { View } from "react-native";
 
-import { EmptyState, SectionCard } from "@/shared/components/ui";
+import { EmptyState } from "@/shared/components/ui";
 
 import { RegistryHouseholdCard } from "./RegistryHouseholdCard";
 
-import type { EvacuationStatus, Household } from "@project-agap/api/supabase";
+import type { EvacuationStatus, Household, HouseholdWithMembers } from "@project-agap/api/supabase";
 
 type Props = {
+  expandedHousehold: HouseholdWithMembers | null;
+  expandedHouseholdId: string | null;
   households: Household[];
+  isAssigningWelfare: boolean;
   isLoading: boolean;
   isUpdating: boolean;
-  updatingHouseholdId?: string;
-  isAssigningWelfare?: boolean;
-  assigningWelfareHouseholdId?: string;
+  onAssignWelfare: (householdId: string) => void;
+  onToggleHousehold: (householdId: string) => void;
   onUpdateStatus: (householdId: string, evacuationStatus: EvacuationStatus) => void;
-  onAssignWelfare?: (householdId: string) => void;
 };
 
 export function RegistryListCard({
+  expandedHousehold,
+  expandedHouseholdId,
   households,
+  isAssigningWelfare,
   isLoading,
   isUpdating,
-  updatingHouseholdId,
-  isAssigningWelfare,
-  assigningWelfareHouseholdId,
-  onUpdateStatus,
   onAssignWelfare,
+  onToggleHousehold,
+  onUpdateStatus,
 }: Props) {
-  return (
-    <SectionCard title="Registry list" subtitle="Residents and SMS-only households live in the same accountability surface.">
-      {isLoading && !households.length ? (
-        <Text className="text-sm text-slate-500">Loading registry data...</Text>
-      ) : null}
-      {households.length ? (
-        households.map((household) => (
-          <RegistryHouseholdCard
-            key={household.id}
-            household={household}
-            isUpdating={isUpdating && updatingHouseholdId === household.id}
-            isAssigningWelfare={Boolean(isAssigningWelfare && assigningWelfareHouseholdId === household.id)}
-            onUpdateStatus={onUpdateStatus}
-            onAssignWelfare={onAssignWelfare}
-          />
-        ))
-      ) : (
+  if (!households.length && !isLoading) {
+    return (
+      <View className="mx-5 mt-5">
         <EmptyState
           title="No households found"
-          description="When residents finish onboarding or officials register households, they will appear here."
+          description="Try another search or switch filters to widen the registry list."
         />
-      )}
-    </SectionCard>
+      </View>
+    );
+  }
+
+  return (
+    <View className="mx-5 mt-5 mb-8 gap-3">
+      {households.map((household) => (
+        <RegistryHouseholdCard
+          key={household.id}
+          expandedHousehold={expandedHouseholdId === household.id ? expandedHousehold : null}
+          household={household}
+          isAssigningWelfare={isAssigningWelfare && expandedHouseholdId === household.id}
+          isExpanded={expandedHouseholdId === household.id}
+          isUpdating={isUpdating && expandedHouseholdId === household.id}
+          onAssignWelfare={onAssignWelfare}
+          onToggle={onToggleHousehold}
+          onUpdateStatus={onUpdateStatus}
+        />
+      ))}
+    </View>
   );
 }

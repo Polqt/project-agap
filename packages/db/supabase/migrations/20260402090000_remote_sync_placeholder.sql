@@ -1,0 +1,5 @@
+-- Placeholder migration to align local history with the linked remote project.
+--
+-- The linked Supabase project already has version 20260402090000 recorded in
+-- migration history, but the original SQL file is not present in this repo.
+-- This no-op migration lets subsequent tracked migrations apply cleanly.

@@ -7,7 +7,6 @@ import {
   insertQueuedAction,
   listQueuedActions,
   markQueuedActionFailed,
-  resetFailedQueuedActions,
   updateQueuedActionRetries,
 } from "@/services/offlineQueueDb";
 import {
@@ -106,7 +105,6 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
       setSyncStatus(nextOnline ? "online" : "offline");
 
       if (nextOnline) {
-        void resetFailedQueuedActions();
         void flushQueue();
       }
     });

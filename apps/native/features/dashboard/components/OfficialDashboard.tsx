@@ -1,7 +1,7 @@
 import { ScreenShell } from "@/shared/components/screen-shell";
 import { useRouter } from "expo-router";
-import { Text, View } from "react-native";
-import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
+import { Pressable, Text, View } from "react-native";
+import { AppButton } from "@/shared/components/ui";
 
 import { CenterQrCard } from "./CenterQrCard";
 import { CenterStatusCard } from "./CenterStatusCard";
@@ -31,12 +31,24 @@ export function OfficialDashboard() {
 
   return (
     <ScreenShell
-      eyebrow="Official dashboard"
-      title="Command view"
+      title="Command"
+      description="Live command surface for Banago."
       action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
       feedback={feedback}
       isLoading={isLoading}
       loadingLabel="Refreshing dashboard data..."
+      floatingAction={
+        <View className="items-end px-5">
+          <Pressable
+            onPress={() => {
+              router.push({ pathname: "/broadcast", params: { tab: "send", compose: String(Date.now()) } });
+            }}
+            className="rounded-full bg-blue-700 px-5 py-4 shadow-sm"
+          >
+            <Text className="text-sm font-semibold text-white">Quick Broadcast</Text>
+          </Pressable>
+        </View>
+      }
     >
       <DashboardSummaryCards summary={summary} />
       <PriorityQueueCard

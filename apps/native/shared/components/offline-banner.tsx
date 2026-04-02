@@ -32,7 +32,7 @@ export function OfflineBanner() {
     <View className="pointer-events-none absolute bottom-24 left-4 right-4 z-50">
       <View className={`rounded-xl border px-4 py-2 shadow-sm ${toneClasses}`}>
         <Text className="text-xs font-semibold text-slate-800">
-          {statusLabel} · {pendingQueueCount} queued · {failedQueueCount} failed
+          {statusLabel} / {pendingQueueCount} queued / {failedQueueCount} failed
         </Text>
       </View>
     </View>

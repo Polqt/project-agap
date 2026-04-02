@@ -1,4 +1,5 @@
 import type {
+  EvacuationStatus,
   FunctionDefinition,
   PushPlatform,
   VulnerabilityFlag,
@@ -70,6 +71,31 @@ export type SmsFollowupListRpc = FunctionDefinition<
     vulnerability_flags: VulnerabilityFlag[];
     sms_sent_at: string;
     minutes_since_sent: number;
+  }[]
+>;
+
+export type WelfareDispatchQueueRpc = FunctionDefinition<
+  {
+    p_barangay_id: string;
+  },
+  {
+    id: string;
+    barangay_id: string;
+    registered_by: string | null;
+    household_head: string;
+    purok: string;
+    address: string;
+    phone_number: string | null;
+    total_members: number;
+    vulnerability_flags: VulnerabilityFlag[];
+    is_sms_only: boolean;
+    evacuation_status: EvacuationStatus;
+    notes: string | null;
+    welfare_assigned_profile_id: string | null;
+    welfare_assigned_at: string | null;
+    created_at: string;
+    updated_at: string | null;
+    assignee_full_name: string | null;
   }[]
 >;
 

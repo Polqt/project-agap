@@ -113,6 +113,8 @@ export type HouseholdsRow = TimestampedUpdated & {
   is_sms_only: boolean;
   evacuation_status: EvacuationStatus;
   notes: string | null;
+  welfare_assigned_profile_id: string | null;
+  welfare_assigned_at: string | null;
 };
 export type HouseholdsInsert = ReadonlyMutationShape<
   HouseholdsRow,

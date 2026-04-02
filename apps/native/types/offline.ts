@@ -58,6 +58,8 @@ export type NeedsReportSubmitQueuePayload = {
 };
 
 export type BroadcastCreateQueuePayload = {
+  broadcastId?: string;
+  sentAt?: string;
   broadcastType: "evacuate_now" | "stay_alert" | "all_clear" | "custom";
   message: string;
   messageFilipino?: string | null;
