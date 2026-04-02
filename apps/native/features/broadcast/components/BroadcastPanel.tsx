@@ -55,7 +55,7 @@ export function BroadcastPanel() {
                 <Pressable
                   key={tab.value}
                   onPress={() => setActiveTab(tab.value)}
-                  className={`flex-1 rounded-[16px] px-4 py-3 ${isActive ? "bg-white" : ""}`}
+                  className={`flex-1 rounded-2xl px-4 py-3 ${isActive ? "bg-white" : ""}`}
                 >
                   <Text className={`text-center text-sm font-semibold ${isActive ? "text-slate-950" : "text-slate-500"}`}>
                     {tab.label}
@@ -81,7 +81,7 @@ export function BroadcastPanel() {
       }
     >
       {broadcastsError ? (
-        <View className="mx-5 mt-5 rounded-[24px] bg-rose-50 px-4 py-4">
+        <View className="mx-5 mt-5 rounded-3xl bg-rose-50 px-4 py-4">
           <Text className="text-sm leading-6 text-rose-700">{broadcastsError}</Text>
         </View>
       ) : null}

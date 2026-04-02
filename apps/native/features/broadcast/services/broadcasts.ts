@@ -1,4 +1,4 @@
-import type { Broadcast, Profile, TableInsert } from "@project-agap/api/supabase";
+import type { Alert, Broadcast, Profile, SmsLog, TableInsert } from "@project-agap/api/supabase";
 
 import { supabase } from "@/services/supabase";
 import { trpcClient } from "@/services/trpc";
@@ -20,6 +20,20 @@ export type BroadcastTimelineItem = Broadcast & {
 
 type BroadcastAuthor = Pick<Profile, "id" | "barangay_id">;
 const broadcastAuthorColumns = "id, barangay_id";
+const smsLogColumns =
+  "id, barangay_id, household_id, broadcast_id, direction, phone_number, message, delivery_status, keyword_reply, gateway_message_id, error_message, sent_at, delivered_at, replied_at, created_at";
+
+export type BroadcastAudienceOverview = {
+  householdCount: number;
+  smsReachableCount: number;
+  appReachableCount: number;
+  puroks: Array<{
+    purok: string;
+    householdCount: number;
+    smsReachableCount: number;
+    appReachableCount: number;
+  }>;
+};
 
 function createUuid() {
   const randomUuid = globalThis.crypto?.randomUUID;
@@ -130,6 +144,90 @@ export async function listBroadcastsForBarangay(barangayId: string) {
   }
 
   return data ?? [];
+}
+
+export async function listActiveAgencyAlerts(barangayId: string) {
+  const { data, error } = await supabase
+    .from("alerts")
+    .select(
+      "id, barangay_id, source, severity, hazard_type, title, title_filipino, body, body_filipino, signal_level, recommended_actions, recommended_actions_filipino, source_url, issued_at, expires_at, is_active, external_id, created_at",
+    )
+    .eq("is_active", true)
+    .or(`barangay_id.is.null,barangay_id.eq.${barangayId}`)
+    .in("source", ["pagasa", "phivolcs"])
+    .order("issued_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as Alert[];
+}
+
+export async function listOutboundSmsLogsForBarangay(barangayId: string) {
+  const { data, error } = await supabase
+    .from("sms_logs")
+    .select(smsLogColumns)
+    .eq("barangay_id", barangayId)
+    .eq("direction", "outbound")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as SmsLog[];
+}
+
+export async function getBroadcastAudienceOverview(barangayId: string): Promise<BroadcastAudienceOverview> {
+  const { data, error } = await supabase
+    .from("households")
+    .select("purok, phone_number, is_sms_only")
+    .eq("barangay_id", barangayId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const households = data ?? [];
+  const purokMap = new Map<
+    string,
+    {
+      purok: string;
+      householdCount: number;
+      smsReachableCount: number;
+      appReachableCount: number;
+    }
+  >();
+
+  for (const household of households) {
+    const current =
+      purokMap.get(household.purok) ?? {
+        purok: household.purok,
+        householdCount: 0,
+        smsReachableCount: 0,
+        appReachableCount: 0,
+      };
+
+    current.householdCount += 1;
+    if (household.phone_number) {
+      current.smsReachableCount += 1;
+    }
+    if (!household.is_sms_only) {
+      current.appReachableCount += 1;
+    }
+
+    purokMap.set(household.purok, current);
+  }
+
+  return {
+    householdCount: households.length,
+    smsReachableCount: households.filter((household) => Boolean(household.phone_number)).length,
+    appReachableCount: households.filter((household) => !household.is_sms_only).length,
+    puroks: Array.from(purokMap.values()).sort((left, right) =>
+      left.purok.localeCompare(right.purok, "en", { sensitivity: "base" }),
+    ),
+  };
 }
 
 async function getCurrentBroadcastAuthor(): Promise<BroadcastAuthor> {

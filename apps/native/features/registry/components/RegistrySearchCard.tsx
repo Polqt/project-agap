@@ -27,7 +27,7 @@ export function RegistrySearchCard({ activeFilter, value, onChange, onSelectFilt
         placeholderTextColor="#94a3b8"
       />
 
-      <View className="flex-row flex-wrap gap-2">
+      <View className="flex-row gap-2">
         {filterChips.map((chip) => {
           const isActive = activeFilter === chip.value;
 
@@ -35,9 +35,9 @@ export function RegistrySearchCard({ activeFilter, value, onChange, onSelectFilt
             <Pressable
               key={chip.value}
               onPress={() => onSelectFilter(chip.value)}
-              className={`rounded-full px-4 py-2 ${isActive ? "bg-slate-950" : "bg-white"}`}
+              className={`flex-1 rounded-full px-2 py-3 ${isActive ? "bg-slate-950" : "bg-white"}`}
             >
-              <Text className={`text-xs font-semibold ${isActive ? "text-white" : "text-slate-700"}`}>
+              <Text className={`text-center text-[11px] font-semibold ${isActive ? "text-white" : "text-slate-700"}`}>
                 {chip.label}
               </Text>
             </Pressable>

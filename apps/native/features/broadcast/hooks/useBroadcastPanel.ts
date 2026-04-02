@@ -8,7 +8,7 @@ import { broadcastTemplates } from "@/features/broadcast/constants";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { createQueuedAction } from "@/services/offlineQueueActions";
-import { trpc, trpcClient } from "@/services/trpc";
+import { trpcClient } from "@/services/trpc";
 import {
   getErrorMessage,
   getServerConnectionErrorMessage,
@@ -18,7 +18,10 @@ import { broadcastSchema, type BroadcastFormValues } from "@/types/forms";
 import type { SmsLog } from "@project-agap/api/supabase";
 
 import {
+  getBroadcastAudienceOverview,
   listBroadcastsForBarangay,
+  listActiveAgencyAlerts,
+  listOutboundSmsLogsForBarangay,
   mergeBroadcastHistory,
   prepareBroadcastPayload,
   publishBroadcastRecord,
@@ -135,46 +138,33 @@ export function useBroadcastPanel() {
     queryFn: async () => listBroadcastsForBarangay(profile!.barangay_id!),
   });
 
-  const alertsQuery = useQuery(
-    trpc.alerts.listActive.queryOptions(
-      { barangayId: profile?.barangay_id ?? undefined },
-      {
-        enabled: Boolean(profile?.barangay_id),
-        refetchInterval: 60_000,
-      },
-    ),
-  );
+  const alertsQuery = useQuery({
+    queryKey: ["alerts", "active", profile?.barangay_id],
+    enabled: Boolean(profile?.barangay_id),
+    refetchInterval: 60_000,
+    queryFn: async () => listActiveAgencyAlerts(profile!.barangay_id!),
+  });
 
-  const smsLogsQuery = useQuery(
-    trpc.smsLogs.list.queryOptions(
-      {
-        barangayId: profile?.barangay_id ?? undefined,
-        direction: "outbound",
-      },
-      {
-        enabled: Boolean(profile?.barangay_id),
-        refetchInterval: 60_000,
-      },
-    ),
-  );
+  const smsLogsQuery = useQuery({
+    queryKey: ["smsLogs", "outbound", profile?.barangay_id],
+    enabled: Boolean(profile?.barangay_id),
+    refetchInterval: 60_000,
+    queryFn: async () => listOutboundSmsLogsForBarangay(profile!.barangay_id!),
+  });
 
-  const audienceQuery = useQuery(
-    trpc.broadcasts.audienceOverview.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-      refetchInterval: 60_000,
-    }),
-  );
+  const audienceQuery = useQuery({
+    queryKey: ["broadcasts", "audience", profile?.barangay_id],
+    enabled: Boolean(profile?.barangay_id),
+    refetchInterval: 60_000,
+    queryFn: async () => getBroadcastAudienceOverview(profile!.barangay_id!),
+  });
 
   const broadcasts = useMemo(
     () => mergeBroadcastHistory(broadcastsQuery.data ?? [], pendingActions),
     [broadcastsQuery.data, pendingActions],
   );
 
-  const alerts = useMemo(
-    () =>
-      (alertsQuery.data ?? []).filter((alert) => alert.source === "pagasa" || alert.source === "phivolcs"),
-    [alertsQuery.data],
-  );
+  const alerts = alertsQuery.data ?? [];
 
   const deliveryStatsByBroadcastId = useMemo(
     () => normalizeDeliveryStats(smsLogsQuery.data ?? []),

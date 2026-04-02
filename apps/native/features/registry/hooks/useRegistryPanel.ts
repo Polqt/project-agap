@@ -5,10 +5,9 @@ import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
 
 import type { EvacuationStatus, Household } from "@project-agap/api/supabase";
+import { getRegistryHouseholdDetail, listRegistryHouseholds } from "../services/registry";
 
 type RegistryFilter = "all" | "vulnerable" | "unknown" | "sms_only";
-
-const PAGE_SIZE = 200;
 
 function shouldInvalidate(queryKey: readonly unknown[], root: string) {
   const first = queryKey[0];
@@ -50,6 +49,20 @@ function filterHouseholds(households: Household[], filter: RegistryFilter) {
   }
 }
 
+function matchesQuery(household: Household, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  const value = query.toLowerCase();
+  return (
+    household.household_head.toLowerCase().includes(value) ||
+    household.purok.toLowerCase().includes(value) ||
+    household.address.toLowerCase().includes(value) ||
+    (household.phone_number ?? "").toLowerCase().includes(value)
+  );
+}
+
 export function useRegistryPanel() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -59,48 +72,27 @@ export function useRegistryPanel() {
   const [expandedHouseholdId, setExpandedHouseholdId] = useState<string | null>(null);
 
   const trimmedQuery = query.trim();
-  const isServerSearch = trimmedQuery.length >= 2;
 
-  const listQuery = useQuery(
-    trpc.households.list.queryOptions(
-      {
-        barangayId: profile?.barangay_id ?? undefined,
-        page: 1,
-        pageSize: PAGE_SIZE,
-      },
-      {
-        enabled: Boolean(profile?.barangay_id && !isServerSearch),
-      },
-    ),
-  );
+  const listQuery = useQuery({
+    queryKey: ["households", "registry", profile?.barangay_id],
+    enabled: Boolean(profile?.barangay_id),
+    queryFn: async () => listRegistryHouseholds(profile!.barangay_id!),
+  });
 
-  const searchQuery = useQuery(
-    trpc.households.search.queryOptions(
-      {
-        barangayId: profile?.barangay_id ?? undefined,
-        query: trimmedQuery,
-      },
-      {
-        enabled: Boolean(profile?.barangay_id && isServerSearch),
-      },
-    ),
-  );
-
-  const expandedHouseholdQuery = useQuery(
-    trpc.households.getById.queryOptions(
-      {
-        id: expandedHouseholdId ?? "00000000-0000-0000-0000-000000000000",
-      },
-      {
-        enabled: Boolean(expandedHouseholdId),
-      },
-    ),
-  );
+  const expandedHouseholdQuery = useQuery({
+    queryKey: ["households", "detail", expandedHouseholdId],
+    enabled: Boolean(profile?.barangay_id && expandedHouseholdId),
+    queryFn: async () => getRegistryHouseholdDetail(expandedHouseholdId!, profile!.barangay_id!),
+  });
 
   const households = useMemo(() => {
-    const source = (isServerSearch ? searchQuery.data ?? [] : listQuery.data?.items ?? []).slice().sort(sortHouseholds);
+    const source = (listQuery.data ?? [])
+      .filter((household) => matchesQuery(household, trimmedQuery))
+      .slice()
+      .sort(sortHouseholds);
+
     return filterHouseholds(source, filter);
-  }, [filter, isServerSearch, listQuery.data?.items, searchQuery.data]);
+  }, [filter, listQuery.data, trimmedQuery]);
 
   async function invalidateRegistry() {
     await Promise.all([
@@ -142,11 +134,8 @@ export function useRegistryPanel() {
     filter,
     households,
     isLoading:
-      listQuery.isLoading ||
-      searchQuery.isLoading ||
-      (Boolean(expandedHouseholdId) && expandedHouseholdQuery.isLoading),
-    isRefreshing:
-      listQuery.isFetching || searchQuery.isFetching || expandedHouseholdQuery.isFetching,
+      listQuery.isLoading || (Boolean(expandedHouseholdId) && expandedHouseholdQuery.isLoading),
+    isRefreshing: listQuery.isFetching || expandedHouseholdQuery.isFetching,
     query,
     assignWelfareMutation,
     setFilter,

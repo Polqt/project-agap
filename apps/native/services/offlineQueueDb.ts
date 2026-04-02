@@ -104,3 +104,8 @@ export async function resetFailedQueuedActions() {
     "UPDATE offline_queue SET failed_at = NULL, last_error = NULL, retries = 0 WHERE failed_at IS NOT NULL",
   );
 }
+
+export async function clearQueuedActions() {
+  const database = await getOfflineQueueDatabase();
+  await database.runAsync("DELETE FROM offline_queue");
+}

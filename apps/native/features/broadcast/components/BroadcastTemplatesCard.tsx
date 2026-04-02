@@ -17,25 +17,29 @@ export function BroadcastTemplatesCard({ deliveryLanguage, form, onSelectTemplat
   return (
     <View className="gap-3">
       <Text className="text-sm font-medium text-slate-700">Quick templates</Text>
-      <View className="flex-row flex-wrap gap-2">
+      <View className="flex-row gap-2">
         {broadcastTemplates.map((template) => {
           const isSelected = selectedType === template.broadcastType;
-          const preview = deliveryLanguage === "filipino" ? template.messageFilipino : template.message;
+          const label = deliveryLanguage === "filipino"
+            ? template.broadcastType === "evacuate_now"
+              ? "Lumikas"
+              : template.broadcastType === "stay_alert"
+                ? "Alerto"
+                : "Ligtas"
+            : template.broadcastType === "evacuate_now"
+              ? "Evacuate"
+              : template.broadcastType === "stay_alert"
+                ? "Stay alert"
+                : "All clear";
 
           return (
             <Pressable
               key={template.broadcastType}
               onPress={() => onSelectTemplate(template.broadcastType)}
-              className={`min-w-[31%] flex-1 rounded-[24px] px-4 py-4 ${isSelected ? "bg-slate-950" : "bg-slate-100"}`}
+              className={`flex-1 rounded-full px-4 py-3 ${isSelected ? "bg-slate-950" : "bg-slate-100"}`}
             >
-              <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-slate-950"}`}>
-                {template.broadcastType.replaceAll("_", " ")}
-              </Text>
-              <Text
-                className={`mt-2 text-xs leading-5 ${isSelected ? "text-slate-300" : "text-slate-500"}`}
-                numberOfLines={3}
-              >
-                {preview}
+              <Text className={`text-center text-sm font-semibold ${isSelected ? "text-white" : "text-slate-950"}`}>
+                {label}
               </Text>
             </Pressable>
           );
