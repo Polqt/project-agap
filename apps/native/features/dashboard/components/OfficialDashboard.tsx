@@ -29,6 +29,11 @@ export function OfficialDashboard() {
     shareCenterToken,
   } = useOfficialDashboard();
 
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/onboarding");
+  }
+
   return (
     <ScreenShell
       title="Command"
