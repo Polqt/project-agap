@@ -18,6 +18,7 @@ import type {
   ResolveNeedHelpPingRpc,
   SmsFollowupListRpc,
   UpsertPushTokenRpc,
+  WelfareDispatchQueueRpc,
 } from "./database-functions";
 import type {
   AlertsInsert,
@@ -97,6 +98,7 @@ export interface Database {
       checkin_by_qr: CheckinByQrRpc;
       resolve_need_help_ping: ResolveNeedHelpPingRpc;
       get_sms_followup_list: SmsFollowupListRpc;
+      get_welfare_dispatch_queue: WelfareDispatchQueueRpc;
       upsert_push_token: UpsertPushTokenRpc;
     };
     Enums: {

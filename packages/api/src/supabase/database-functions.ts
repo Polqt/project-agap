@@ -73,5 +73,21 @@ export type SmsFollowupListRpc = FunctionDefinition<
   }[]
 >;
 
+export type WelfareDispatchQueueRpc = FunctionDefinition<
+  { p_barangay_id: string },
+  {
+    household_id: string;
+    household_head: string;
+    purok: string;
+    address: string;
+    phone_number: string | null;
+    total_members: number;
+    evacuation_status: string;
+    welfare_assigned_profile_id: string | null;
+    welfare_assigned_at: string | null;
+    assignee_name: string | null;
+  }[]
+>;
+
 export type ResolveNeedHelpPingRpc = FunctionDefinition<{ p_ping_id: string }, null>;
 export type UpsertPushTokenRpc = FunctionDefinition<{ p_token: string; p_platform: PushPlatform }, null>;

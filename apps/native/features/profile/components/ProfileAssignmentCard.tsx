@@ -20,6 +20,8 @@ export function ProfileAssignmentCard({ profile, barangayName, municipality }: P
         <Pill label={(profile?.role ?? "resident").toUpperCase()} tone="info" />
         <InfoRow label="Barangay" value={barangayName ?? "Not assigned"} />
         <InfoRow label="Municipality" value={municipality ?? "Not assigned"} />
+        <InfoRow label="Purok" value={profile?.purok ?? "Not set"} />
+        <InfoRow label="Phone number" value={profile?.phone_number ?? "Not set"} />
         <InfoRow label="Account created" value={formatDateTime(profile?.created_at)} />
       </View>
     </SectionCard>

@@ -5,12 +5,21 @@ import { useForm } from "react-hook-form";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { trpc } from "@/services/trpc";
-import { householdSchema, profileSchema, type HouseholdFormValues, type ProfileFormValues } from "@/types/forms";
+import {
+  householdSchema,
+  profileSchema,
+  type HouseholdFormValues,
+  type HouseholdMemberFormValues,
+  type ProfileFormValues,
+} from "@/types/forms";
 import { getErrorMessage } from "@/shared/utils/errors";
 
 export function useProfilePanel() {
-  const { profile, signOut, refreshProfile } = useAuth();
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const { profile, session, signOut, refreshProfile, resetPassword } = useAuth();
+  const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
+  const [householdFeedback, setHouseholdFeedback] = useState<string | null>(null);
+  const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -30,6 +39,8 @@ export function useProfilePanel() {
       phoneNumber: profile?.phone_number ?? "",
       totalMembers: "1",
       isSmsOnly: false,
+      vulnerabilityFlags: [],
+      members: [],
       notes: "",
     },
   });
@@ -64,6 +75,8 @@ export function useProfilePanel() {
         phoneNumber: profile?.phone_number ?? "",
         totalMembers: "1",
         isSmsOnly: false,
+        vulnerabilityFlags: [],
+        members: [],
         notes: "",
       });
       return;
@@ -76,6 +89,13 @@ export function useProfilePanel() {
       phoneNumber: householdQuery.data.phone_number ?? "",
       totalMembers: String(householdQuery.data.total_members),
       isSmsOnly: householdQuery.data.is_sms_only,
+      vulnerabilityFlags: householdQuery.data.vulnerability_flags ?? [],
+      members: householdQuery.data.household_members.map((member) => ({
+        fullName: member.full_name,
+        age: member.age === null ? "" : String(member.age),
+        vulnerabilityFlags: member.vulnerability_flags ?? [],
+        notes: member.notes ?? "",
+      })),
       notes: householdQuery.data.notes ?? "",
     });
   }, [householdForm, householdQuery.data, profile]);
@@ -84,7 +104,7 @@ export function useProfilePanel() {
     trpc.profile.update.mutationOptions({
       onSuccess: async () => {
         await refreshProfile();
-        setFeedback("Profile updated.");
+        setProfileFeedback("Profile updated.");
       },
     }),
   );
@@ -93,13 +113,13 @@ export function useProfilePanel() {
     trpc.households.register.mutationOptions({
       onSuccess: () => {
         void householdQuery.refetch();
-        setFeedback("Household details saved.");
+        setHouseholdFeedback("Household details saved.");
       },
     }),
   );
 
   const handleProfileSubmit = profileForm.handleSubmit(async (values) => {
-    setFeedback(null);
+    setProfileFeedback(null);
 
     try {
       await profileMutation.mutateAsync({
@@ -108,12 +128,12 @@ export function useProfilePanel() {
         purok: values.purok,
       });
     } catch (error) {
-      setFeedback(getErrorMessage(error, "Unable to update your profile."));
+      setProfileFeedback(getErrorMessage(error, "Unable to update your profile."));
     }
   });
 
   const handleHouseholdSubmit = householdForm.handleSubmit(async (values) => {
-    setFeedback(null);
+    setHouseholdFeedback(null);
 
     try {
       await householdMutation.mutateAsync({
@@ -124,17 +144,52 @@ export function useProfilePanel() {
         totalMembers: Number(values.totalMembers),
         isSmsOnly: values.isSmsOnly,
         notes: values.notes || null,
-        vulnerabilityFlags: [],
-        members: [],
+        vulnerabilityFlags: values.vulnerabilityFlags,
+        members: values.members.map((member: HouseholdMemberFormValues) => ({
+          fullName: member.fullName,
+          age: member.age ? Number(member.age) : null,
+          vulnerabilityFlags: member.vulnerabilityFlags,
+          notes: member.notes || null,
+        })),
       });
     } catch (error) {
-      setFeedback(getErrorMessage(error, "Unable to save your household."));
+      setHouseholdFeedback(getErrorMessage(error, "Unable to save your household."));
     }
   });
 
+  function fillHouseholdFromProfile() {
+    householdForm.setValue("householdHead", profile?.full_name ?? "");
+    householdForm.setValue("phoneNumber", profile?.phone_number ?? "");
+    householdForm.setValue("purok", profile?.purok ?? "");
+  }
+
+  async function handlePasswordReset() {
+    const email = session?.user.email;
+    if (!email) {
+      setAccountFeedback("No account email is available for password recovery.");
+      return;
+    }
+
+    setAccountFeedback(null);
+    setIsResettingPassword(true);
+
+    try {
+      await resetPassword(email);
+      setAccountFeedback(`Password reset link sent to ${email}.`);
+    } catch (error) {
+      setAccountFeedback(getErrorMessage(error, "Unable to send a reset link."));
+    } finally {
+      setIsResettingPassword(false);
+    }
+  }
+
   return {
     profile,
-    feedback,
+    accountEmail: session?.user.email ?? null,
+    profileFeedback,
+    householdFeedback,
+    accountFeedback,
+    isResettingPassword,
     signOut,
     barangay: barangayQuery.data,
     household: householdQuery.data,
@@ -144,5 +199,7 @@ export function useProfilePanel() {
     householdMutation,
     handleProfileSubmit,
     handleHouseholdSubmit,
+    handlePasswordReset,
+    fillHouseholdFromProfile,
   };
 }

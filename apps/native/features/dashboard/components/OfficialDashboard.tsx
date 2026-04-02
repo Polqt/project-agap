@@ -29,11 +29,16 @@ export function OfficialDashboard() {
     shareCenterToken,
   } = useOfficialDashboard();
 
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/onboarding");
+  }
+
   return (
     <ScreenShell
       eyebrow="Official dashboard"
       title="Command view"
-      action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
+      action={<AppButton label="Sign out" onPress={() => void handleSignOut()} variant="ghost" />}
       feedback={feedback}
       isLoading={isLoading}
       loadingLabel="Refreshing dashboard data..."
