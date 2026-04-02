@@ -34,9 +34,12 @@ export function useNeedsReportsPanel() {
   );
 
   const reportsQuery = useQuery(
-    trpc.needsReports.list.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
+    trpc.needsReports.list.queryOptions(
+      { barangayId: profile?.barangay_id ?? undefined },
+      {
+        enabled: Boolean(profile?.barangay_id),
+      },
+    ),
   );
 
   const submitMutation = useMutation(
@@ -61,13 +64,13 @@ export function useNeedsReportsPanel() {
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
       await submitMutation.mutateAsync({
-        center_id: values.centerId || undefined,
-        total_evacuees: Number(values.totalEvacuees),
-        needs_food_packs: Number(values.needsFoodPacks),
-        needs_water_liters: Number(values.needsWaterLiters),
-        needs_blankets: Number(values.needsBlankets),
-        needs_medicine: values.needsMedicine,
-        medical_cases: values.medicalCases || undefined,
+        centerId: values.centerId || undefined,
+        totalEvacuees: Number(values.totalEvacuees),
+        needsFoodPacks: Number(values.needsFoodPacks),
+        needsWaterLiters: Number(values.needsWaterLiters),
+        needsBlankets: Number(values.needsBlankets),
+        needsMedicine: values.needsMedicine,
+        medicalCases: values.medicalCases || undefined,
         notes: values.notes || undefined,
       });
     } catch (error) {

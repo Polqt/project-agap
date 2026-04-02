@@ -37,3 +37,4 @@ export type DashboardSummary = RpcResult<"get_dashboard_summary">[number];
 export type NearbyCenter = RpcResult<"get_nearby_centers">[number];
 export type CheckInByQrResult = RpcResult<"checkin_by_qr">[number];
 export type SmsFollowupItem = RpcResult<"get_sms_followup_list">[number];
+export type WelfareDispatchQueueItem = RpcResult<"get_welfare_dispatch_queue">[number];
