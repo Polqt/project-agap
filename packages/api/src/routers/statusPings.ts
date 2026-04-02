@@ -8,8 +8,11 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, protectedProcedure, router } from "../index";
+import { ApiError } from "../errors";
 import { barangayIdSchema, locationSchema, uuidSchema } from "../schemas";
 import type { StatusPing, TableInsert } from "../supabase";
+
+const STATUS_PING_COOLDOWN_MS = 30_000;
 
 export const statusPingsRouter = router({
   getLatestMine: protectedProcedure.query(async ({ ctx }) => {
@@ -42,6 +45,30 @@ export const statusPingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const profile = getProfileOrThrow(ctx.profile);
       const barangayId = getProfileBarangayIdOrThrow(profile);
+      const latestExistingPing = getSupabaseDataOrThrow<Pick<StatusPing, "pinged_at"> | null>(
+        await ctx.supabase
+          .from("status_pings")
+          .select("pinged_at")
+          .eq("resident_id", ctx.session.id)
+          .order("pinged_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        "Failed to check recent status ping.",
+      );
+
+      if (latestExistingPing) {
+        const elapsedMs = Date.now() - Date.parse(latestExistingPing.pinged_at);
+
+        if (elapsedMs < STATUS_PING_COOLDOWN_MS) {
+          const waitSeconds = Math.max(
+            1,
+            Math.ceil((STATUS_PING_COOLDOWN_MS - elapsedMs) / 1000),
+          );
+          throw ApiError.badRequest(
+            `Please wait ${waitSeconds} second${waitSeconds === 1 ? "" : "s"} before sending another status ping.`,
+          );
+        }
+      }
 
       if (input.householdId) {
         getFoundOrThrow<{ id: string } | null>(
