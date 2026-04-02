@@ -40,7 +40,29 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
             return;
           }
 
-          void queryClient.invalidateQueries();
+          const tableRootByRealtimeTable: Partial<Record<(typeof REALTIME_TABLES)[number], string>> = {
+            alerts: "alerts",
+            broadcasts: "broadcasts",
+            check_ins: "checkIns",
+            evacuation_centers: "evacuationCenters",
+            households: "households",
+            needs_reports: "needsReports",
+            status_pings: "statusPings",
+          };
+          const tableRoot = tableRootByRealtimeTable[table];
+
+          if (tableRoot) {
+            void queryClient.invalidateQueries({
+              predicate: (query) => {
+                const first = query.queryKey[0];
+                if (typeof first === "string") {
+                  return first === tableRoot;
+                }
+
+                return Array.isArray(first) && first[0] === tableRoot;
+              },
+            });
+          }
 
           if (profile.role === "resident" && table === "alerts" && shouldNotifyResidentAlert(payload)) {
             const nextAlertId =

@@ -14,7 +14,7 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
   return (
     <SectionCard
       title="Broadcast message"
-      subtitle="Default is everyone. Add purok only if you need to target one area."
+      subtitle="SMS sends English first, then Filipino. Add purok only if needed."
     >
       <View className="gap-4">
         <Controller
@@ -22,7 +22,7 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
           name="message"
           render={({ field, fieldState }) => (
             <TextField
-              label="Main message"
+              label="English message (or your primary language)"
               value={field.value}
               onChangeText={field.onChange}
               placeholder="Example: Heavy rain expected. Stay indoors and monitor updates."
@@ -39,9 +39,10 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
               label="Filipino version (optional)"
               value={field.value ?? ""}
               onChangeText={field.onChange}
-              placeholder="Optional translation of the same message."
+              placeholder="Optional Filipino translation of the message."
               multiline
               error={fieldState.error?.message}
+              helperText="If provided, this is appended after the primary message."
             />
           )}
         />

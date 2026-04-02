@@ -64,7 +64,7 @@ export const broadcastsRouter = router({
       );
 
       const smsMessage = input.messageFilipino
-        ? `${input.messageFilipino}\n\n${input.message}`
+        ? `${input.message}\n\n${input.messageFilipino}`
         : input.message;
 
       let smsSentCount = 0;

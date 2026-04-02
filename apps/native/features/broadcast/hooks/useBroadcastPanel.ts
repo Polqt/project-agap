@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { trpc } from "@/services/trpc";
 import {
   getErrorMessage,
@@ -14,6 +16,7 @@ import { broadcastSchema, type BroadcastFormValues } from "@/types/forms";
 
 export function useBroadcastPanel() {
   const { profile } = useAuth();
+  const { isOnline, queueAction } = useOfflineQueue();
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const form = useForm<BroadcastFormValues>({
@@ -49,19 +52,49 @@ export function useBroadcastPanel() {
   );
 
   const handleSubmit = form.handleSubmit(async (values) => {
+    form.clearErrors("root");
+
+    const payload = {
+      broadcastType: values.broadcastType,
+      message: values.message,
+      messageFilipino: values.messageFilipino || null,
+      targetPurok: values.targetPurok || null,
+    };
+
+    if (!isOnline) {
+      await queueAction(createQueuedAction("broadcast.create", payload));
+      form.reset({
+        broadcastType: "stay_alert",
+        message: "",
+        messageFilipino: "",
+        targetPurok: "",
+      });
+      setFeedback("No connection. Broadcast queued and will auto-send once online.");
+      return;
+    }
+
     try {
-      const normalizedType = values.targetPurok?.trim().length ? values.broadcastType : "stay_alert";
       await createBroadcastMutation.mutateAsync({
-        broadcastType: normalizedType,
-        message: values.message,
-        messageFilipino: values.messageFilipino || null,
-        targetPurok: values.targetPurok || null,
+        ...payload,
       });
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(createQueuedAction("broadcast.create", payload));
+        form.reset({
+          broadcastType: "stay_alert",
+          message: "",
+          messageFilipino: "",
+          targetPurok: "",
+        });
+        setFeedback("Connection dropped. Broadcast queued for auto-send.");
+        return;
+      }
+
       form.setError("root", {
-        message: isOfflineLikeError(error)
-          ? getServerConnectionErrorMessage("Unable to send the broadcast.")
-          : getErrorMessage(error, "Unable to send the broadcast."),
+        message:
+          getErrorMessage(error, "") === "Network request failed"
+            ? getServerConnectionErrorMessage("Unable to send the broadcast.")
+            : getErrorMessage(error, "Unable to send the broadcast."),
       });
     }
   });
@@ -70,6 +103,7 @@ export function useBroadcastPanel() {
     form,
     feedback,
     broadcasts: broadcastsQuery.data ?? [],
+    isOnline,
     createBroadcastMutation,
     handleSubmit,
   };

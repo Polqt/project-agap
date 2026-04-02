@@ -1,5 +1,5 @@
 import NetInfo from "@react-native-community/netinfo";
-import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
 import { OfflineQueueContext } from "@/shared/hooks/useOfflineQueue";
 import {
@@ -7,6 +7,7 @@ import {
   insertQueuedAction,
   listQueuedActions,
   markQueuedActionFailed,
+  resetFailedQueuedActions,
   updateQueuedActionRetries,
 } from "@/services/offlineQueueDb";
 import {
@@ -22,6 +23,7 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const [pendingActions, setPendingActions] = useState<QueuedAction[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [isFlushing, setIsFlushing] = useState(false);
+  const isFlushingRef = useRef(false);
 
   const refreshPendingActions = useCallback(async () => {
     const actions = await listQueuedActions();
@@ -45,10 +47,11 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
   );
 
   const flushQueue = useCallback(async () => {
-    if (isFlushing) {
+    if (isFlushingRef.current) {
       return;
     }
 
+    isFlushingRef.current = true;
     setIsFlushing(true);
     setSyncStatus("syncing");
 
@@ -80,14 +83,19 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
 
           await updateQueuedActionRetries(action.id, nextRetries);
           await new Promise((resolve) => setTimeout(resolve, getRetryDelayMs(nextRetries - 1)));
+
+          // Avoid repeatedly processing the rest of the queue in the same cycle when
+          // the backend/session is currently failing; retry on the next online event.
+          break;
         }
       }
     } finally {
       await refreshPendingActions();
       setIsFlushing(false);
+      isFlushingRef.current = false;
       setSyncStatus(isOnline ? "online" : "offline");
     }
-  }, [isFlushing, isOnline, refreshPendingActions]);
+  }, [isOnline, refreshPendingActions]);
 
   useEffect(() => {
     void refreshPendingActions();
@@ -98,6 +106,7 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
       setSyncStatus(nextOnline ? "online" : "offline");
 
       if (nextOnline) {
+        void resetFailedQueuedActions();
         void flushQueue();
       }
     });

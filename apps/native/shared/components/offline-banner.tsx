@@ -9,7 +9,11 @@ export function OfflineBanner() {
   const pendingQueueCount = useStore(appShellStore, (state) => state.pendingQueueCount);
   const failedQueueCount = useStore(appShellStore, (state) => state.failedQueueCount);
   const syncStatus = useStore(appShellStore, (state) => state.syncStatus);
-  const shouldShow = !isOnline || pendingQueueCount > 0 || failedQueueCount > 0;
+  const shouldShow = !isOnline || failedQueueCount > 0 || pendingQueueCount > 0;
+
+  if (!shouldShow) {
+    return null;
+  }
 
   const isOffline = !isOnline || syncStatus === "offline";
   const toneClasses = isOffline
@@ -25,13 +29,12 @@ export function OfflineBanner() {
       : "Queue";
 
   return (
-    <View
-      className={`border-b px-4 py-2 ${shouldShow ? toneClasses : "border-transparent bg-transparent"}`}
-      pointerEvents={shouldShow ? "auto" : "none"}
-    >
-      <Text className={`text-xs font-semibold ${shouldShow ? "text-slate-800" : "text-transparent"}`}>
-        {shouldShow ? `${statusLabel} · ${pendingQueueCount} queued · ${failedQueueCount} failed` : " "}
-      </Text>
+    <View className="pointer-events-none absolute bottom-24 left-4 right-4 z-50">
+      <View className={`rounded-xl border px-4 py-2 shadow-sm ${toneClasses}`}>
+        <Text className="text-xs font-semibold text-slate-800">
+          {statusLabel} · {pendingQueueCount} queued · {failedQueueCount} failed
+        </Text>
+      </View>
     </View>
   );
 }
