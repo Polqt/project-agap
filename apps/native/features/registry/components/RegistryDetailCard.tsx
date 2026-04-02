@@ -31,53 +31,54 @@ export function RegistryDetailCard({
 }: Props) {
   if (!household) {
     return (
-      <View className="rounded-[22px] bg-white px-4 py-4">
-        <Text className="text-sm leading-6 text-slate-500">Loading household details...</Text>
+      <View className="mt-3 rounded-xl bg-slate-50 px-3.5 py-3">
+        <Text className="text-[13px] text-slate-400">Loading household details...</Text>
       </View>
     );
   }
 
   return (
-    <View className="mt-4 gap-4">
-      <View className="rounded-[22px] bg-white px-4 py-4">
-        <Text className="text-sm font-semibold text-slate-950">Members</Text>
+    <View className="mt-3 gap-3">
+      {/* Members */}
+      <View className="rounded-xl bg-slate-50 p-3">
+        <Text className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+          Members
+        </Text>
         {household.household_members.length ? (
-          <View className="mt-3 gap-2">
+          <View className="mt-2 gap-1.5">
             {household.household_members.map((member) => (
-              <View key={member.id} className="rounded-[18px] bg-slate-100 px-3 py-3">
-                <Text className="text-sm font-semibold text-slate-950">{member.full_name}</Text>
-                <Text className="mt-1 text-xs text-slate-500">
-                  {member.age !== null ? `${member.age} years old` : "Age not recorded"}
+              <View key={member.id} className="flex-row items-center justify-between py-1.5">
+                <Text className="text-[13px] font-medium text-slate-800">{member.full_name}</Text>
+                <Text className="text-[12px] text-slate-400">
+                  {member.age !== null ? `${member.age} yrs` : "—"}
                 </Text>
               </View>
             ))}
           </View>
         ) : (
-          <Text className="mt-2 text-sm text-slate-500">No household members saved yet.</Text>
+          <Text className="mt-2 text-[13px] text-slate-400">No members recorded.</Text>
         )}
       </View>
 
-      <View className="rounded-[22px] bg-white px-4 py-4">
-        <Text className="text-sm font-semibold text-slate-950">Field actions</Text>
-        <View className="mt-3 gap-3">
+      {/* Actions */}
+      <View className="gap-2">
+        <AppButton
+          label="Assign welfare visit"
+          onPress={() => onAssignWelfare(household.id)}
+          variant="ghost"
+          loading={isAssigningWelfare}
+          disabled={isUpdating}
+        />
+        {statusActions.map((action) => (
           <AppButton
-            label="Assign welfare visit"
-            onPress={() => onAssignWelfare(household.id)}
-            variant="secondary"
-            loading={isAssigningWelfare}
-            disabled={isUpdating}
+            key={action.value}
+            label={action.label}
+            onPress={() => onUpdateStatus(household.id, action.value)}
+            variant={action.variant}
+            loading={isUpdating}
+            disabled={isAssigningWelfare}
           />
-          {statusActions.map((action) => (
-            <AppButton
-              key={action.value}
-              label={action.label}
-              onPress={() => onUpdateStatus(household.id, action.value)}
-              variant={action.variant}
-              loading={isUpdating}
-              disabled={isAssigningWelfare}
-            />
-          ))}
-        </View>
+        ))}
       </View>
     </View>
   );

@@ -31,7 +31,7 @@ export function RegistryListCard({
 }: Props) {
   if (!households.length && !isLoading) {
     return (
-      <View className="mx-5 mt-5">
+      <View className="mx-6 mt-4">
         <EmptyState
           title="No households found"
           description="Try another search or switch filters to widen the registry list."
@@ -41,7 +41,7 @@ export function RegistryListCard({
   }
 
   return (
-    <View className="mx-5 mt-5 mb-8 gap-3">
+    <View className="mx-6 mt-3 gap-2.5">
       {households.map((household) => (
         <RegistryHouseholdCard
           key={household.id}

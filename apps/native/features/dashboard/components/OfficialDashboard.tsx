@@ -38,7 +38,7 @@ export function OfficialDashboard() {
     <ScreenShell
       title="Command"
       description="Live command surface for Banago."
-      action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
+      action={<AppButton label="Sign out" onPress={() => void handleSignOut()} variant="ghost" />}
       feedback={feedback}
       isLoading={isLoading}
       loadingLabel="Refreshing dashboard data..."

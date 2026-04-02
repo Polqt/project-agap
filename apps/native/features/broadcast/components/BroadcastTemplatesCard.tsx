@@ -11,34 +11,35 @@ type Props = {
   onSelectTemplate: (type: BroadcastFormValues["broadcastType"]) => void;
 };
 
+const templateLabels: Record<string, { en: string; fil: string }> = {
+  evacuate_now: { en: "Evacuate", fil: "Lumikas" },
+  stay_alert: { en: "Stay alert", fil: "Alerto" },
+  all_clear: { en: "All clear", fil: "Ligtas" },
+};
+
 export function BroadcastTemplatesCard({ deliveryLanguage, form, onSelectTemplate }: Props) {
   const selectedType = form.watch("broadcastType");
 
   return (
-    <View className="gap-3">
-      <Text className="text-sm font-medium text-slate-700">Quick templates</Text>
+    <View className="gap-2">
+      <Text className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+        Quick templates
+      </Text>
       <View className="flex-row gap-2">
         {broadcastTemplates.map((template) => {
           const isSelected = selectedType === template.broadcastType;
-          const label = deliveryLanguage === "filipino"
-            ? template.broadcastType === "evacuate_now"
-              ? "Lumikas"
-              : template.broadcastType === "stay_alert"
-                ? "Alerto"
-                : "Ligtas"
-            : template.broadcastType === "evacuate_now"
-              ? "Evacuate"
-              : template.broadcastType === "stay_alert"
-                ? "Stay alert"
-                : "All clear";
+          const labels = templateLabels[template.broadcastType];
+          const label = deliveryLanguage === "filipino" ? labels?.fil : labels?.en;
 
           return (
             <Pressable
               key={template.broadcastType}
               onPress={() => onSelectTemplate(template.broadcastType)}
-              className={`flex-1 rounded-full px-4 py-3 ${isSelected ? "bg-slate-950" : "bg-slate-100"}`}
+              className={`flex-1 items-center rounded-lg py-2.5 ${isSelected ? "bg-slate-900" : "bg-slate-100"}`}
             >
-              <Text className={`text-center text-sm font-semibold ${isSelected ? "text-white" : "text-slate-950"}`}>
+              <Text
+                className={`text-[13px] font-semibold ${isSelected ? "text-white" : "text-slate-600"}`}
+              >
                 {label}
               </Text>
             </Pressable>

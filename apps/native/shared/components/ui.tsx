@@ -12,10 +12,10 @@ type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 type PillTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-blue-700",
-  secondary: "bg-slate-900",
-  danger: "bg-rose-700",
-  ghost: "border border-slate-300 bg-transparent",
+  primary: "bg-slate-900",
+  secondary: "bg-slate-700",
+  danger: "bg-rose-600",
+  ghost: "border border-slate-200 bg-transparent",
 };
 
 const pillVariants: Record<PillTone, string> = {
@@ -67,7 +67,7 @@ export function SectionCard({
   right?: React.ReactNode;
 }) {
   return (
-    <View className="mx-5 mt-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <View className="mx-6 mt-4 rounded-2xl border border-slate-200 bg-white p-4">
       {title || subtitle || right ? (
         <View className="mb-4 flex-row items-start justify-between gap-4">
           <View className="flex-1 gap-1">
@@ -100,9 +100,9 @@ export function AppButton({
 }) {
   const muted = disabled || loading;
   const sizeClasses =
-    size === "kiosk" ? "min-h-[72px] rounded-3xl px-6" : "min-h-14 rounded-2xl px-4";
+    size === "kiosk" ? "min-h-[72px] rounded-2xl px-6" : "min-h-[48px] rounded-xl px-4";
   const textClasses =
-    size === "kiosk" ? "text-xl font-bold" : "text-base font-semibold";
+    size === "kiosk" ? "text-xl font-bold" : "text-[14px] font-semibold";
 
   return (
     <Pressable
@@ -160,7 +160,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         keyboardType={keyboardType}
         multiline={multiline}
         textAlignVertical={multiline ? "top" : "center"}
-        className={`rounded-2xl border px-4 py-3 text-base text-slate-950 ${multiline ? "min-h-28" : "min-h-14"} ${error ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50"}`}
+        className={`rounded-xl border px-4 py-3 text-[15px] text-slate-900 ${multiline ? "min-h-28" : "min-h-[44px]"} ${error ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-slate-50"}`}
         placeholderTextColor="#94a3b8"
         {...textInputProps}
       />
@@ -172,7 +172,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 
 export function Pill({ label, tone = "neutral" }: { label: string; tone?: PillTone }) {
   return (
-    <Text className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${pillVariants[tone]}`}>
+    <Text className={`self-start rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${pillVariants[tone]}`}>
       {label}
     </Text>
   );
@@ -190,7 +190,7 @@ export function StatCard({
   tone?: PillTone;
 }) {
   return (
-    <View className="min-w-[46%] flex-1 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+    <View className="min-w-[46%] flex-1 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <Pill label={label} tone={tone} />
       <Text className="mt-4 text-3xl font-bold text-slate-950">{value}</Text>
       {caption ? <Text className="mt-2 text-sm text-slate-500">{caption}</Text> : null}
@@ -206,9 +206,9 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <View className="items-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8">
-      <Text className="text-lg font-semibold text-slate-900">{title}</Text>
-      <Text className="mt-2 text-center text-sm leading-6 text-slate-500">{description}</Text>
+    <View className="items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-6">
+      <Text className="text-[14px] font-semibold text-slate-600">{title}</Text>
+      <Text className="mt-1.5 text-center text-[13px] leading-5 text-slate-400">{description}</Text>
     </View>
   );
 }
