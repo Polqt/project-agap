@@ -38,7 +38,7 @@ export async function sendSms(
       return { success: false, error: `HTTP ${res.status}: ${text}` };
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as { messageId?: string; id?: string };
     return { success: true, messageId: data.messageId ?? data.id };
   } catch (err) {
     const message =
@@ -75,7 +75,7 @@ export async function sendBulkSms(
       };
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as { messageId?: string; id?: string };
 
     return {
       totalSent: recipients.length,

@@ -57,6 +57,15 @@ export function useOfficialDashboard() {
     unresolvedQuery.isLoading ||
     centersQuery.isLoading ||
     unaccountedQuery.isLoading;
+  const welfareDispatchQuery = useQuery(
+    trpc.households.listWelfareDispatchQueue.queryOptions(
+      { barangayId: profile?.barangay_id ?? undefined },
+      {
+        enabled: Boolean(profile?.barangay_id),
+        refetchInterval: 60_000,
+      },
+    ),
+  );
 
   const resolveMutation = useMutation(
     trpc.statusPings.resolve.mutationOptions({
@@ -119,6 +128,7 @@ export function useOfficialDashboard() {
     unresolvedPings: unresolvedQuery.data ?? [],
     centers: centersQuery.data ?? [],
     unaccountedHouseholds: unaccountedQuery.data ?? [],
+    welfareDispatch: welfareDispatchQuery.data ?? [],
     resolveMutation,
     toggleCenterMutation,
     rotateQrMutation,

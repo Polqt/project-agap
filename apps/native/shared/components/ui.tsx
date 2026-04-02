@@ -88,25 +88,32 @@ export function AppButton({
   variant = "primary",
   disabled,
   loading,
+  size = "default",
 }: {
   label: string;
   onPress?: () => void;
   variant?: ButtonVariant;
   disabled?: boolean;
   loading?: boolean;
+  /** Larger touch targets and text for kiosk / field tablets. */
+  size?: "default" | "kiosk";
 }) {
   const muted = disabled || loading;
+  const sizeClasses =
+    size === "kiosk" ? "min-h-[72px] rounded-3xl px-6" : "min-h-14 rounded-2xl px-4";
+  const textClasses =
+    size === "kiosk" ? "text-xl font-bold" : "text-base font-semibold";
 
   return (
     <Pressable
       onPress={onPress}
       disabled={muted}
-      className={`min-h-14 items-center justify-center rounded-2xl px-4 ${buttonVariants[variant]} ${muted ? "opacity-50" : ""}`}
+      className={`items-center justify-center ${sizeClasses} ${buttonVariants[variant]} ${muted ? "opacity-50" : ""}`}
     >
       {loading ? (
         <ActivityIndicator color={variant === "ghost" ? "#0f172a" : "#ffffff"} />
       ) : (
-        <Text className={`text-base font-semibold ${variant === "ghost" ? "text-slate-900" : "text-white"}`}>
+        <Text className={`${textClasses} ${variant === "ghost" ? "text-slate-900" : "text-white"}`}>
           {label}
         </Text>
       )}

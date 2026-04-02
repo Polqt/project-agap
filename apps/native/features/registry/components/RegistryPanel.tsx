@@ -8,7 +8,15 @@ import { RegistrySearchCard } from "./RegistrySearchCard";
 import { useRegistryPanel } from "../hooks/useRegistryPanel";
 
 export function RegistryPanel() {
-  const { query, setQuery, feedback, households, isLoading, updateStatusMutation } = useRegistryPanel();
+  const {
+    query,
+    setQuery,
+    feedback,
+    households,
+    isLoading,
+    updateStatusMutation,
+    assignWelfareMutation,
+  } = useRegistryPanel();
 
   return (
     <ScreenShell
@@ -30,8 +38,13 @@ export function RegistryPanel() {
         isLoading={isLoading}
         isUpdating={updateStatusMutation.isPending}
         updatingHouseholdId={updateStatusMutation.variables?.householdId}
+        isAssigningWelfare={assignWelfareMutation.isPending}
+        assigningWelfareHouseholdId={assignWelfareMutation.variables?.householdId}
         onUpdateStatus={(householdId, evacuationStatus) => {
           void updateStatusMutation.mutateAsync({ householdId, evacuationStatus });
+        }}
+        onAssignWelfare={(householdId) => {
+          void assignWelfareMutation.mutateAsync({ householdId });
         }}
       />
     </ScreenShell>

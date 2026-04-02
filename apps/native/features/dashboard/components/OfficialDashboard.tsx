@@ -1,14 +1,18 @@
 import { ScreenShell } from "@/shared/components/screen-shell";
-import { AppButton } from "@/shared/components/ui";
+import { useRouter } from "expo-router";
+import { Text, View } from "react-native";
+import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
 
 import { CenterQrCard } from "./CenterQrCard";
 import { CenterStatusCard } from "./CenterStatusCard";
 import { DashboardSummaryCards } from "./DashboardSummaryCards";
 import { PriorityQueueCard } from "./PriorityQueueCard";
 import { UnaccountedHouseholdsCard } from "./UnaccountedHouseholdsCard";
+import { WelfareDispatchCard } from "./WelfareDispatchCard";
 import { useOfficialDashboard } from "../hooks/useOfficialDashboard";
 
 export function OfficialDashboard() {
+  const router = useRouter();
   const {
     signOut,
     feedback,
@@ -17,6 +21,7 @@ export function OfficialDashboard() {
     unresolvedPings,
     centers,
     unaccountedHouseholds,
+    welfareDispatch,
     resolveMutation,
     toggleCenterMutation,
     rotateQrMutation,
@@ -42,6 +47,7 @@ export function OfficialDashboard() {
           void resolveMutation.mutateAsync({ pingId });
         }}
       />
+      <WelfareDispatchCard items={welfareDispatch} />
       <UnaccountedHouseholdsCard households={unaccountedHouseholds} />
       <CenterStatusCard
         centers={centers}
