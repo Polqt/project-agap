@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 
-import { ScreenHeader, SectionCard } from "@/shared/components/ui";
+import { ScreenShell } from "@/shared/components/screen-shell";
+import { SectionCard } from "@/shared/components/ui";
 
 import { IncidentReportCard } from "./IncidentReportCard";
 import { NeedsReportFormCard } from "./NeedsReportFormCard";
@@ -21,22 +22,17 @@ export function NeedsReportsPanel() {
   } = useIncidentReportsPanel();
 
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
-      <ScreenHeader
-        eyebrow="5.3.4 Needs reports"
-        title="Submit shelter needs"
-        description="Capture evacuee counts and urgent supply needs from the field so the barangay can escalate quickly."
-      />
-      {feedback ? (
-        <SectionCard>
-          <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
-        </SectionCard>
-      ) : null}
-      {incidentFeedback ? (
-        <SectionCard>
-          <Text className="text-sm leading-6 text-slate-600">{incidentFeedback}</Text>
-        </SectionCard>
-      ) : null}
+    <ScreenShell
+      eyebrow="5.3.4 Needs reports"
+      title="Submit shelter needs"
+      description="Capture evacuee counts and urgent supply needs from the field so the barangay can escalate quickly."
+      feedback={feedback ?? incidentFeedback}
+    >
+      <SectionCard>
+        <Text className="text-xs uppercase tracking-[1px] text-slate-500">
+          Workflow: generate AI summary, submit needs report, then review latest submissions.
+        </Text>
+      </SectionCard>
       <IncidentReportCard
         report={latestReport}
         language={language}
@@ -56,6 +52,6 @@ export function NeedsReportsPanel() {
         onSubmit={handleSubmit}
       />
       <RecentNeedsReportsCard reports={reports} />
-    </View>
+    </ScreenShell>
   );
 }

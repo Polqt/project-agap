@@ -11,6 +11,11 @@ import { buildCenterQrShareMessage } from "../services/centerQr";
 export function useOfficialDashboard() {
   const { profile, signOut } = useAuth();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const isLoading =
+    summaryQuery.isLoading ||
+    unresolvedQuery.isLoading ||
+    centersQuery.isLoading ||
+    unaccountedQuery.isLoading;
 
   const summaryQuery = useQuery(
     trpc.dashboard.summary.queryOptions(
@@ -108,6 +113,7 @@ export function useOfficialDashboard() {
   return {
     signOut,
     feedback,
+    isLoading,
     summary: summaryQuery.data,
     unresolvedPings: unresolvedQuery.data ?? [],
     centers: centersQuery.data ?? [],
