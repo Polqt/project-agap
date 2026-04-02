@@ -1,4 +1,33 @@
 import { z } from "zod";
+import type { VulnerabilityFlag } from "@project-agap/api/supabase/types";
+
+export const vulnerabilityFlagOptions = [
+  "elderly",
+  "pwd",
+  "infant",
+  "pregnant",
+  "solo_parent",
+  "chronic_illness",
+] as const satisfies readonly VulnerabilityFlag[];
+
+const vulnerabilityFlagSchema = z.enum(vulnerabilityFlagOptions);
+
+const householdMemberSchema = z.object({
+  fullName: z.string().trim().min(1, "Enter the member's name."),
+  age: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine((value) => {
+      if (!value) {
+        return true;
+      }
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed >= 0 && parsed <= 130;
+    }, "Age must be between 0 and 130."),
+  vulnerabilityFlags: z.array(vulnerabilityFlagSchema).max(6),
+  notes: z.string().trim().max(300).optional().or(z.literal("")),
+});
 
 export const signInSchema = z.object({
   email: z.email(),
@@ -26,21 +55,39 @@ export const profileSchema = z.object({
   purok: z.string().trim().min(1, "Enter your purok."),
 });
 
-export const householdSchema = z.object({
-  householdHead: z.string().trim().min(2, "Enter the household head."),
-  address: z.string().trim().min(3, "Enter the household address."),
-  purok: z.string().trim().min(1, "Enter the purok."),
-  phoneNumber: z.string().trim().max(40).optional().or(z.literal("")),
-  totalMembers: z
-    .string()
-    .min(1, "Enter the total household members.")
-    .refine((value) => {
-      const parsed = Number(value);
-      return Number.isInteger(parsed) && parsed >= 1 && parsed <= 20;
-    }, "Total members must be between 1 and 20."),
-  isSmsOnly: z.boolean(),
-  notes: z.string().trim().max(300).optional().or(z.literal("")),
-});
+export const householdSchema = z
+  .object({
+    householdHead: z.string().trim().min(2, "Enter the household head."),
+    address: z.string().trim().min(3, "Enter the household address."),
+    purok: z.string().trim().min(1, "Enter the purok."),
+    phoneNumber: z.string().trim().max(40).optional().or(z.literal("")),
+    totalMembers: z
+      .string()
+      .min(1, "Enter the total household members.")
+      .refine((value) => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed >= 1 && parsed <= 20;
+      }, "Total members must be between 1 and 20."),
+    isSmsOnly: z.boolean(),
+    vulnerabilityFlags: z.array(vulnerabilityFlagSchema).max(6),
+    members: z.array(householdMemberSchema).max(19),
+    notes: z.string().trim().max(300).optional().or(z.literal("")),
+  })
+  .superRefine((value, ctx) => {
+    const totalMembers = Number(value.totalMembers);
+    if (Number.isNaN(totalMembers)) {
+      return;
+    }
+
+    const minimumMembers = value.members.length + 1;
+    if (totalMembers < minimumMembers) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Total members must be at least ${minimumMembers}.`,
+        path: ["totalMembers"],
+      });
+    }
+  });
 
 export const broadcastSchema = z.object({
   broadcastType: z.enum(["evacuate_now", "stay_alert", "all_clear", "custom"]),
@@ -64,5 +111,6 @@ export type SignInFormValues = z.infer<typeof signInSchema>;
 export type ResidentSignUpFormValues = z.infer<typeof residentSignUpSchema>;
 export type ProfileFormValues = z.infer<typeof profileSchema>;
 export type HouseholdFormValues = z.infer<typeof householdSchema>;
+export type HouseholdMemberFormValues = z.infer<typeof householdMemberSchema>;
 export type BroadcastFormValues = z.infer<typeof broadcastSchema>;
 export type NeedsReportFormValues = z.infer<typeof needsReportSchema>;

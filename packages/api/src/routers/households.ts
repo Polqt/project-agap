@@ -25,8 +25,35 @@ import type {
 } from "../supabase";
 import type { EvacuationStatus, VulnerabilityFlag } from "../supabase/types";
 
-const householdBaseSelect =
-  "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, welfare_assigned_profile_id, welfare_assigned_at, created_at, updated_at";
+const householdResidentSelect =
+  "id, barangay_id, registered_by, household_head, purok, address, phone_number, total_members, vulnerability_flags, is_sms_only, evacuation_status, notes, created_at, updated_at";
+
+const householdBaseSelect = `${householdResidentSelect}, welfare_assigned_profile_id, welfare_assigned_at`;
+
+function isMissingWelfareColumnsError(error: { message?: string | null } | null) {
+  const message = error?.message ?? "";
+  return message.includes("welfare_assigned_profile_id") || message.includes("welfare_assigned_at");
+}
+
+async function runHouseholdQueryWithFallback<T>(
+  primary: () => Promise<unknown>,
+  fallback: () => Promise<unknown>,
+  errorMessage: string,
+) {
+  let response = (await primary()) as {
+    data: T | null;
+    error: { message?: string | null } | null;
+  };
+
+  if (response.error && isMissingWelfareColumnsError(response.error)) {
+    response = (await fallback()) as {
+      data: T | null;
+      error: { message?: string | null } | null;
+    };
+  }
+
+  return getSupabaseDataOrThrow<T | null>(response as never, errorMessage);
+}
 
 const householdMemberInputSchema = z.object({
   id: uuidSchema.optional(),
@@ -93,15 +120,25 @@ export const householdsRouter = router({
     const profile = getProfileOrThrow(ctx.profile);
     const barangayId = getProfileBarangayIdOrThrow(profile);
 
-    const household = getSupabaseDataOrThrow<HouseholdRecordWithMembers | null>(
-      await ctx.supabase
-        .from("households")
-        .select(
-          `${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
-        )
-        .eq("barangay_id", barangayId)
-        .eq("registered_by", ctx.session.id)
-        .maybeSingle(),
+    const household = await runHouseholdQueryWithFallback<HouseholdRecordWithMembers>(
+      async () =>
+        await ctx.supabase
+          .from("households")
+          .select(
+            `${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
+          )
+          .eq("barangay_id", barangayId)
+          .eq("registered_by", ctx.session.id)
+          .maybeSingle(),
+      async () =>
+        await ctx.supabase
+          .from("households")
+          .select(
+            `${householdResidentSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
+          )
+          .eq("barangay_id", barangayId)
+          .eq("registered_by", ctx.session.id)
+          .maybeSingle(),
       "Failed to load household.",
     );
 
@@ -126,15 +163,25 @@ export const householdsRouter = router({
       const barangayId = getScopedBarangayId(profile);
 
       const household = getFoundOrThrow<HouseholdRecordWithMembers | null>(
-        getSupabaseDataOrThrow<HouseholdRecordWithMembers | null>(
-          await ctx.supabase
-            .from("households")
-            .select(
-              `${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
-            )
-            .eq("id", input.id)
-            .eq("barangay_id", barangayId)
-            .maybeSingle(),
+        await runHouseholdQueryWithFallback<HouseholdRecordWithMembers>(
+          async () =>
+            await ctx.supabase
+              .from("households")
+              .select(
+                `${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
+              )
+              .eq("id", input.id)
+              .eq("barangay_id", barangayId)
+              .maybeSingle(),
+          async () =>
+            await ctx.supabase
+              .from("households")
+              .select(
+                `${householdResidentSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`,
+              )
+              .eq("id", input.id)
+              .eq("barangay_id", barangayId)
+              .maybeSingle(),
           "Failed to load household.",
         ),
         "Household not found.",
@@ -176,20 +223,35 @@ export const householdsRouter = router({
       };
 
       const household = getFoundOrThrow<Household | null>(
-        getSupabaseDataOrThrow<Household | null>(
-          existingHousehold
-            ? await ctx.supabase
-                .from("households")
-                .update(basePayload)
-                .eq("id", existingHousehold.id)
-                .eq("registered_by", ctx.session.id)
-                .select(householdBaseSelect)
-                .maybeSingle()
-            : await ctx.supabase
-                .from("households")
-                .insert(basePayload)
-                .select(householdBaseSelect)
-                .maybeSingle(),
+        await runHouseholdQueryWithFallback<Household>(
+          async () =>
+            existingHousehold
+              ? await ctx.supabase
+                  .from("households")
+                  .update(basePayload)
+                  .eq("id", existingHousehold.id)
+                  .eq("registered_by", ctx.session.id)
+                  .select(householdBaseSelect)
+                  .maybeSingle()
+              : await ctx.supabase
+                  .from("households")
+                  .insert(basePayload)
+                  .select(householdBaseSelect)
+                  .maybeSingle(),
+          async () =>
+            existingHousehold
+              ? await ctx.supabase
+                  .from("households")
+                  .update(basePayload)
+                  .eq("id", existingHousehold.id)
+                  .eq("registered_by", ctx.session.id)
+                  .select(householdResidentSelect)
+                  .maybeSingle()
+              : await ctx.supabase
+                  .from("households")
+                  .insert(basePayload)
+                  .select(householdResidentSelect)
+                  .maybeSingle(),
           "Failed to save household.",
         ),
         "Household could not be saved.",
