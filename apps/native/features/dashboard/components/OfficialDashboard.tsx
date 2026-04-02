@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Text, View } from "react-native";
 
 import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
@@ -7,9 +8,11 @@ import { CenterStatusCard } from "./CenterStatusCard";
 import { DashboardSummaryCards } from "./DashboardSummaryCards";
 import { PriorityQueueCard } from "./PriorityQueueCard";
 import { UnaccountedHouseholdsCard } from "./UnaccountedHouseholdsCard";
+import { WelfareDispatchCard } from "./WelfareDispatchCard";
 import { useOfficialDashboard } from "../hooks/useOfficialDashboard";
 
 export function OfficialDashboard() {
+  const router = useRouter();
   const {
     signOut,
     feedback,
@@ -17,6 +20,7 @@ export function OfficialDashboard() {
     unresolvedPings,
     centers,
     unaccountedHouseholds,
+    welfareDispatch,
     resolveMutation,
     toggleCenterMutation,
     rotateQrMutation,
@@ -30,7 +34,13 @@ export function OfficialDashboard() {
         eyebrow="5.3.1 Live dashboard"
         title="Barangay command view"
         description="Track safe, need-help, checked-in, and unaccounted households from one screen."
-        action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
+        action={
+          <View className="max-w-[52%] flex-row flex-wrap items-end justify-end gap-2">
+            <AppButton label="Welfare" onPress={() => router.push("/(shared)/welfare-check")} variant="ghost" />
+            <AppButton label="Kiosk" onPress={() => router.push("/(shared)/kiosk")} variant="ghost" />
+            <AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />
+          </View>
+        }
       />
       {feedback ? (
         <SectionCard>
@@ -46,6 +56,7 @@ export function OfficialDashboard() {
           void resolveMutation.mutateAsync({ pingId });
         }}
       />
+      <WelfareDispatchCard items={welfareDispatch} />
       <UnaccountedHouseholdsCard households={unaccountedHouseholds} />
       <CenterStatusCard
         centers={centers}

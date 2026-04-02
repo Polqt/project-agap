@@ -7,25 +7,34 @@ type Props = {
   centers: EvacuationCenter[];
   selectedCenterId: string | null;
   onSelect: (centerId: string) => void;
+  kiosk?: boolean;
 };
 
-export function CenterPickerCard({ centers, selectedCenterId, onSelect }: Props) {
+export function CenterPickerCard({ centers, selectedCenterId, onSelect, kiosk = false }: Props) {
   return (
     <SectionCard
-      title="Open centers"
-      subtitle="Choose the evacuation center where the household is currently staying."
+      title={kiosk ? "Buksan na center" : "Open centers"}
+      subtitle={
+        kiosk
+          ? "Pindutin ang evacuation center (malaking pindutan)."
+          : "Choose the evacuation center where the household is currently staying."
+      }
     >
       {centers.length ? (
         centers.map((center) => (
           <Pressable
             key={center.id}
             onPress={() => onSelect(center.id)}
-            className={`mb-3 rounded-2xl border px-4 py-4 ${selectedCenterId === center.id ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50"}`}
+            className={`mb-3 rounded-2xl border ${kiosk ? "min-h-[88px] px-5 py-5" : "px-4 py-4"} ${
+              selectedCenterId === center.id ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50"
+            }`}
           >
             <View className="flex-row items-center justify-between gap-4">
               <View className="flex-1">
-                <Text className="text-base font-semibold text-slate-950">{center.name}</Text>
-                <Text className="mt-1 text-sm text-slate-500">{center.address}</Text>
+                <Text className={`font-semibold text-slate-950 ${kiosk ? "text-xl" : "text-base"}`}>
+                  {center.name}
+                </Text>
+                <Text className={`mt-1 text-slate-500 ${kiosk ? "text-base" : "text-sm"}`}>{center.address}</Text>
               </View>
               <Pill label={center.is_open ? "Open" : "Closed"} tone={center.is_open ? "success" : "warning"} />
             </View>

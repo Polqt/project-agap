@@ -33,7 +33,11 @@ export type EvacuationStatus =
   | "checked_in"
   | "safe"
   | "need_help"
-  | "unknown";
+  | "unknown"
+  | "welfare_check_dispatched"
+  | "not_home";
+
+export type WelfareVisitOutcome = "safe" | "need_help" | "not_home" | "dispatch_again";
 
 export type PingStatus = "safe" | "need_help";
 export type AlertSource = "pagasa" | "phivolcs" | "ldrrmo" | "manual";

@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { AppButton, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 
@@ -9,7 +10,9 @@ import { ProxyMemberSelectorCard } from "./ProxyMemberSelectorCard";
 import { QrCheckInCard } from "./QrCheckInCard";
 import { useCheckInFlow } from "../hooks/useCheckInFlow";
 
-export function CheckInFlow() {
+const kioskModes = ["manual", "qr"] as const;
+
+export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   const {
     mode,
     setMode,
@@ -39,23 +42,33 @@ export function CheckInFlow() {
     submitQrCheckIn,
     submitProxyCheckIn,
     handleQrFallback,
-  } = useCheckInFlow();
+  } = useCheckInFlow({ kioskMode });
 
-  return (
-    <View className="flex-1 bg-slate-50 pb-8">
-      <ScreenHeader
-        eyebrow="5.2.3 Check-in"
-        title="Evacuation center check-in"
-        description="Scan a center QR code for instant validation, fall back to manual selection when needed, and log proxy arrivals for another household."
+  const btnSize = kioskMode ? "kiosk" : "default";
+
+  const body = (
+    <>
+      {!kioskMode ? (
+        <ScreenHeader
+          eyebrow="5.2.3 Check-in"
+          title="Evacuation center check-in"
+          description="Scan a center QR code for instant validation, fall back to manual selection when needed, and log proxy arrivals for another household."
+        />
+      ) : null}
+
+      <CheckInModeSelector
+        mode={mode}
+        onChange={setMode}
+        modes={kioskMode ? [...kioskModes] : undefined}
+        kiosk={kioskMode}
       />
-
-      <CheckInModeSelector mode={mode} onChange={setMode} />
 
       {mode === "qr" ? (
         <QrCheckInCard
           isSubmitting={qrMutation.isPending}
           onScan={submitQrCheckIn}
           onManualFallback={handleQrFallback}
+          kiosk={kioskMode}
         />
       ) : null}
 
@@ -65,15 +78,26 @@ export function CheckInFlow() {
             centers={centers}
             selectedCenterId={selectedCenterId}
             onSelect={setSelectedCenterId}
+            kiosk={kioskMode}
           />
           <SectionCard
-            title="Manual check-in"
-            subtitle="Use your registered household by default and add optional notes for responders."
+            title={kioskMode ? "Walk-in check-in" : "Manual check-in"}
+            subtitle={
+              kioskMode
+                ? "Walang smartphone? Piliin ang center. Household ay opsyonal."
+                : "Use your registered household by default and add optional notes for responders."
+            }
           >
-            <Text className="mb-4 text-sm leading-6 text-slate-600">
-              {household
-                ? `Checking in household: ${household.household_head}`
-                : "Your household registration will be attached automatically when available."}
+            <Text
+              className={`mb-4 leading-6 ${kioskMode ? "text-lg text-slate-200" : "text-sm text-slate-600"}`}
+            >
+              {kioskMode
+                ? household
+                  ? `Kasama ang household: ${household.household_head}`
+                  : "Walk-in — walang naka-link na household (OK)."
+                : household
+                  ? `Checking in household: ${household.household_head}`
+                  : "Your household registration will be attached automatically when available."}
             </Text>
             <TextField
               label="Notes"
@@ -84,17 +108,18 @@ export function CheckInFlow() {
             />
             <View className="mt-4">
               <AppButton
-                label="Submit manual check-in"
+                label={kioskMode ? "Check-in" : "Submit manual check-in"}
                 onPress={() => void submitManualCheckIn()}
                 loading={manualMutation.isPending}
                 disabled={!hasOpenCenters}
+                size={btnSize}
               />
             </View>
           </SectionCard>
         </>
       ) : null}
 
-      {mode === "proxy" ? (
+      {!kioskMode && mode === "proxy" ? (
         <>
           <CenterPickerCard
             centers={centers}
@@ -141,9 +166,28 @@ export function CheckInFlow() {
 
       {feedback ? (
         <SectionCard>
-          <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
+          <Text className={`leading-6 ${kioskMode ? "text-base text-amber-100" : "text-sm text-slate-600"}`}>
+            {feedback}
+          </Text>
         </SectionCard>
       ) : null}
-    </View>
+    </>
   );
+
+  if (kioskMode) {
+    return (
+      <KeyboardAwareScrollView
+        className="flex-1 bg-neutral-950"
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+        bottomOffset={24}
+        nestedScrollEnabled
+      >
+        {body}
+      </KeyboardAwareScrollView>
+    );
+  }
+
+  return <View className="flex-1 bg-slate-50 pb-8">{body}</View>;
 }
