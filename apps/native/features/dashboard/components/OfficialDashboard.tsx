@@ -1,5 +1,3 @@
-import { Text, View } from "react-native";
-
 import { ScreenShell } from "@/shared/components/screen-shell";
 import { AppButton } from "@/shared/components/ui";
 
@@ -28,21 +26,13 @@ export function OfficialDashboard() {
 
   return (
     <ScreenShell
-      eyebrow="5.3.1 Live dashboard"
-      title="Barangay command view"
-      description="Track safe, need-help, checked-in, and unaccounted households from one screen."
+      eyebrow="Official dashboard"
+      title="Command view"
       action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
       feedback={feedback}
       isLoading={isLoading}
       loadingLabel="Refreshing dashboard data..."
     >
-      <View>
-        <View className="mx-5 mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-          <Text className="text-xs uppercase tracking-[1px] text-slate-500">
-            Quick actions are ordered by urgency. Resolve pings first, then manage centers and QR tokens.
-          </Text>
-        </View>
-      </View>
       <DashboardSummaryCards summary={summary} />
       <PriorityQueueCard
         unresolvedPings={unresolvedPings}

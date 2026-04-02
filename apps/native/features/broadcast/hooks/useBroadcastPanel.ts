@@ -5,7 +5,11 @@ import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { trpc } from "@/services/trpc";
-import { getErrorMessage } from "@/shared/utils/errors";
+import {
+  getErrorMessage,
+  getServerConnectionErrorMessage,
+  isOfflineLikeError,
+} from "@/shared/utils/errors";
 import { broadcastSchema, type BroadcastFormValues } from "@/types/forms";
 
 export function useBroadcastPanel() {
@@ -15,7 +19,7 @@ export function useBroadcastPanel() {
   const form = useForm<BroadcastFormValues>({
     resolver: zodResolver(broadcastSchema),
     defaultValues: {
-      broadcastType: "custom",
+      broadcastType: "stay_alert",
       message: "",
       messageFilipino: "",
       targetPurok: "",
@@ -34,7 +38,7 @@ export function useBroadcastPanel() {
       onSuccess: () => {
         void broadcastsQuery.refetch();
         form.reset({
-          broadcastType: "custom",
+          broadcastType: "stay_alert",
           message: "",
           messageFilipino: "",
           targetPurok: "",
@@ -46,15 +50,18 @@ export function useBroadcastPanel() {
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
+      const normalizedType = values.targetPurok?.trim().length ? values.broadcastType : "stay_alert";
       await createBroadcastMutation.mutateAsync({
-        broadcastType: values.broadcastType,
+        broadcastType: normalizedType,
         message: values.message,
         messageFilipino: values.messageFilipino || null,
         targetPurok: values.targetPurok || null,
       });
     } catch (error) {
       form.setError("root", {
-        message: getErrorMessage(error, "Unable to send the broadcast."),
+        message: isOfflineLikeError(error)
+          ? getServerConnectionErrorMessage("Unable to send the broadcast.")
+          : getErrorMessage(error, "Unable to send the broadcast."),
       });
     }
   });

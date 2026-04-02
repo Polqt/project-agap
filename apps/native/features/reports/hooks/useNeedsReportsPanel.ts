@@ -5,7 +5,11 @@ import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { trpc } from "@/services/trpc";
-import { getErrorMessage } from "@/shared/utils/errors";
+import {
+  getErrorMessage,
+  getServerConnectionErrorMessage,
+  isOfflineLikeError,
+} from "@/shared/utils/errors";
 import { needsReportSchema, type NeedsReportFormValues } from "@/types/forms";
 
 export function useNeedsReportsPanel() {
@@ -72,7 +76,9 @@ export function useNeedsReportsPanel() {
       });
     } catch (error) {
       form.setError("root", {
-        message: getErrorMessage(error, "Unable to submit the needs report."),
+        message: isOfflineLikeError(error)
+          ? getServerConnectionErrorMessage("Unable to submit the needs report.")
+          : getErrorMessage(error, "Unable to submit the needs report."),
       });
     }
   });

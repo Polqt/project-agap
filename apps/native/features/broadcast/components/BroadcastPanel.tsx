@@ -4,7 +4,6 @@ import { ScreenShell } from "@/shared/components/screen-shell";
 import { SectionCard } from "@/shared/components/ui";
 
 import { BroadcastComposerCard } from "./BroadcastComposerCard";
-import { BroadcastTemplatesCard } from "./BroadcastTemplatesCard";
 import { RecentBroadcastsCard } from "./RecentBroadcastsCard";
 import { useBroadcastPanel } from "../hooks/useBroadcastPanel";
 
@@ -13,17 +12,16 @@ export function BroadcastPanel() {
 
   return (
     <ScreenShell
-      eyebrow="5.3.3 Broadcast"
-      title="Broadcast to your barangay"
-      description="Use templates or craft a custom bilingual message, then scope it to the whole barangay or a specific purok."
+      eyebrow="Broadcast"
+      title="Talk to everyone"
+      description="Send one clear update to the whole barangay."
       feedback={feedback}
     >
       <SectionCard>
-        <Text className="text-xs uppercase tracking-[1px] text-slate-500">
-          Tip: Keep messages short and action-based so residents can understand quickly.
+        <Text className="text-sm leading-6 text-slate-600">
+          Keep it short and direct. Put the action first.
         </Text>
       </SectionCard>
-      <BroadcastTemplatesCard form={form} />
       <BroadcastComposerCard
         form={form}
         isSubmitting={createBroadcastMutation.isPending}

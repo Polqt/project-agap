@@ -13,8 +13,8 @@ type Props = {
 export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
   return (
     <SectionCard
-      title="Compose broadcast"
-      subtitle="Push notifications and SMS fanout can consume the same message payload."
+      title="Broadcast message"
+      subtitle="Default is everyone. Add purok only if you need to target one area."
     >
       <View className="gap-4">
         <Controller
@@ -22,10 +22,10 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
           name="message"
           render={({ field, fieldState }) => (
             <TextField
-              label="English message"
+              label="Main message"
               value={field.value}
               onChangeText={field.onChange}
-              placeholder="Enter the primary message"
+              placeholder="Example: Heavy rain expected. Stay indoors and monitor updates."
               multiline
               error={fieldState.error?.message}
             />
@@ -36,10 +36,10 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
           name="messageFilipino"
           render={({ field, fieldState }) => (
             <TextField
-              label="Filipino message"
+              label="Filipino version (optional)"
               value={field.value ?? ""}
               onChangeText={field.onChange}
-              placeholder="Optional Filipino version"
+              placeholder="Optional translation of the same message."
               multiline
               error={fieldState.error?.message}
             />
@@ -50,10 +50,10 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
           name="targetPurok"
           render={({ field, fieldState }) => (
             <TextField
-              label="Target purok"
+              label="Target purok (optional)"
               value={field.value ?? ""}
               onChangeText={field.onChange}
-              placeholder="Leave blank to reach the whole barangay"
+              placeholder="Leave blank to send to everyone."
               error={fieldState.error?.message}
             />
           )}
@@ -63,7 +63,7 @@ export function BroadcastComposerCard({ form, isSubmitting, onSubmit }: Props) {
           <Text className="text-sm text-rose-600">{form.formState.errors.root.message}</Text>
         ) : null}
 
-        <AppButton label="Send broadcast" onPress={onSubmit} loading={isSubmitting} />
+        <AppButton label="Broadcast now" onPress={onSubmit} loading={isSubmitting} />
       </View>
     </SectionCard>
   );
