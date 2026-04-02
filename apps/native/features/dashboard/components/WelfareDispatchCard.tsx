@@ -17,7 +17,7 @@ export function WelfareDispatchCard({ items }: Props) {
       {items.length ? (
         items.map((row) => (
           <View
-            key={row.household_id}
+            key={row.id}
             className="mb-4 rounded-3xl border border-amber-200 bg-amber-50/80 p-4"
           >
             <View className="flex-row items-start justify-between gap-3">

@@ -7,7 +7,12 @@ import {
   getSupabaseDataOrThrow,
 } from "../router-helpers";
 import { officialProcedure, router } from "../index";
-import type { NeedsReport, TableInsert } from "../supabase";
+import type { Barangay, NeedsReport, TableInsert } from "../supabase";
+import {
+  aggregateNeedsReports,
+  buildNeedsSummary,
+  type NeedsSummary,
+} from "../ai/needsSummaryBuilder";
 
 const uuidSchema = z.string().uuid();
 
@@ -95,5 +100,41 @@ export const needsReportsRouter = router({
         ),
         "Needs report not found.",
       );
+    }),
+
+  getSummary: officialProcedure
+    .input(
+      z.object({
+        barangayId: uuidSchema.optional(),
+      }),
+    )
+    .query(async ({ ctx, input }): Promise<NeedsSummary | null> => {
+      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+
+      const reports = getSupabaseDataOrThrow<NeedsReport[]>(
+        await ctx.supabase
+          .from("needs_reports")
+          .select(allColumns)
+          .eq("barangay_id", barangayId)
+          .eq("status", "pending")
+          .order("submitted_at", { ascending: false }),
+        "Failed to fetch needs reports for summary.",
+      ) ?? [];
+
+      if (reports.length === 0) {
+        return null;
+      }
+
+      const barangay = getSupabaseDataOrThrow<Barangay | null>(
+        await ctx.supabase
+          .from("barangays")
+          .select("name")
+          .eq("id", barangayId)
+          .maybeSingle(),
+        "Failed to fetch barangay name.",
+      );
+
+      const aggregated = aggregateNeedsReports(reports);
+      return buildNeedsSummary(aggregated, barangay?.name ?? "Unknown Barangay");
     }),
 });
