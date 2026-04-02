@@ -1,8 +1,11 @@
+import { replayQueuedBroadcast } from "@/features/broadcast/services/broadcasts";
 import { trpcClient } from "@/services/trpc";
 import type {
+  BroadcastCreateQueuePayload,
   CheckInManualQueuePayload,
   CheckInProxyQueuePayload,
   CheckInQrQueuePayload,
+  NeedsReportSubmitQueuePayload,
   QueuedAction,
   StatusPingQueuePayload,
   WelfareRecordOutcomeQueuePayload,
@@ -49,6 +52,12 @@ export async function replayQueuedAction(action: QueuedAction) {
       await trpcClient.households.recordWelfareOutcome.mutate(
         action.payload as WelfareRecordOutcomeQueuePayload,
       );
+      return;
+    case "needs-report.submit":
+      await trpcClient.needsReports.submit.mutate(action.payload as NeedsReportSubmitQueuePayload);
+      return;
+    case "broadcast.create":
+      await replayQueuedBroadcast(action.payload as BroadcastCreateQueuePayload);
       return;
     default:
       throw new Error("Unsupported queued action.");

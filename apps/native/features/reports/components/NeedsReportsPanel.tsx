@@ -10,7 +10,7 @@ import { useIncidentReportsPanel } from "../hooks/useIncidentReportsPanel";
 import { useNeedsReportsPanel } from "../hooks/useNeedsReportsPanel";
 
 export function NeedsReportsPanel() {
-  const { form, feedback, centers, reports, submitMutation, handleSubmit } = useNeedsReportsPanel();
+  const { form, feedback, centers, reports, isOnline, submitMutation, handleSubmit } = useNeedsReportsPanel();
   const {
     feedback: incidentFeedback,
     language,
@@ -23,15 +23,19 @@ export function NeedsReportsPanel() {
 
   return (
     <ScreenShell
-      eyebrow="5.3.4 Needs reports"
-      title="Submit shelter needs"
-      description="Capture evacuee counts and urgent supply needs from the field so the barangay can escalate quickly."
+      title="Reports"
+      description="Shelter needs and latest submissions."
       feedback={feedback ?? incidentFeedback}
     >
       <SectionCard>
         <Text className="text-xs uppercase tracking-[1px] text-slate-500">
           Workflow: generate AI summary, submit needs report, then review latest submissions.
         </Text>
+        {!isOnline ? (
+          <Text className="mt-2 text-sm text-amber-700">
+            Offline mode: submitted reports are queued on this device and auto-sync later.
+          </Text>
+        ) : null}
       </SectionCard>
       <IncidentReportCard
         report={latestReport}

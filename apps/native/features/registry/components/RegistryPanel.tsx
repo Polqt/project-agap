@@ -1,7 +1,6 @@
 import { Text, View } from "react-native";
 
 import { ScreenShell } from "@/shared/components/screen-shell";
-import { SectionCard } from "@/shared/components/ui";
 
 import { RegistryListCard } from "./RegistryListCard";
 import { RegistrySearchCard } from "./RegistrySearchCard";
@@ -9,42 +8,60 @@ import { useRegistryPanel } from "../hooks/useRegistryPanel";
 
 export function RegistryPanel() {
   const {
-    query,
-    setQuery,
+    expandedHousehold,
+    expandedHouseholdId,
     feedback,
+    filter,
     households,
     isLoading,
-    updateStatusMutation,
+    isRefreshing,
+    query,
     assignWelfareMutation,
+    setFilter,
+    setQuery,
+    toggleExpandedHousehold,
+    updateStatusMutation,
+    assignWelfare,
+    updateStatus,
   } = useRegistryPanel();
 
   return (
     <ScreenShell
-      eyebrow="5.3.2 Household registry"
-      title="Household registry"
-      description="Search the registry, inspect household status, and update accountability markers for your barangay."
+      title="Registry"
+      description="Search first, expand inline, act fast."
       feedback={feedback}
-      isLoading={isLoading && !households.length}
-      loadingLabel="Loading household registry..."
+      topContent={
+        <RegistrySearchCard
+          activeFilter={filter}
+          value={query}
+          onChange={setQuery}
+          onSelectFilter={setFilter}
+        />
+      }
     >
-      <SectionCard>
-        <Text className="text-xs uppercase tracking-[1px] text-slate-500">
-          Search by household head or purok, then update status in one tap.
+      <View className="mx-5 mt-5 rounded-[28px] bg-[#eef2ff] px-4 py-4">
+        <Text className="text-sm font-semibold text-slate-950">
+          {households.length} household{households.length === 1 ? "" : "s"} in view
         </Text>
-      </SectionCard>
-      <RegistrySearchCard value={query} onChange={setQuery} />
+        <Text className="mt-1 text-sm leading-6 text-slate-600">
+          Sorted vulnerability-first, then unknown status so the riskiest households stay near the top.
+        </Text>
+        {isRefreshing ? <Text className="mt-2 text-xs font-semibold text-slate-500">Refreshing registry...</Text> : null}
+      </View>
+
       <RegistryListCard
+        expandedHousehold={expandedHousehold}
+        expandedHouseholdId={expandedHouseholdId}
         households={households}
+        isAssigningWelfare={assignWelfareMutation.isPending}
         isLoading={isLoading}
         isUpdating={updateStatusMutation.isPending}
-        updatingHouseholdId={updateStatusMutation.variables?.householdId}
-        isAssigningWelfare={assignWelfareMutation.isPending}
-        assigningWelfareHouseholdId={assignWelfareMutation.variables?.householdId}
-        onUpdateStatus={(householdId, evacuationStatus) => {
-          void updateStatusMutation.mutateAsync({ householdId, evacuationStatus });
-        }}
         onAssignWelfare={(householdId) => {
-          void assignWelfareMutation.mutateAsync({ householdId });
+          void assignWelfare(householdId);
+        }}
+        onToggleHousehold={toggleExpandedHousehold}
+        onUpdateStatus={(householdId, evacuationStatus) => {
+          void updateStatus(householdId, evacuationStatus);
         }}
       />
     </ScreenShell>

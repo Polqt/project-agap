@@ -1,8 +1,10 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
-import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
 import { OfflineQueueContext } from "@/shared/hooks/useOfflineQueue";
 import {
+  clearQueuedActions,
   deleteQueuedAction,
   insertQueuedAction,
   listQueuedActions,
@@ -18,10 +20,13 @@ import {
 import { appShellStore, setSyncStatus } from "@/stores/app-shell-store";
 import type { QueuedAction } from "@/types/offline";
 
+const ONE_TIME_QUEUE_RESET_KEY = "agap-offline-queue-reset-2026-04-02";
+
 export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const [pendingActions, setPendingActions] = useState<QueuedAction[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [isFlushing, setIsFlushing] = useState(false);
+  const isFlushingRef = useRef(false);
 
   const refreshPendingActions = useCallback(async () => {
     const actions = await listQueuedActions();
@@ -45,10 +50,11 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
   );
 
   const flushQueue = useCallback(async () => {
-    if (isFlushing) {
+    if (isFlushingRef.current) {
       return;
     }
 
+    isFlushingRef.current = true;
     setIsFlushing(true);
     setSyncStatus("syncing");
 
@@ -80,17 +86,33 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
 
           await updateQueuedActionRetries(action.id, nextRetries);
           await new Promise((resolve) => setTimeout(resolve, getRetryDelayMs(nextRetries - 1)));
+
+          // Avoid repeatedly processing the rest of the queue in the same cycle when
+          // the backend/session is currently failing; retry on the next online event.
+          break;
         }
       }
     } finally {
       await refreshPendingActions();
       setIsFlushing(false);
+      isFlushingRef.current = false;
       setSyncStatus(isOnline ? "online" : "offline");
     }
-  }, [isFlushing, isOnline, refreshPendingActions]);
+  }, [isOnline, refreshPendingActions]);
 
   useEffect(() => {
-    void refreshPendingActions();
+    async function bootstrapQueueState() {
+      const hasReset = await AsyncStorage.getItem(ONE_TIME_QUEUE_RESET_KEY);
+
+      if (!hasReset) {
+        await clearQueuedActions();
+        await AsyncStorage.setItem(ONE_TIME_QUEUE_RESET_KEY, "1");
+      }
+
+      await refreshPendingActions();
+    }
+
+    void bootstrapQueueState();
 
     const unsubscribe = NetInfo.addEventListener((state) => {
       const nextOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
