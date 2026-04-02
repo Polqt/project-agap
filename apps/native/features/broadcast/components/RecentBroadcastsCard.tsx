@@ -8,16 +8,18 @@ export function RecentBroadcastsCard({ broadcasts }: { broadcasts: Broadcast[] }
   return (
     <SectionCard
       title="Recent broadcasts"
-      subtitle="This becomes the operational audit trail for sent messaging."
+      subtitle="Your latest sent updates."
     >
       {broadcasts.length ? (
         broadcasts.map((broadcast) => (
           <View key={broadcast.id} className="mb-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
             <View className="flex-row items-start justify-between gap-4">
               <View className="flex-1">
-                <Text className="text-base font-semibold text-slate-950">{broadcast.message}</Text>
+                <Text className="text-base font-semibold text-slate-950" numberOfLines={3}>
+                  {broadcast.message}
+                </Text>
                 <Text className="mt-2 text-sm text-slate-500">
-                  {broadcast.target_purok ? `Scoped to ${broadcast.target_purok}` : "Whole barangay"}
+                  {broadcast.target_purok ? `Purok: ${broadcast.target_purok}` : "Everyone"}
                 </Text>
               </View>
               <Pill label={broadcast.broadcast_type.replace("_", " ").toUpperCase()} tone="info" />
@@ -29,8 +31,8 @@ export function RecentBroadcastsCard({ broadcasts }: { broadcasts: Broadcast[] }
         ))
       ) : (
         <EmptyState
-          title="No broadcasts yet"
-          description="Once you send operational messages, they will appear here for follow-up and review."
+          title="No alerts yet"
+          description="Sent alerts will appear here."
         />
       )}
     </SectionCard>

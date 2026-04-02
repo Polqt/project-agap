@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 
-import { ScreenHeader, SectionCard } from "@/shared/components/ui";
+import { ScreenShell } from "@/shared/components/screen-shell";
+import { SectionCard } from "@/shared/components/ui";
 
 import { RegistryListCard } from "./RegistryListCard";
 import { RegistrySearchCard } from "./RegistrySearchCard";
@@ -18,17 +19,19 @@ export function RegistryPanel() {
   } = useRegistryPanel();
 
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
-      <ScreenHeader
-        eyebrow="5.3.2 Household registry"
-        title="Household registry"
-        description="Search the registry, inspect household status, and update accountability markers for your barangay."
-      />
-      {feedback ? (
-        <SectionCard>
-          <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
-        </SectionCard>
-      ) : null}
+    <ScreenShell
+      eyebrow="5.3.2 Household registry"
+      title="Household registry"
+      description="Search the registry, inspect household status, and update accountability markers for your barangay."
+      feedback={feedback}
+      isLoading={isLoading && !households.length}
+      loadingLabel="Loading household registry..."
+    >
+      <SectionCard>
+        <Text className="text-xs uppercase tracking-[1px] text-slate-500">
+          Search by household head or purok, then update status in one tap.
+        </Text>
+      </SectionCard>
       <RegistrySearchCard value={query} onChange={setQuery} />
       <RegistryListCard
         households={households}
@@ -44,6 +47,6 @@ export function RegistryPanel() {
           void assignWelfareMutation.mutateAsync({ householdId });
         }}
       />
-    </View>
+    </ScreenShell>
   );
 }

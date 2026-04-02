@@ -4,7 +4,11 @@ import { useState } from "react";
 
 import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
-import { getErrorMessage } from "@/shared/utils/errors";
+import {
+  getErrorMessage,
+  getServerConnectionErrorMessage,
+  isOfflineLikeError,
+} from "@/shared/utils/errors";
 
 import { getIncidentReportText } from "../services/incidentReport";
 import type { IncidentReportLanguage } from "../types";
@@ -33,7 +37,11 @@ export function useIncidentReportsPanel() {
         setFeedback("Incident report generated.");
       },
       onError: (error) => {
-        setFeedback(getErrorMessage(error, "Unable to generate incident report."));
+        setFeedback(
+          isOfflineLikeError(error)
+            ? getServerConnectionErrorMessage("Unable to generate incident report.")
+            : getErrorMessage(error, "Unable to generate incident report."),
+        );
       },
     }),
   );

@@ -13,6 +13,9 @@ const CREATE_QUEUE_TABLE_SQL = `
   );
 `;
 
+const ADD_FAILED_AT_COLUMN_SQL = "ALTER TABLE offline_queue ADD COLUMN failed_at INTEGER;";
+const ADD_LAST_ERROR_COLUMN_SQL = "ALTER TABLE offline_queue ADD COLUMN last_error TEXT;";
+
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 function mapRow(row: OfflineQueueRow): QueuedAction {
@@ -31,11 +34,25 @@ export async function getOfflineQueueDatabase() {
   if (!databasePromise) {
     databasePromise = SQLite.openDatabaseAsync("agap-offline.db").then(async (database) => {
       await database.execAsync(CREATE_QUEUE_TABLE_SQL);
+      await ensureOfflineQueueColumns(database);
       return database;
     });
   }
 
   return databasePromise;
+}
+
+async function ensureOfflineQueueColumns(database: SQLite.SQLiteDatabase) {
+  const tableInfo = await database.getAllAsync<{ name: string }>("PRAGMA table_info(offline_queue)");
+  const columnNames = new Set(tableInfo.map((column) => column.name));
+
+  if (!columnNames.has("failed_at")) {
+    await database.execAsync(ADD_FAILED_AT_COLUMN_SQL);
+  }
+
+  if (!columnNames.has("last_error")) {
+    await database.execAsync(ADD_LAST_ERROR_COLUMN_SQL);
+  }
 }
 
 export async function listQueuedActions() {

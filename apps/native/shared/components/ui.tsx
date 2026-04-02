@@ -44,12 +44,12 @@ export function ScreenHeader({
           {eyebrow}
         </Text>
       ) : null}
-      <View className="flex-row items-start justify-between gap-4">
-        <View className="flex-1 gap-2">
-          <Text className="text-3xl font-bold text-slate-950">{title}</Text>
-          {description ? <Text className="text-sm leading-6 text-slate-600">{description}</Text> : null}
+      <View className="gap-3">
+        <View className="gap-2">
+          <Text className="text-2xl font-bold leading-tight text-slate-950">{title}</Text>
+          {description ? <Text className="text-sm leading-5 text-slate-600">{description}</Text> : null}
         </View>
-        {action}
+        {action ? <View className="self-start">{action}</View> : null}
       </View>
     </View>
   );

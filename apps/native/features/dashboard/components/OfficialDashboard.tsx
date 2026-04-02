@@ -1,6 +1,6 @@
+import { ScreenShell } from "@/shared/components/screen-shell";
 import { useRouter } from "expo-router";
 import { Text, View } from "react-native";
-
 import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
 
 import { CenterQrCard } from "./CenterQrCard";
@@ -16,6 +16,7 @@ export function OfficialDashboard() {
   const {
     signOut,
     feedback,
+    isLoading,
     summary,
     unresolvedPings,
     centers,
@@ -29,24 +30,14 @@ export function OfficialDashboard() {
   } = useOfficialDashboard();
 
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
-      <ScreenHeader
-        eyebrow="5.3.1 Live dashboard"
-        title="Barangay command view"
-        description="Track safe, need-help, checked-in, and unaccounted households from one screen."
-        action={
-          <View className="max-w-[52%] flex-row flex-wrap items-end justify-end gap-2">
-            <AppButton label="Welfare" onPress={() => router.push("/(shared)/welfare-check")} variant="ghost" />
-            <AppButton label="Kiosk" onPress={() => router.push("/(shared)/kiosk")} variant="ghost" />
-            <AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />
-          </View>
-        }
-      />
-      {feedback ? (
-        <SectionCard>
-          <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
-        </SectionCard>
-      ) : null}
+    <ScreenShell
+      eyebrow="Official dashboard"
+      title="Command view"
+      action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
+      feedback={feedback}
+      isLoading={isLoading}
+      loadingLabel="Refreshing dashboard data..."
+    >
       <DashboardSummaryCards summary={summary} />
       <PriorityQueueCard
         unresolvedPings={unresolvedPings}
@@ -80,6 +71,6 @@ export function OfficialDashboard() {
           void rotateQrMutation.mutateAsync({ centerId });
         }}
       />
-    </View>
+    </ScreenShell>
   );
 }

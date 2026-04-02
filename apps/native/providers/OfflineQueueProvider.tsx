@@ -15,7 +15,7 @@ import {
   MAX_QUEUE_RETRIES,
   replayQueuedAction,
 } from "@/services/offlineQueueActions";
-import { setFailedQueueCount, setPendingQueueCount, setSyncStatus } from "@/stores/app-shell-store";
+import { appShellStore, setSyncStatus } from "@/stores/app-shell-store";
 import type { QueuedAction } from "@/types/offline";
 
 export function OfflineQueueProvider({ children }: PropsWithChildren) {
@@ -25,11 +25,14 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
 
   const refreshPendingActions = useCallback(async () => {
     const actions = await listQueuedActions();
-    setPendingActions(actions);
     const pendingCount = actions.filter((action) => action.failedAt === null).length;
     const failedCount = actions.length - pendingCount;
-    setPendingQueueCount(pendingCount);
-    setFailedQueueCount(failedCount);
+    setPendingActions(actions);
+    appShellStore.setState((state) => ({
+      ...state,
+      pendingQueueCount: pendingCount,
+      failedQueueCount: failedCount,
+    }));
     return actions;
   }, []);
 
