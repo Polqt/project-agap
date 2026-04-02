@@ -10,6 +10,7 @@ import { AuthProvider } from "@/providers/AuthProvider";
 import { OfflineQueueProvider } from "@/providers/OfflineQueueProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { RealtimeSyncProvider } from "@/providers/RealtimeSyncProvider";
+import { OfflineBanner } from "@/shared/components/offline-banner";
 
 export const unstable_settings = {
   initialRouteName: "index",
@@ -46,6 +47,7 @@ export default function RootLayout() {
               <AuthProvider>
                 <OfflineQueueProvider>
                   <RealtimeSyncProvider>
+                    <OfflineBanner />
                     <Stack screenOptions={{ headerShown: false }}>
                       <Stack.Screen name="index" />
                       <Stack.Screen name="onboarding" />

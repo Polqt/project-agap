@@ -26,12 +26,21 @@ pnpm install
 
 ## Database Setup
 
-This project uses PostgreSQL with Drizzle ORM.
+This project uses **Supabase SQL migrations** under `packages/db/supabase/migrations`.
 
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/web/.env` file with your PostgreSQL connection details.
+1. Start local Supabase services:
 
-3. Apply the schema to your database:
+```bash
+pnpm run supabase:start
+```
+
+2. Apply pending migrations:
+
+```bash
+pnpm run db:migrate
+```
+
+3. Push local migration state (safe Supabase flow, not Drizzle push diff):
 
 ```bash
 pnpm run db:push
@@ -102,5 +111,6 @@ project-agap/
 - `pnpm run build`: Build all applications
 - `pnpm run check-types`: Check TypeScript types across all apps
 - `pnpm run dev:native`: Start the React Native/Expo development server
-- `pnpm run db:push`: Push schema changes to database
-- `pnpm run db:studio`: Open database studio UI
+- `pnpm run db:migrate`: Apply pending Supabase migrations
+- `pnpm run db:push`: Push pending Supabase migrations
+- `pnpm run db:studio`: Open Supabase Studio UI

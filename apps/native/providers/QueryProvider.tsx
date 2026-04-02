@@ -17,6 +17,17 @@ export function QueryProvider({ children }: PropsWithChildren) {
       persistOptions={{
         persister,
         maxAge: 1000 * 60 * 60 * 24,
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) => {
+            const key = String(query.queryKey[0] ?? "");
+            return (
+              key.includes("alerts") ||
+              key.includes("evacuationCenters") ||
+              key.includes("evacuationRoutes") ||
+              key.includes("households")
+            );
+          },
+        },
       }}
     >
       {children}

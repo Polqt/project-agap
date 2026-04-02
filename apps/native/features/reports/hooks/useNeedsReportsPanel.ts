@@ -34,12 +34,9 @@ export function useNeedsReportsPanel() {
   );
 
   const reportsQuery = useQuery(
-    trpc.needsReports.list.queryOptions(
-      { barangayId: profile?.barangay_id ?? undefined },
-      {
-        enabled: Boolean(profile?.barangay_id),
-      },
-    ),
+    trpc.needsReports.list.queryOptions({ barangayId: profile?.barangay_id ?? undefined }, {
+      enabled: Boolean(profile?.barangay_id),
+    }),
   );
 
   const submitMutation = useMutation(

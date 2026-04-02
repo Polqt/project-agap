@@ -58,6 +58,8 @@ export type QueuedAction<TType extends OfflineActionType = OfflineActionType> = 
   payload: OfflinePayloadMap[TType];
   createdAt: number;
   retries: number;
+  failedAt: number | null;
+  lastError: string | null;
 };
 
 export type OfflineQueueRow = {
@@ -66,4 +68,6 @@ export type OfflineQueueRow = {
   payload: string;
   created_at: number;
   retries: number;
+  failed_at: number | null;
+  last_error: string | null;
 };

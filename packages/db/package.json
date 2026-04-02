@@ -10,10 +10,10 @@
     }
   },
   "scripts": {
-    "db:push": "drizzle-kit push",
+    "db:push": "supabase db push --workdir .",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio",
-    "db:migrate": "drizzle-kit migrate"
+    "db:studio": "supabase studio --workdir .",
+    "db:migrate": "supabase migration up --workdir ."
   },
   "dependencies": {
     "@project-agap/env": "workspace:*",

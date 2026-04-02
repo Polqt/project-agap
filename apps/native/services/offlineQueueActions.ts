@@ -9,6 +9,8 @@ import type {
 } from "@/types/offline";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+export const MAX_QUEUE_RETRIES = 3;
+const RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 
 export function createQueuedAction<TType extends QueuedAction["type"]>(
   type: TType,
@@ -20,6 +22,8 @@ export function createQueuedAction<TType extends QueuedAction["type"]>(
     payload,
     createdAt: Date.now(),
     retries: 0,
+    failedAt: null,
+    lastError: null,
   };
 }
 
@@ -49,4 +53,9 @@ export async function replayQueuedAction(action: QueuedAction) {
     default:
       throw new Error("Unsupported queued action.");
   }
+}
+
+export function getRetryDelayMs(retries: number) {
+  const safeIndex = Math.max(0, Math.min(retries, RETRY_DELAYS_MS.length - 1));
+  return RETRY_DELAYS_MS[safeIndex];
 }

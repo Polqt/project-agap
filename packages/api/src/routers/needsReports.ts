@@ -19,13 +19,13 @@ export const needsReportsRouter = router({
     .input(
       z.object({
         centerId: uuidSchema.optional(),
-        totalEvacuees: z.number(),
-        needsFoodPacks: z.number(),
-        needsWaterLiters: z.number(),
+        totalEvacuees: z.number().int().min(0),
+        needsFoodPacks: z.number().int().min(0),
+        needsWaterLiters: z.number().int().min(0),
         needsMedicine: z.boolean(),
-        needsBlankets: z.number(),
-        medicalCases: z.string().optional(),
-        notes: z.string().optional(),
+        needsBlankets: z.number().int().min(0),
+        medicalCases: z.string().trim().max(1000).optional(),
+        notes: z.string().trim().max(2000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -53,7 +53,7 @@ export const needsReportsRouter = router({
         ),
         "Needs report submission failed.",
       );
-  }),
+    }),
 
   list: officialProcedure
     .input(

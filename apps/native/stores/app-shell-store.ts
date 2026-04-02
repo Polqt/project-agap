@@ -4,6 +4,8 @@ import { Store } from "@tanstack/store";
 type AppShellState = {
   selectedRole: AppRole | null;
   pendingQueueCount: number;
+  failedQueueCount: number;
+  syncStatus: "online" | "offline" | "syncing";
   lastStatusPing: {
     status: "safe" | "need_help";
     createdAt: number;
@@ -14,6 +16,8 @@ type AppShellState = {
 const initialState: AppShellState = {
   selectedRole: null,
   pendingQueueCount: 0,
+  failedQueueCount: 0,
+  syncStatus: "online",
   lastStatusPing: null,
 };
 
@@ -30,6 +34,20 @@ export function setPendingQueueCount(pendingQueueCount: number) {
   appShellStore.setState((state) => ({
     ...state,
     pendingQueueCount,
+  }));
+}
+
+export function setFailedQueueCount(failedQueueCount: number) {
+  appShellStore.setState((state) => ({
+    ...state,
+    failedQueueCount,
+  }));
+}
+
+export function setSyncStatus(syncStatus: AppShellState["syncStatus"]) {
+  appShellStore.setState((state) => ({
+    ...state,
+    syncStatus,
   }));
 }
 

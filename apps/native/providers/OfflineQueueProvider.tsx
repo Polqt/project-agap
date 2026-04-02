@@ -6,15 +6,17 @@ import {
   deleteQueuedAction,
   insertQueuedAction,
   listQueuedActions,
+  markQueuedActionFailed,
   updateQueuedActionRetries,
 } from "@/services/offlineQueueDb";
-import { isExpiredQueuedAction, replayQueuedAction } from "@/services/offlineQueueActions";
-import { setPendingQueueCount } from "@/stores/app-shell-store";
+import {
+  getRetryDelayMs,
+  isExpiredQueuedAction,
+  MAX_QUEUE_RETRIES,
+  replayQueuedAction,
+} from "@/services/offlineQueueActions";
+import { setFailedQueueCount, setPendingQueueCount, setSyncStatus } from "@/stores/app-shell-store";
 import type { QueuedAction } from "@/types/offline";
-
-function getRetryDelayMs(retries: number) {
-  return Math.min(2 ** retries * 250, 5000);
-}
 
 export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const [pendingActions, setPendingActions] = useState<QueuedAction[]>([]);
@@ -24,7 +26,10 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const refreshPendingActions = useCallback(async () => {
     const actions = await listQueuedActions();
     setPendingActions(actions);
-    setPendingQueueCount(actions.length);
+    const pendingCount = actions.filter((action) => action.failedAt === null).length;
+    const failedCount = actions.length - pendingCount;
+    setPendingQueueCount(pendingCount);
+    setFailedQueueCount(failedCount);
     return actions;
   }, []);
 
@@ -42,11 +47,16 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
     }
 
     setIsFlushing(true);
+    setSyncStatus("syncing");
 
     try {
       const actions = await listQueuedActions();
 
       for (const action of actions) {
+        if (action.failedAt !== null) {
+          continue;
+        }
+
         if (isExpiredQueuedAction(action)) {
           await deleteQueuedAction(action.id);
           continue;
@@ -55,19 +65,26 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
         try {
           await replayQueuedAction(action);
           await deleteQueuedAction(action.id);
-        } catch {
+        } catch (error) {
           const nextRetries = action.retries + 1;
+
+          if (nextRetries >= MAX_QUEUE_RETRIES) {
+            const message =
+              error instanceof Error ? error.message : "Exceeded maximum retry attempts.";
+            await markQueuedActionFailed(action.id, message);
+            continue;
+          }
+
           await updateQueuedActionRetries(action.id, nextRetries);
-          await new Promise((resolve) => {
-            setTimeout(resolve, getRetryDelayMs(nextRetries));
-          });
+          await new Promise((resolve) => setTimeout(resolve, getRetryDelayMs(nextRetries - 1)));
         }
       }
     } finally {
       await refreshPendingActions();
       setIsFlushing(false);
+      setSyncStatus(isOnline ? "online" : "offline");
     }
-  }, [isFlushing, refreshPendingActions]);
+  }, [isFlushing, isOnline, refreshPendingActions]);
 
   useEffect(() => {
     void refreshPendingActions();
@@ -75,6 +92,7 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
     const unsubscribe = NetInfo.addEventListener((state) => {
       const nextOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
       setIsOnline(nextOnline);
+      setSyncStatus(nextOnline ? "online" : "offline");
 
       if (nextOnline) {
         void flushQueue();
