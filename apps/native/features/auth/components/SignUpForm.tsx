@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Pressable, Text, type TextInput, View } from "react-native";
 
+import { haptics } from "@/services/haptics";
 import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { AppButton, Pill, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -19,7 +20,9 @@ export function SignUpForm() {
   const { signUpResident, role, isAuthenticated, isLoading } = useAuth();
   const [step, setStep] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPendingRedirect, setIsPendingRedirect] = useState(false);
   const fullNameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -45,8 +48,17 @@ export function SignUpForm() {
       return;
     }
 
-    router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
-  }, [isAuthenticated, isLoading, role, router]);
+    if (!isPendingRedirect) {
+      router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
+    }, 1400);
+
+    return () => clearTimeout(timeout);
+  }, [isAuthenticated, isLoading, isPendingRedirect, role, router]);
 
   useEffect(() => {
     form.setValue("barangayId", PILOT_BARANGAY_BANAGO_ID, {
@@ -67,6 +79,7 @@ export function SignUpForm() {
 
   const handleSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);
+    setSubmitSuccess(null);
     setIsSubmitting(true);
 
     try {
@@ -78,8 +91,13 @@ export function SignUpForm() {
         barangayId: values.barangayId,
         purok: values.purok,
       });
+      setSubmitSuccess("Resident account created successfully. Redirecting you to your dashboard...");
+      setIsPendingRedirect(true);
+      void haptics.success();
     } catch (error) {
+      setIsPendingRedirect(false);
       setSubmitError(getErrorMessage(error, "Unable to create your account."));
+      void haptics.error();
     } finally {
       setIsSubmitting(false);
     }
@@ -233,14 +251,32 @@ export function SignUpForm() {
                 />
               )}
             />
+            {submitSuccess ? (
+              <View className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                <Text className="text-sm font-medium text-emerald-800">{submitSuccess}</Text>
+              </View>
+            ) : null}
             {submitError ? <Text className="text-sm text-rose-600">{submitError}</Text> : null}
           </View>
         ) : null}
 
         <View className="mt-6 flex-row gap-3">
-          {step > 0 ? <AppButton label="Back" onPress={() => setStep((value) => value - 1)} variant="ghost" /> : null}
+          {step > 0 ? (
+            <AppButton
+              label="Back"
+              onPress={() => setStep((value) => value - 1)}
+              variant="ghost"
+              disabled={isSubmitting || isPendingRedirect}
+            />
+          ) : null}
           {step < 1 ? <AppButton label="Continue" onPress={() => void nextStep()} /> : null}
-          {step === 1 ? <AppButton label="Create account" onPress={handleSubmit} loading={isSubmitting} /> : null}
+          {step === 1 ? (
+            <AppButton
+              label="Create account"
+              onPress={handleSubmit}
+              loading={isSubmitting || isPendingRedirect}
+            />
+          ) : null}
         </View>
       </SectionCard>
 
