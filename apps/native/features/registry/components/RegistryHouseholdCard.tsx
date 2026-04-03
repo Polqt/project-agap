@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 
 import { RegistryDetailCard } from "./RegistryDetailCard";
+import { computeRiskScore, RISK_COLORS } from "@/shared/utils/riskScore";
 
 import type { EvacuationStatus, Household, HouseholdWithMembers } from "@project-agap/api/supabase";
 
@@ -55,6 +56,8 @@ export function RegistryHouseholdCard({
   const badges = getBadges(household);
   const status = statusConfig(household.evacuation_status);
   const statusLabel = (household.evacuation_status ?? "unknown").replaceAll("_", " ");
+  const risk = computeRiskScore(household);
+  const riskColors = RISK_COLORS[risk.level];
 
   return (
     <View
@@ -78,10 +81,16 @@ export function RegistryHouseholdCard({
           </View>
         </View>
 
-        {/* Subtitle: purok + members */}
-        <Text className="mt-1 text-[13px] text-slate-400">
-          {household.purok} &middot; {household.total_members} member{household.total_members === 1 ? "" : "s"}
-        </Text>
+        {/* Subtitle: purok + members + risk badge */}
+        <View className="mt-1 flex-row items-center justify-between gap-2">
+          <Text className="flex-1 text-[13px] text-slate-400">
+            {household.purok} &middot; {household.total_members} member{household.total_members === 1 ? "" : "s"}
+          </Text>
+          <View className={`flex-row items-center gap-1 rounded px-1.5 py-0.5 ${riskColors.bg}`}>
+            <View className={`h-1.5 w-1.5 rounded-full ${riskColors.dot}`} />
+            <Text className={`text-[10px] font-bold ${riskColors.text}`}>{risk.label}</Text>
+          </View>
+        </View>
 
         {/* Badges row */}
         {badges.length > 0 || household.is_sms_only ? (

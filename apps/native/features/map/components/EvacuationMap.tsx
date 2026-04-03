@@ -14,7 +14,7 @@ import { getResidentMapCache, setResidentMapCache } from "@/services/mapCache";
 import { trpc } from "@/services/trpc";
 import { formatDistanceKm, haversineDistanceKm } from "@/shared/utils/geo";
 import type { CachedResidentMapData } from "@/types/map";
-import type { EvacuationCenter } from "@project-agap/api/supabase";
+import type { EvacuationCenter, EvacuationRoute } from "@project-agap/api/supabase";
 
 type ReactNativeMapsModule = typeof import("react-native-maps");
 
@@ -38,6 +38,16 @@ function getReactNativeMapsModule() {
   }
 }
 
+function getRouteCoords(route: EvacuationRoute): { latitude: number; longitude: number }[] {
+  const geojson = route.route_geojson as { coordinates?: [number, number][] };
+  return (geojson.coordinates ?? []).map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+}
+
+function getWalkMinutes(km: number): string {
+  const mins = Math.round((km / 4.5) * 60);
+  return `~${mins} min walk`;
+}
+
 export function EvacuationMap() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -46,6 +56,7 @@ export function EvacuationMap() {
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const [cachedData, setCachedData] = useState<CachedResidentMapData | null>(null);
   const [selectedCenter, setSelectedCenter] = useState<EvacuationCenter | null>(null);
+  const [showHeatmap, setShowHeatmap] = useState(false);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const mapsModule = useMemo(() => getReactNativeMapsModule(), []);
 
@@ -60,6 +71,13 @@ export function EvacuationMap() {
     trpc.evacuationCenters.listByBarangay.queryOptions(
       { barangayId: profile?.barangay_id ?? "" },
       { enabled: Boolean(profile?.barangay_id) },
+    ),
+  );
+
+  const heatmapQuery = useQuery(
+    trpc.dashboard.heatmapData.queryOptions(
+      { barangayId: profile?.barangay_id ?? "" },
+      { enabled: Boolean(profile?.barangay_id) && showHeatmap },
     ),
   );
 
@@ -110,9 +128,34 @@ export function EvacuationMap() {
     [],
   );
 
+  // F9: Recommended route — nearest open center with capacity
+  const recommendedCenter = useMemo(() => {
+    if (!location) return null;
+    const open = sortedCenters.filter(
+      (c) => c.is_open && c.current_occupancy < c.capacity,
+    );
+    return open[0] ?? null;
+  }, [sortedCenters, location]);
+
+  const recommendedRoute = useMemo(() => {
+    if (!recommendedCenter) return null;
+    return routes.find((r) => r.center_id === recommendedCenter.id) ?? null;
+  }, [recommendedCenter, routes]);
+
+  const recommendedDistance = useMemo(() => {
+    if (!recommendedCenter || !location) return null;
+    return haversineDistanceKm(
+      location.latitude,
+      location.longitude,
+      recommendedCenter.latitude,
+      recommendedCenter.longitude,
+    );
+  }, [recommendedCenter, location]);
+
   const MapView = mapsModule?.default;
   const Marker = mapsModule?.Marker;
   const Polyline = mapsModule?.Polyline;
+  const Circle = mapsModule?.Circle;
 
   const selectedDistance =
     selectedCenter && location
@@ -143,23 +186,41 @@ export function EvacuationMap() {
             />
           ))}
           {routes.map((route) => {
-            const coords = Array.isArray(
-              (route.route_geojson as { coordinates?: unknown[] }).coordinates,
-            )
-              ? (
-                  (route.route_geojson as { coordinates: [number, number][] }).coordinates ?? []
-                ).map(([lng, lat]) => ({ latitude: lat, longitude: lng }))
-              : [];
+            const coords = getRouteCoords(route);
             if (!coords.length) return null;
+            const isRecommended = recommendedRoute?.id === route.id;
             return (
               <Polyline
                 key={route.id}
                 coordinates={coords}
-                strokeColor={route.color_hex || "#1d4ed8"}
-                strokeWidth={4}
+                strokeColor={isRecommended ? "#0ea5e9" : (route.color_hex || "#1d4ed8")}
+                strokeWidth={isRecommended ? 6 : 4}
               />
             );
           })}
+          {/* F2: Heatmap circles — need_help density per purok */}
+          {showHeatmap && Circle
+            ? (heatmapQuery.data ?? []).map((stat) => {
+                const color =
+                  stat.count >= 5
+                    ? "rgba(220,38,38,0.35)"
+                    : stat.count >= 2
+                      ? "rgba(245,158,11,0.35)"
+                      : "rgba(34,197,94,0.25)";
+                const strokeColor =
+                  stat.count >= 5 ? "#dc2626" : stat.count >= 2 ? "#f59e0b" : "#22c55e";
+                return (
+                  <Circle
+                    key={stat.purok}
+                    center={{ latitude: stat.latitude, longitude: stat.longitude }}
+                    radius={300}
+                    fillColor={color}
+                    strokeColor={strokeColor}
+                    strokeWidth={1}
+                  />
+                );
+              })
+            : null}
         </MapView>
       ) : (
         <View className="flex-1 items-center justify-center bg-slate-100 px-8">
@@ -173,7 +234,7 @@ export function EvacuationMap() {
         </View>
       )}
 
-      {/* Top bar overlay: Offline pill */}
+      {/* Top bar overlay */}
       <View
         className="absolute left-0 right-0 flex-row items-center justify-between px-4"
         style={{ top: insets.top + 8 }}
@@ -186,6 +247,20 @@ export function EvacuationMap() {
               <Text className="text-[11px] font-semibold text-amber-800">Offline</Text>
             </View>
           ) : null}
+          {/* F2: Heatmap toggle */}
+          <Pressable
+            onPress={() => setShowHeatmap((v) => !v)}
+            className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${showHeatmap ? "bg-rose-600" : "bg-white/90"}`}
+          >
+            <Ionicons
+              name="flame-outline"
+              size={14}
+              color={showHeatmap ? "#fff" : "#334155"}
+            />
+            <Text className={`text-[11px] font-semibold ${showHeatmap ? "text-white" : "text-slate-700"}`}>
+              Heatmap
+            </Text>
+          </Pressable>
         </View>
         <Pressable
           onPress={() => router.push("/(resident)/profile")}
@@ -194,6 +269,26 @@ export function EvacuationMap() {
           <Ionicons name="person-outline" size={18} color="#334155" />
         </Pressable>
       </View>
+
+      {/* F9: Recommended route callout */}
+      {recommendedCenter && recommendedDistance != null ? (
+        <View
+          className="absolute left-4 right-4 flex-row items-center gap-3 rounded-2xl bg-sky-600 px-4 py-3 shadow-lg"
+          style={{ top: insets.top + 56 }}
+          pointerEvents="none"
+        >
+          <Ionicons name="navigate-outline" size={18} color="white" />
+          <View className="flex-1">
+            <Text className="text-[12px] font-semibold text-sky-100">Recommended route</Text>
+            <Text className="text-[14px] font-bold text-white" numberOfLines={1}>
+              {recommendedCenter.name}
+            </Text>
+          </View>
+          <Text className="text-[12px] font-semibold text-sky-100">
+            {getWalkMinutes(recommendedDistance)}
+          </Text>
+        </View>
+      ) : null}
 
       {/* FAB: Check-In shortcut */}
       <View

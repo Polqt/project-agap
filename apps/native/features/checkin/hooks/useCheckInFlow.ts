@@ -67,6 +67,7 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
   const manualMutation = useMutation(trpc.checkIns.manual.mutationOptions());
   const qrMutation = useMutation(trpc.checkIns.byQr.mutationOptions());
   const proxyMutation = useMutation(trpc.checkIns.proxy.mutationOptions());
+  const markLocatedMutation = useMutation(trpc.households.markLocated.mutationOptions());
 
   const centers = (centersQuery.data ?? []).filter((center) => center.is_open);
 
@@ -162,15 +163,32 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       return;
     }
 
+    setFeedback(null);
+    setQrToken(resolvedQrToken);
+
+    // Family Reunification QR — payload format: AGAP:HH:{householdId}
+    if (resolvedQrToken.startsWith("AGAP:HH:")) {
+      const householdId = resolvedQrToken.slice("AGAP:HH:".length);
+      try {
+        const result = await markLocatedMutation.mutateAsync({ householdId });
+        setQrToken("");
+        setFeedback(
+          result.smsNotified
+            ? `Family located! SMS notification sent to ${result.household.household_head}.`
+            : `Family located! ${result.household.household_head} is now marked as checked in.`,
+        );
+      } catch (error) {
+        setFeedback(getErrorMessage(error, "Unable to mark household as located."));
+      }
+      return;
+    }
+
     const payload = {
       qrToken: resolvedQrToken,
       householdId: householdQuery.data?.id ?? undefined,
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
-
-    setFeedback(null);
-    setQrToken(resolvedQrToken);
 
     if (!isOnline) {
       await queueAction(createQueuedAction("check-in.qr", payload));

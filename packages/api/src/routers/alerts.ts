@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseStringPromise } from "xml2js";
 
 import {
   getAuthorizedBarangayId,
@@ -7,6 +8,7 @@ import {
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
+import { TRPCError } from "@trpc/server";
 import { ApiError } from "../errors";
 import { officialProcedure, protectedProcedure, router } from "../index";
 import { uuidSchema } from "../schemas";
@@ -136,4 +138,147 @@ export const alertsRouter = router({
 
       return alert;
     }),
+
+  ingestPagasa: officialProcedure.mutation(async ({ ctx }) => {
+    const PAGASA_FEED_URL = "https://publicalert.pagasa.dost.gov.ph/feeds/";
+
+    let feedText: string;
+    try {
+      const res = await fetch(PAGASA_FEED_URL, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ProjectAGAP/1.0)" },
+      });
+      if (!res.ok) {
+        throw ApiError.internal(`PAGASA feed returned HTTP ${res.status}`);
+      }
+      feedText = await res.text();
+    } catch (err) {
+      if (err instanceof TRPCError) throw err;
+      throw ApiError.internal("Failed to fetch PAGASA feed.");
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const xmlData = await parseStringPromise(feedText, { explicitArray: false }) as any;
+    const feedData = xmlData.feed ?? xmlData.rss?.channel;
+    if (!feedData) {
+      throw ApiError.internal("Unrecognised PAGASA feed format.");
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawEntries: any[] = Array.isArray(feedData.entry)
+      ? feedData.entry
+      : feedData.entry
+        ? [feedData.entry]
+        : [];
+
+    const entries = rawEntries.slice(0, 10);
+    let ingested = 0;
+    let skipped = 0;
+
+    for (const entry of entries) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const externalId: string = String(entry.id ?? entry.guid ?? "");
+      if (!externalId) {
+        skipped++;
+        continue;
+      }
+
+      // Dedup: skip if already ingested
+      const { data: existing } = await ctx.supabaseAdmin
+        .from("alerts")
+        .select("id")
+        .eq("external_id", externalId)
+        .maybeSingle();
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      // Try to fetch CAP detail
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const capLink: string = String(entry.link?.$?.href ?? entry.link ?? "");
+      let title = String(entry.title ?? "PAGASA Alert");
+      let body = String(entry.summary ?? entry.description ?? title);
+      let severity: TableInsert<"alerts">["severity"] = "advisory";
+      let hazardType = "weather";
+      let signalLevel: string | null = null;
+      let sourceUrl: string | null = capLink || null;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const rawUpdated: string = String(entry.updated ?? entry.pubDate ?? "");
+      const issuedAt = rawUpdated ? new Date(rawUpdated).toISOString() : new Date().toISOString();
+
+      if (capLink) {
+        try {
+          const capRes = await fetch(capLink, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; ProjectAGAP/1.0)" },
+          });
+          if (capRes.ok) {
+            const capText = await capRes.text();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const capXml = await parseStringPromise(capText, { explicitArray: false }) as any;
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+            const info = capXml?.alert?.info;
+            if (info) {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+              const capTitle: string = String(info.headline ?? info.event ?? title);
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+              const capBody: string = String(info.description ?? info.event ?? body);
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+              const capEvent: string = String(info.event ?? "").toLowerCase();
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+              const capSeverity: string = String(info.severity ?? "").toLowerCase();
+
+              title = capTitle || title;
+              body = capBody || body;
+
+              if (capEvent.includes("typhoon") || capEvent.includes("bagyo")) {
+                hazardType = "typhoon";
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+                const paramArray = Array.isArray(info.parameter) ? info.parameter : info.parameter ? [info.parameter] : [];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+                const signalParam = paramArray.find((p: any) => String(p.valueName ?? "").toLowerCase().includes("signal"));
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+                if (signalParam) signalLevel = String(signalParam.value ?? "");
+              } else if (capEvent.includes("flood") || capEvent.includes("baha")) {
+                hazardType = "flood";
+              } else if (capEvent.includes("rain")) {
+                hazardType = "rainfall";
+              }
+
+              if (capSeverity === "extreme" || capSeverity === "severe") {
+                severity = "warning";
+              } else if (capSeverity === "moderate") {
+                severity = "watch";
+              } else {
+                severity = "advisory";
+              }
+            }
+          }
+        } catch {
+          // Proceed with feed-level metadata on CAP fetch failure
+        }
+      }
+
+      const insertPayload: TableInsert<"alerts"> = {
+        barangay_id: null, // national-level alert
+        source: "pagasa",
+        severity,
+        hazard_type: hazardType,
+        title,
+        body,
+        signal_level: signalLevel,
+        source_url: sourceUrl,
+        issued_at: issuedAt,
+        is_active: true,
+        external_id: externalId,
+      };
+
+      const { error } = await ctx.supabaseAdmin.from("alerts").insert(insertPayload);
+      if (!error) {
+        ingested++;
+      }
+    }
+
+    return { ingested, skipped, total: entries.length };
+  }),
 });

@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { listBroadcastsForBarangay } from "@/features/broadcast/services/broadcasts";
@@ -32,8 +32,16 @@ export function AlertsScreen() {
   const { profile } = useAuth();
   const { isOnline } = useOfflineQueue();
 
-  const [tab, setTab] = useState<"alerto" | "mensahe">("alerto");
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<"alerto" | "mensahe" | "nawawala">("alerto");
   const [language, setLanguage] = useState<AlertLanguage>("filipino");
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportForm, setReportForm] = useState({
+    fullName: "",
+    age: "",
+    lastSeenLocation: "",
+    description: "",
+  });
 
   // Persist language preference
   useEffect(() => {
@@ -68,11 +76,38 @@ export function AlertsScreen() {
     queryFn: async () => listBroadcastsForBarangay(profile!.barangay_id!),
   });
 
+  const missingPersonsQuery = useQuery(
+    trpc.missingPersons.list.queryOptions(
+      { statusFilter: "missing" },
+      { enabled: Boolean(profile?.barangay_id), refetchInterval: 30_000 },
+    ),
+  );
+
+  const reportMutation = useMutation(
+    trpc.missingPersons.report.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] });
+        setShowReportModal(false);
+        setReportForm({ fullName: "", age: "", lastSeenLocation: "", description: "" });
+      },
+      onError: (err) => Alert.alert("Error", getErrorMessage(err)),
+    }),
+  );
+
+  const markFoundMutation = useMutation(
+    trpc.missingPersons.markFound.mutationOptions({
+      onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] }),
+      onError: (err) => Alert.alert("Error", getErrorMessage(err)),
+    }),
+  );
+
   const alerts = alertsQuery.data ?? [];
   const broadcasts = broadcastsQuery.data ?? [];
+  const missingPersons = missingPersonsQuery.data ?? [];
   const isRefreshing =
     (alertsQuery.isFetching && !alertsQuery.isLoading) ||
-    (broadcastsQuery.isFetching && !broadcastsQuery.isLoading);
+    (broadcastsQuery.isFetching && !broadcastsQuery.isLoading) ||
+    (missingPersonsQuery.isFetching && !missingPersonsQuery.isLoading);
 
   // Find highest active signal
   const activeSignal = alerts.reduce<string | null>((best, alert) => {
@@ -88,7 +123,11 @@ export function AlertsScreen() {
   const signalNumber = activeSignal ? activeSignal.replace(/\D/g, "") : null;
 
   async function refresh() {
-    await Promise.allSettled([alertsQuery.refetch(), broadcastsQuery.refetch()]);
+    await Promise.allSettled([
+      alertsQuery.refetch(),
+      broadcastsQuery.refetch(),
+      missingPersonsQuery.refetch(),
+    ]);
   }
 
   const pillTone: Record<string, string> = {
@@ -131,9 +170,9 @@ export function AlertsScreen() {
           </View>
         ) : null}
 
-        {/* Segmented control: Alerto | Mensahe */}
+        {/* Segmented control: Alerto | Mensahe | Nawawala */}
         <View className="mx-5 mt-4 flex-row rounded-xl bg-slate-100 p-1">
-          {(["alerto", "mensahe"] as const).map((t) => (
+          {(["alerto", "mensahe", "nawawala"] as const).map((t) => (
             <Pressable
               key={t}
               onPress={() => setTab(t)}
@@ -143,16 +182,22 @@ export function AlertsScreen() {
             >
               <View className="flex-row items-center gap-1.5">
                 <Ionicons
-                  name={t === "alerto" ? "warning-outline" : "chatbox-outline"}
+                  name={
+                    t === "alerto"
+                      ? "warning-outline"
+                      : t === "mensahe"
+                        ? "chatbox-outline"
+                        : "search-outline"
+                  }
                   size={14}
                   color={tab === t ? "#0f172a" : "#64748b"}
                 />
                 <Text
-                  className={`text-[13px] font-semibold ${
+                  className={`text-[12px] font-semibold ${
                     tab === t ? "text-slate-900" : "text-slate-500"
                   }`}
                 >
-                  {t === "alerto" ? "Alerto" : "Mensahe"}
+                  {t === "alerto" ? "Alerto" : t === "mensahe" ? "Mensahe" : "Nawawala"}
                 </Text>
               </View>
             </Pressable>
@@ -331,7 +376,199 @@ export function AlertsScreen() {
             ))}
           </View>
         ) : null}
+        {/* NAWAWALA TAB */}
+        {tab === "nawawala" ? (
+          <View className="mt-4">
+            <View className="mx-5 mb-3 flex-row items-center justify-between">
+              <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
+                {missingPersons.length} nawawala
+              </Text>
+              <Pressable
+                onPress={() => setShowReportModal(true)}
+                className="flex-row items-center gap-1 rounded-full bg-rose-600 px-3.5 py-1.5"
+              >
+                <Ionicons name="add" size={14} color="#fff" />
+                <Text className="text-[12px] font-semibold text-white">I-report</Text>
+              </Pressable>
+            </View>
+
+            {missingPersons.length === 0 ? (
+              <View className="mx-5 items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8">
+                <Ionicons name="search-outline" size={32} color="#94a3b8" />
+                <Text className="mt-2 text-[14px] font-semibold text-slate-600">
+                  Walang nawawala
+                </Text>
+                <Text className="mt-1 text-center text-[13px] text-slate-400">
+                  I-report kung may nakita kang nawawalang tao sa inyong lugar.
+                </Text>
+              </View>
+            ) : null}
+
+            {missingPersons.map((person) => (
+              <View
+                key={person.id}
+                className="mx-5 mb-3 rounded-2xl border border-rose-100 bg-white px-4 py-4"
+              >
+                <View className="flex-row items-start justify-between">
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-2">
+                      <View className="h-2 w-2 rounded-full bg-rose-500" />
+                      <Text className="text-[15px] font-bold text-slate-900">{person.full_name}</Text>
+                    </View>
+                    {person.age != null ? (
+                      <Text className="mt-0.5 text-[12px] text-slate-500">
+                        {person.age} taong gulang
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text className="rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    NAWAWALA
+                  </Text>
+                </View>
+
+                {person.last_seen_location ? (
+                  <View className="mt-2.5 flex-row items-start gap-1.5">
+                    <Ionicons name="location-outline" size={13} color="#94a3b8" />
+                    <Text className="flex-1 text-[12px] text-slate-500">
+                      Huling nakita: {person.last_seen_location}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {person.description ? (
+                  <Text className="mt-1.5 text-[13px] leading-5 text-slate-700">
+                    {person.description}
+                  </Text>
+                ) : null}
+
+                <View className="mt-3 flex-row items-center justify-between">
+                  <Text className="text-[11px] text-slate-400">
+                    {formatRelativeTime(person.created_at)}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      Alert.alert(
+                        "Nahanap na?",
+                        `Markahan si ${person.full_name} bilang nahanap na?`,
+                        [
+                          { text: "Hindi", style: "cancel" },
+                          {
+                            text: "Oo, Nahanap Na",
+                            onPress: () => markFoundMutation.mutate({ id: person.id }),
+                          },
+                        ],
+                      );
+                    }}
+                    className="rounded-full bg-emerald-100 px-3 py-1.5"
+                  >
+                    <Text className="text-[12px] font-semibold text-emerald-700">Nahanap Na ✓</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
+
+      {/* Report Missing Person Modal */}
+      <Modal
+        visible={showReportModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <View className="flex-1 bg-white">
+          <View className="flex-row items-center justify-between border-b border-slate-100 px-5 py-4">
+            <Text className="text-[17px] font-bold text-slate-900">I-report ang Nawawala</Text>
+            <Pressable onPress={() => setShowReportModal(false)}>
+              <Ionicons name="close" size={22} color="#64748b" />
+            </Pressable>
+          </View>
+
+          <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
+            <View className="py-4 gap-4">
+              <View>
+                <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
+                  Buong Pangalan *
+                </Text>
+                <TextInput
+                  value={reportForm.fullName}
+                  onChangeText={(v) => setReportForm((f) => ({ ...f, fullName: v }))}
+                  placeholder="Juan Dela Cruz"
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View>
+                <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
+                  Edad (opsyonal)
+                </Text>
+                <TextInput
+                  value={reportForm.age}
+                  onChangeText={(v) => setReportForm((f) => ({ ...f, age: v }))}
+                  placeholder="35"
+                  keyboardType="numeric"
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View>
+                <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
+                  Huling Nakita (opsyonal)
+                </Text>
+                <TextInput
+                  value={reportForm.lastSeenLocation}
+                  onChangeText={(v) => setReportForm((f) => ({ ...f, lastSeenLocation: v }))}
+                  placeholder="Purok 3, malapit sa eskwelahan"
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View>
+                <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
+                  Paglalarawan (opsyonal)
+                </Text>
+                <TextInput
+                  value={reportForm.description}
+                  onChangeText={(v) => setReportForm((f) => ({ ...f, description: v }))}
+                  placeholder="Suot ang pulang t-shirt, mahabang buhok..."
+                  multiline
+                  numberOfLines={3}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
+                  placeholderTextColor="#94a3b8"
+                  style={{ textAlignVertical: "top", minHeight: 80 }}
+                />
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  if (!reportForm.fullName.trim()) {
+                    Alert.alert("Kinakailangan", "Ilagay ang buong pangalan.");
+                    return;
+                  }
+                  reportMutation.mutate({
+                    fullName: reportForm.fullName.trim(),
+                    age: reportForm.age ? parseInt(reportForm.age, 10) : undefined,
+                    lastSeenLocation: reportForm.lastSeenLocation.trim() || undefined,
+                    description: reportForm.description.trim() || undefined,
+                  });
+                }}
+                disabled={reportMutation.isPending}
+                className={`items-center rounded-2xl py-4 ${
+                  reportMutation.isPending ? "bg-slate-200" : "bg-rose-600"
+                }`}
+              >
+                <Text className={`text-[15px] font-bold ${reportMutation.isPending ? "text-slate-400" : "text-white"}`}>
+                  {reportMutation.isPending ? "Nagpapadala..." : "I-submit ang Report"}
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }

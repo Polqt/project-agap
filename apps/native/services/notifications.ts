@@ -12,7 +12,7 @@ function isExpoGo() {
   return Constants.executionEnvironment === "storeClient";
 }
 
-function getNotificationsModule() {
+export function getNotificationsModule() {
   if (isExpoGo()) {
     return null;
   }
@@ -25,6 +25,15 @@ function getNotificationsModule() {
 }
 
 let hasConfiguredNotificationHandler = false;
+let registeredPushToken: string | null = null;
+
+export function getRegisteredPushToken(): string | null {
+  return registeredPushToken;
+}
+
+export function clearRegisteredPushToken(): void {
+  registeredPushToken = null;
+}
 
 function ensureNotificationHandlerConfigured(notifications: ExpoNotificationsModule) {
   if (hasConfiguredNotificationHandler) {
@@ -80,6 +89,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       projectId ? { projectId } : undefined,
     );
 
+    registeredPushToken = tokenResult.data;
     return tokenResult.data;
   } catch {
     return null;

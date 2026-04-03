@@ -312,3 +312,38 @@ export type IncidentReportsInsert = ReadonlyMutationShape<
   | "next_steps_filipino"
 >;
 export type IncidentReportsUpdate = ReadonlyMutationShape<IncidentReportsRow, "created_at">;
+
+export type CenterSuppliesRow = {
+  center_id: string;
+  food_packs: number;
+  water_liters: number;
+  medicine_units: number;
+  blankets: number;
+  updated_at: string | null;
+  updated_by: string | null;
+};
+export type CenterSuppliesInsert = Partial<Omit<CenterSuppliesRow, "center_id">> & { center_id: string };
+export type CenterSuppliesUpdate = Partial<Omit<CenterSuppliesRow, "center_id">>;
+
+export type MissingPersonStatus = "missing" | "found";
+
+export type MissingPersonsRow = {
+  id: string;
+  barangay_id: string;
+  reported_by: string;
+  full_name: string;
+  age: number | null;
+  last_seen_location: string | null;
+  description: string | null;
+  status: MissingPersonStatus;
+  found_at: string | null;
+  found_by: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+export type MissingPersonsInsert = Omit<MissingPersonsRow, "id" | "created_at" | "updated_at" | "found_at" | "found_by" | "status"> & {
+  status?: MissingPersonStatus;
+};
+export type MissingPersonsUpdate = Partial<Omit<MissingPersonsRow, "id" | "barangay_id" | "reported_by" | "created_at">>;
+
+// appended

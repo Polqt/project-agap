@@ -102,6 +102,50 @@ export const needsReportsRouter = router({
       );
     }),
 
+  acknowledge: officialProcedure
+    .input(z.object({ id: uuidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      return getFoundOrThrow<NeedsReport | null>(
+        getSupabaseDataOrThrow<NeedsReport | null>(
+          await ctx.supabase
+            .from("needs_reports")
+            .update({
+              status: "acknowledged",
+              acknowledged_by: ctx.session.id,
+              acknowledged_at: new Date().toISOString(),
+            })
+            .eq("id", input.id)
+            .eq("barangay_id", barangayId)
+            .select(allColumns)
+            .maybeSingle(),
+          "Failed to acknowledge needs report.",
+        ),
+        "Needs report not found.",
+      );
+    }),
+
+  resolve: officialProcedure
+    .input(z.object({ id: uuidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      return getFoundOrThrow<NeedsReport | null>(
+        getSupabaseDataOrThrow<NeedsReport | null>(
+          await ctx.supabase
+            .from("needs_reports")
+            .update({ status: "resolved" })
+            .eq("id", input.id)
+            .eq("barangay_id", barangayId)
+            .select(allColumns)
+            .maybeSingle(),
+          "Failed to resolve needs report.",
+        ),
+        "Needs report not found.",
+      );
+    }),
+
   getSummary: officialProcedure
     .input(
       z.object({
