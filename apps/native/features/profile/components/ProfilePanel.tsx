@@ -12,38 +12,49 @@ import { ProfileAccountCard } from "./ProfileAccountCard";
 
 type Section = "personal" | "household" | "language" | "account";
 
-function CollapseRow({
+function AccordionRow({
   label,
   value,
   open,
   onPress,
+  children,
 }: {
   label: string;
   value?: string | null;
   open: boolean;
   onPress: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row items-center justify-between border-b border-slate-100 py-3.5"
-    >
-      <View className="flex-1">
-        <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-          {label}
-        </Text>
-        {value ? (
-          <Text className="mt-0.5 text-[14px] font-medium text-slate-700" numberOfLines={1}>
-            {value}
+    <View>
+      <Pressable
+        onPress={onPress}
+        className="flex-row items-center justify-between py-4"
+      >
+        <View className="flex-1 pr-4">
+          <Text className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+            {label}
           </Text>
-        ) : null}
-      </View>
-      <Ionicons
-        name={open ? "chevron-up" : "chevron-down"}
-        size={16}
-        color="#94a3b8"
-      />
-    </Pressable>
+          {value && !open ? (
+            <Text className="mt-0.5 text-[15px] font-medium text-slate-800" numberOfLines={1}>
+              {value}
+            </Text>
+          ) : null}
+        </View>
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={16}
+          color="#94a3b8"
+        />
+      </Pressable>
+
+      {open ? (
+        <View className="pb-6">{children}</View>
+      ) : null}
+
+      {/* Divider */}
+      <View className="h-px bg-slate-100" />
+    </View>
   );
 }
 
@@ -84,86 +95,79 @@ export function ProfilePanel() {
   return (
     <ScrollView
       className="flex-1 bg-white"
-      contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 48 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View className="px-5 pb-5">
-        <View className="flex-row items-center gap-3">
-          <View className="h-14 w-14 items-center justify-center rounded-full bg-blue-100">
-            <Text className="text-[22px] font-bold text-blue-600">
+      {/* ── Avatar + Identity ── */}
+      <View className="px-6 pb-8">
+        <View className="flex-row items-center gap-4">
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+            <Text className="text-[26px] font-bold text-slate-600">
               {profile?.full_name?.charAt(0)?.toUpperCase() ?? "?"}
             </Text>
           </View>
+
           <View className="flex-1">
-            <Text className="text-[18px] font-bold text-slate-900" numberOfLines={1}>
+            <Text className="text-[22px] font-bold leading-tight text-slate-900" numberOfLines={1}>
               {profile?.full_name ?? "My Profile"}
             </Text>
-            <Text className="text-[13px] text-slate-500">
+            <Text className="mt-0.5 text-[14px] text-slate-500">
               {barangay?.name
                 ? `${barangay.name}, ${barangay.municipality}`
                 : "Barangay not assigned"}
             </Text>
           </View>
-          <View className="rounded-full bg-blue-50 px-3 py-1">
-            <Text className="text-[11px] font-semibold uppercase text-blue-600">
+        </View>
+
+        {/* Role + quick meta */}
+        <View className="mt-5 flex-row flex-wrap gap-2">
+          <View className="rounded-full bg-blue-50 px-3 py-1.5">
+            <Text className="text-[12px] font-semibold uppercase tracking-wide text-blue-600">
               {profile?.role ?? "resident"}
             </Text>
           </View>
-        </View>
-
-        {/* Quick info pills */}
-        <View className="mt-4 flex-row flex-wrap gap-2">
           {profile?.purok ? (
-            <View className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+            <View className="flex-row items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5">
               <Ionicons name="location-outline" size={12} color="#64748b" />
-              <Text className="text-[12px] text-slate-600">{profile.purok}</Text>
-            </View>
-          ) : null}
-          {profile?.phone_number ? (
-            <View className="flex-row items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-              <Ionicons name="call-outline" size={12} color="#64748b" />
-              <Text className="text-[12px] text-slate-600">{profile.phone_number}</Text>
+              <Text className="text-[12px] font-medium text-slate-600">{profile.purok}</Text>
             </View>
           ) : null}
           {household ? (
-            <View className="flex-row items-center gap-1 rounded-full bg-emerald-50 px-3 py-1">
-              <Ionicons name="home-outline" size={12} color="#059669" />
-              <Text className="text-[12px] text-emerald-700">
+            <View className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5">
+              <Ionicons name="people-outline" size={12} color="#059669" />
+              <Text className="text-[12px] font-medium text-emerald-700">
                 {household.total_members} member{household.total_members !== 1 ? "s" : ""}
               </Text>
             </View>
           ) : (
-            <View className="flex-row items-center gap-1 rounded-full bg-amber-50 px-3 py-1">
+            <View className="flex-row items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5">
               <Ionicons name="warning-outline" size={12} color="#d97706" />
-              <Text className="text-[12px] text-amber-700">No household</Text>
+              <Text className="text-[12px] font-medium text-amber-700">No household yet</Text>
             </View>
           )}
         </View>
       </View>
 
-      {/* Collapsible sections */}
-      <View className="mx-5 rounded-2xl border border-slate-200 bg-white px-4">
-        {/* Personal Info */}
-        <CollapseRow
+      {/* ── Accordion sections ── */}
+      <View className="px-6">
+        {/* Divider before first row */}
+        <View className="h-px bg-slate-100" />
+
+        <AccordionRow
           label="Personal Information"
           value={profile?.full_name}
           open={openSection === "personal"}
           onPress={() => toggle("personal")}
-        />
-        {openSection === "personal" ? (
-          <View className="py-3">
-            <PersonalInformationCard
-              form={profileForm}
-              feedback={profileFeedback}
-              isSaving={profileMutation.isPending}
-              onSubmit={handleProfileSubmit}
-            />
-          </View>
-        ) : null}
+        >
+          <PersonalInformationCard
+            form={profileForm}
+            feedback={profileFeedback}
+            isSaving={profileMutation.isPending}
+            onSubmit={handleProfileSubmit}
+          />
+        </AccordionRow>
 
-        {/* Household */}
-        <CollapseRow
+        <AccordionRow
           label="Household"
           value={
             household
@@ -172,58 +176,64 @@ export function ProfilePanel() {
           }
           open={openSection === "household"}
           onPress={() => toggle("household")}
-        />
-        {openSection === "household" ? (
-          <View className="py-3">
-            <HouseholdRegistrationCard
-              household={household}
-              form={householdForm}
-              feedback={householdFeedback}
-              isSaving={householdMutation.isPending}
-              onFillFromProfile={fillHouseholdFromProfile}
-              onSubmit={handleHouseholdSubmit}
-            />
-          </View>
-        ) : null}
+        >
+          <HouseholdRegistrationCard
+            household={household}
+            form={householdForm}
+            feedback={householdFeedback}
+            isSaving={householdMutation.isPending}
+            onFillFromProfile={fillHouseholdFromProfile}
+            onSubmit={handleHouseholdSubmit}
+          />
+        </AccordionRow>
 
-        {/* Language */}
-        <CollapseRow
+        <AccordionRow
           label="Language"
           value={undefined}
           open={openSection === "language"}
           onPress={() => toggle("language")}
-        />
-        {openSection === "language" ? (
-          <View className="py-3">
-            <LanguagePickerCard />
-          </View>
-        ) : null}
-
-        {/* Account — last row, no bottom border */}
-        <Pressable
-          onPress={() => toggle("account")}
-          className="flex-row items-center justify-between py-3.5"
         >
-          <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-            Account
-          </Text>
-          <Ionicons
-            name={openSection === "account" ? "chevron-up" : "chevron-down"}
-            size={16}
-            color="#94a3b8"
-          />
-        </Pressable>
-        {openSection === "account" ? (
-          <View className="pb-3">
-            <ProfileAccountCard
-              email={accountEmail}
-              resetFeedback={accountFeedback}
-              isResettingPassword={isResettingPassword}
-              onResetPassword={() => void handlePasswordReset()}
-              onSignOut={() => void handleSignOut()}
+          <LanguagePickerCard />
+        </AccordionRow>
+
+        {/* Account — no children card, just inline actions */}
+        <View>
+          <Pressable
+            onPress={() => toggle("account")}
+            className="flex-row items-center justify-between py-4"
+          >
+            <Text className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+              Account
+            </Text>
+            <Ionicons
+              name={openSection === "account" ? "chevron-up" : "chevron-down"}
+              size={16}
+              color="#94a3b8"
             />
-          </View>
-        ) : null}
+          </Pressable>
+
+          {openSection === "account" ? (
+            <View className="pb-6 gap-3">
+              {accountEmail ? (
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[14px] text-slate-500">Email</Text>
+                  <Text className="text-[14px] font-medium text-slate-800">{accountEmail}</Text>
+                </View>
+              ) : null}
+
+              {accountFeedback ? (
+                <Text className="text-[13px] text-slate-500">{accountFeedback}</Text>
+              ) : null}
+
+              <Pressable
+                onPress={() => void handleSignOut()}
+                className="mt-2 items-center rounded-2xl bg-rose-50 py-4"
+              >
+                <Text className="text-[15px] font-semibold text-rose-600">Sign out</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       </View>
     </ScrollView>
   );
