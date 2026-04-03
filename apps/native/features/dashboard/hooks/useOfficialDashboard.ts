@@ -4,12 +4,14 @@ import { Share } from "react-native";
 import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
 
 import { buildCenterQrShareMessage } from "../services/centerQr";
 
 export function useOfficialDashboard() {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
+  const signOut = useSignOutRedirect("/(auth)/sign-in");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const summaryQuery = useQuery(

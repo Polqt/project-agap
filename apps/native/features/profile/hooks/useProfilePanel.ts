@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
 import { householdSchema, profileSchema, type HouseholdFormValues, type ProfileFormValues } from "@/types/forms";
 import { getErrorMessage } from "@/shared/utils/errors";
 
 export function useProfilePanel() {
-  const { profile, signOut, refreshProfile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const signOut = useSignOutRedirect("/onboarding");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const profileForm = useForm<ProfileFormValues>({
