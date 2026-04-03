@@ -1,7 +1,7 @@
 import { Controller, type UseFormReturn } from "react-hook-form";
 import { Text, View } from "react-native";
 
-import { AppButton, SectionCard, TextField } from "@/shared/components/ui";
+import { AppButton, TextField } from "@/shared/components/ui";
 import type { ProfileFormValues } from "@/types/forms";
 
 type Props = {
@@ -13,11 +13,7 @@ type Props = {
 
 export function PersonalInformationCard({ form, feedback, isSaving, onSubmit }: Props) {
   return (
-    <SectionCard
-      title="Personal information"
-      subtitle="These details remain editable after registration, per the PRD."
-    >
-      <View className="gap-4">
+    <View className="gap-4">
         <Controller
           control={form.control}
           name="fullName"
@@ -61,7 +57,6 @@ export function PersonalInformationCard({ form, feedback, isSaving, onSubmit }: 
 
         <AppButton label="Save profile" onPress={onSubmit} loading={isSaving} />
         {feedback ? <Text className="text-sm text-slate-600">{feedback}</Text> : null}
-      </View>
-    </SectionCard>
+    </View>
   );
 }

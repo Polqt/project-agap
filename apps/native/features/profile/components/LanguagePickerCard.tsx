@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import { SectionCard } from "@/shared/components/ui";
 import { type AppLanguage, LANGUAGE_OPTIONS } from "@/shared/i18n";
 import { useAppLanguage } from "@/shared/hooks/useAppLanguage";
 
@@ -11,11 +10,7 @@ export function LanguagePickerCard() {
   const { currentLanguage, changeLanguage } = useAppLanguage();
 
   return (
-    <SectionCard
-      title={t("profile.language")}
-      subtitle={t("profile.changeLanguage")}
-    >
-      <View className="gap-2">
+    <View className="gap-2">
         {LANGUAGE_OPTIONS.map((option) => {
           const isSelected = currentLanguage === option.code;
           return (
@@ -48,7 +43,6 @@ export function LanguagePickerCard() {
             </Pressable>
           );
         })}
-      </View>
-    </SectionCard>
+    </View>
   );
 }
