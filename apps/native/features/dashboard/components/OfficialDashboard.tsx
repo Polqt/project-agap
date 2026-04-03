@@ -60,7 +60,7 @@ export function OfficialDashboard() {
   return (
     <ScreenShell
       title="Command"
-      description="Live command surface for Banago."
+      description="Live command surface for your barangay."
       action={<AppButton label="Sign out" onPress={() => void handleSignOut()} variant="ghost" />}
       feedback={feedback}
       isLoading={isLoading}

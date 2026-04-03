@@ -12,7 +12,7 @@ export function WelfareDispatchCard({ items }: Props) {
   return (
     <SectionCard
       title="Welfare dispatch queue"
-      subtitle="Households with an active field visit assignment. Shows assigned official (Tanod / field)."
+      subtitle="Households with an active field visit assignment. Shows the currently assigned field responder."
     >
       {items.length ? (
         items.map((row) => (
@@ -25,7 +25,9 @@ export function WelfareDispatchCard({ items }: Props) {
                 <Text className="text-base font-semibold text-slate-950">{row.household_head}</Text>
                 <Text className="mt-1 text-sm text-slate-600">
                   {row.purok}
-                  {row.assignee_name ? ` · Assigned: ${row.assignee_name}` : " · Unassigned"}
+                  {row.assignee_full_name
+                    ? ` · Assigned: ${row.assignee_full_name}`
+                    : " · Unassigned"}
                 </Text>
                 {row.welfare_assigned_at ? (
                   <Text className="mt-2 text-xs uppercase tracking-wide text-slate-400">

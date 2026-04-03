@@ -5,9 +5,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { TextInput } from "react-native";
 
-import { supabase } from "@/services/supabase";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { trpcClient } from "@/services/trpc";
 import { getErrorMessage } from "@/shared/utils/errors";
 import { residentSignUpSchema, type ResidentSignUpFormValues } from "@/types/forms";
 import type { VulnerabilityFlag } from "@project-agap/api/supabase/types";
@@ -53,14 +53,7 @@ export function useSignUpForm() {
 
   const barangaysQuery = useQuery({
     queryKey: ["barangays", "all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("barangays")
-        .select("id, name, municipality, province")
-        .order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: async () => await trpcClient.barangays.listAll.query(),
   });
 
   const barangays = barangaysQuery.data ?? [];

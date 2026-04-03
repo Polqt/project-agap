@@ -282,7 +282,7 @@ export function useBroadcastPanel() {
 
     if (!profile?.barangay_id) {
       form.setError("root", {
-        message: "Your official profile is not assigned to Barangay Banago yet.",
+        message: "Your official profile is not assigned to a barangay yet.",
       });
       return;
     }
@@ -298,7 +298,7 @@ export function useBroadcastPanel() {
     const payload = prepareBroadcastPayload({
       broadcastType: values.broadcastType,
       message,
-      messageFilipino: null,
+      messageFilipino: values.messageFilipino?.trim() || null,
       targetPurok: targetMode === "purok" ? selectedPurok : null,
     });
 
