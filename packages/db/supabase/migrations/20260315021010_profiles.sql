@@ -44,8 +44,7 @@ BEGIN
     id,
     role,
     full_name,
-    phone_number,
-    avatar_url
+    phone_number
   )
   VALUES (
     NEW.id,
@@ -58,8 +57,7 @@ BEGIN
       NEW.raw_user_meta_data ->> 'name',
       ''
     ),
-    COALESCE(NEW.raw_user_meta_data ->> 'phone_number', NULL),
-    COALESCE(NEW.raw_user_meta_data ->> 'avatar_url', '')
+    COALESCE(NEW.raw_user_meta_data ->> 'phone_number', NULL)
   );
   RETURN NEW;
 END;
