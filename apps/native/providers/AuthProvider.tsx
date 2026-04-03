@@ -1,4 +1,4 @@
-import type { Profile } from "@project-agap/api/supabase";
+import type { Profile, VulnerabilityFlag } from "@project-agap/api/supabase";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
@@ -188,6 +188,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      // Update profile with barangay + purok + sms-only
       const { error: updateError } = await supabase
         .from("profiles")
         .update({
@@ -195,11 +196,33 @@ export function AuthProvider({ children }: PropsWithChildren) {
           phone_number: input.phoneNumber ?? null,
           barangay_id: input.barangayId,
           purok: input.purok,
+          is_sms_only: input.isSmsOnly ?? false,
         })
         .eq("id", data.user.id);
 
       if (updateError) {
         throw updateError;
+      }
+
+      // Register household if household data was provided
+      if (input.barangayId) {
+        const { error: householdError } = await supabase.from("households").insert({
+          barangay_id: input.barangayId,
+          registered_by: data.user.id,
+          household_head: input.fullName,
+          purok: input.purok,
+          address: input.address ?? input.purok,
+          phone_number: input.phoneNumber ?? null,
+          total_members: input.totalMembers ?? 1,
+          vulnerability_flags: (input.vulnerabilityFlags ?? []) as VulnerabilityFlag[],
+          is_sms_only: input.isSmsOnly ?? false,
+          evacuation_status: "unknown",
+        });
+
+        // Non-fatal — household creation failure shouldn't block auth
+        if (householdError) {
+          console.warn("Household registration failed:", householdError.message);
+        }
       }
 
       if (data.session) {

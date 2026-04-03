@@ -1,98 +1,183 @@
-import { useStore } from "@tanstack/react-store";
+import { Ionicons } from "@expo/vector-icons";
+import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Dimensions, ImageBackground, Pressable, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/shared/hooks/useAuth";
-import { AppButton, Pill, ScreenHeader, SectionCard } from "@/shared/components/ui";
-import { appShellStore, setSelectedRole } from "@/stores/app-shell-store";
+import { setSelectedRole } from "@/stores/app-shell-store";
+import type { AppRole } from "@project-agap/api/supabase";
 
-const roleCards = [
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+type RoleCard = {
+  role: AppRole;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+  path: string;
+  badge: string;
+};
+
+const roles: RoleCard[] = [
   {
-    role: "resident" as const,
+    role: "resident",
+    icon: "people-outline",
     title: "Resident",
-    subtitle: "Send your status in one tap, find the nearest evacuation center, and keep your household visible during emergencies.",
-    actionLabel: "Continue as Resident",
+    description: "Barangay community member. Report your safety status and find evacuation centers.",
+    path: "Self-register",
+    badge: "Community",
   },
   {
-    role: "official" as const,
-    title: "Barangay Official",
-    subtitle: "Monitor accountability, coordinate broadcasts, and manage live evacuation operations for your barangay.",
-    actionLabel: "Continue as Official",
+    role: "official",
+    icon: "shield-outline",
+    title: "Official",
+    description: "Barangay captain or BDRRMC member. Access the command dashboard and broadcast tools.",
+    path: "Pre-assigned account",
+    badge: "Command",
   },
 ];
 
 export function OnboardingFlow() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isLoading, isAuthenticated, role } = useAuth();
-  const selectedRole = useStore(appShellStore, (state) => state.selectedRole);
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const [selectedCard, setSelectedCard] = useState<AppRole | null>(null);
+
+  const snapPoints = useMemo(() => ["55%", "75%"], []);
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !role) {
-      return;
-    }
-
+    if (isLoading || !isAuthenticated || !role) return;
     router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
   }, [isAuthenticated, isLoading, role, router]);
 
+  const handleSelectRole = useCallback(
+    (card: RoleCard) => {
+      setSelectedCard(card.role);
+      setSelectedRole(card.role);
+    },
+    [],
+  );
+
+  const handleContinue = useCallback(() => {
+    if (!selectedCard) return;
+
+    if (selectedCard === "official") {
+      router.push("/(auth)/sign-in");
+    } else {
+      router.push("/(auth)/sign-up");
+    }
+  }, [selectedCard, router]);
+
   return (
-    <ScrollView
-      className="flex-1 bg-slate-50"
-      contentContainerClassName="grow pb-8"
-      showsVerticalScrollIndicator={false}
-    >
-      <ScreenHeader
-        eyebrow="Agap"
-        title="Handa. Ligtas. Agap."
-        description="Pick the role that matches how you use the app. Your screens, actions, and navigation will adapt immediately."
-      />
-
-      <View className="gap-0 pb-8">
-        {roleCards.map((card) => {
-          const isActive = selectedRole === card.role;
-
-          return (
-            <Pressable
-              key={card.role}
-              onPress={() => {
-                setSelectedRole(card.role);
-              }}
-            >
-              <SectionCard
-                title={card.title}
-                subtitle={card.subtitle}
-                right={<Pill label={card.role === "resident" ? "Community side" : "Command side"} tone={isActive ? "info" : "neutral"} />}
-              >
-                <View className={`rounded-3xl px-4 py-5 ${card.role === "resident" ? "bg-emerald-50" : "bg-amber-50"}`}>
-                  <Text className="text-2xl font-semibold text-slate-950">
-                    {card.role === "resident" ? "Ping, map, and check-in" : "Dashboard, registry, and broadcast"}
-                  </Text>
-                  <Text className="mt-2 text-sm leading-6 text-slate-600">
-                    {card.role === "resident"
-                      ? "Ideal for residents and households that need a fast safety workflow."
-                      : "Designed for barangay officials coordinating response on the ground."}
-                  </Text>
-                </View>
-                <View className="mt-4">
-                  <AppButton
-                    label={card.actionLabel}
-                    onPress={() => {
-                      setSelectedRole(card.role);
-                      router.push(card.role === "official" ? "/(auth)/sign-in" : "/(auth)/sign-up");
-                    }}
-                  />
-                </View>
-              </SectionCard>
-            </Pressable>
-          );
-        })}
-
-        <SectionCard title="Session persistence" subtitle="Once you are signed in, Agap keeps your session safely stored on the device until you sign out.">
-          <Text className="text-sm leading-6 text-slate-600">
-            Returning residents can sign in from the resident sign-up screen. Officials use the dedicated sign-in flow for pre-created accounts.
-          </Text>
-        </SectionCard>
+    <View className="flex-1 bg-slate-900">
+      {/* Hero background — top half with branding */}
+      <View
+        className="items-center justify-center"
+        style={{ height: SCREEN_HEIGHT * 0.48, paddingTop: insets.top }}
+      >
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} className="items-center gap-3">
+          <View className="h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
+            <Ionicons name="shield-checkmark" size={32} color="#ffffff" />
+          </View>
+          <Text className="text-[22px] font-bold text-white">Agap</Text>
+          <Text className="text-[13px] text-white/50">Handa. Ligtas. Agap.</Text>
+        </Animated.View>
       </View>
-    </ScrollView>
+
+      {/* Bottom sheet — role selector */}
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={0}
+        snapPoints={snapPoints}
+        backgroundStyle={{ backgroundColor: "#ffffff", borderRadius: 28 }}
+        handleIndicatorStyle={{ backgroundColor: "#cbd5e1", width: 36 }}
+        enablePanDownToClose={false}
+      >
+        <BottomSheetView style={{ flex: 1, paddingHorizontal: 24, paddingBottom: insets.bottom + 16 }}>
+          {/* Header */}
+          <View className="mb-5">
+            <Text className="text-[22px] font-bold text-slate-900">Who are you?</Text>
+            <Text className="mt-1 text-[14px] text-slate-400">Choose your role to continue</Text>
+          </View>
+
+          {/* Role cards */}
+          <View className="gap-3">
+            {roles.map((card, index) => {
+              const isSelected = selectedCard === card.role;
+
+              return (
+                <Animated.View key={card.role} entering={FadeInDown.delay(300 + index * 100).duration(400)}>
+                  <Pressable
+                    onPress={() => handleSelectRole(card)}
+                    className={`rounded-2xl border-2 p-4 ${
+                      isSelected
+                        ? "border-slate-900 bg-slate-50"
+                        : "border-slate-200 bg-white"
+                    }`}
+                    style={{ minHeight: 100 }}
+                  >
+                    <View className="flex-row items-start gap-3.5">
+                      {/* Icon */}
+                      <View
+                        className={`h-11 w-11 items-center justify-center rounded-xl ${
+                          isSelected ? "bg-slate-900" : "bg-slate-100"
+                        }`}
+                      >
+                        <Ionicons
+                          name={card.icon}
+                          size={22}
+                          color={isSelected ? "#ffffff" : "#64748b"}
+                        />
+                      </View>
+
+                      {/* Content */}
+                      <View className="flex-1">
+                        <Text className="text-[16px] font-bold text-slate-900">{card.title}</Text>
+                        <Text className="mt-1 text-[13px] leading-4.5 text-slate-500">
+                          {card.description}
+                        </Text>
+                        <View className="mt-2.5 self-start rounded-md bg-blue-50 px-2 py-0.5">
+                          <Text className="text-[11px] font-semibold text-blue-600">{card.path}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                </Animated.View>
+              );
+            })}
+          </View>
+
+          {/* CTA button */}
+          <View className="mt-5">
+            <Pressable
+              onPress={handleContinue}
+              disabled={!selectedCard}
+              className={`min-h-13 items-center justify-center rounded-2xl ${
+                selectedCard ? "bg-slate-900" : "bg-slate-200"
+              }`}
+            >
+              <Text
+                className={`text-[15px] font-semibold ${
+                  selectedCard ? "text-white" : "text-slate-400"
+                }`}
+              >
+                {selectedCard
+                  ? `Continue as ${selectedCard === "official" ? "Official" : "Resident"}`
+                  : "Select a role"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Footer */}
+          <Text className="mt-4 text-center text-[12px] text-slate-300">
+            Your screens and navigation adapt to your role
+          </Text>
+        </BottomSheetView>
+      </BottomSheet>
+    </View>
   );
 }

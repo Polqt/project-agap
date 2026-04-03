@@ -9,6 +9,10 @@ export type ResidentSignUpInput = {
   phoneNumber?: string | null;
   barangayId: string;
   purok: string;
+  address?: string | null;
+  totalMembers?: number;
+  vulnerabilityFlags?: string[];
+  isSmsOnly?: boolean;
 };
 
 export type AuthContextValue = {

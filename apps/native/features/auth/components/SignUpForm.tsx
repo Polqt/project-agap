@@ -1,254 +1,150 @@
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { Pressable, Text, type TextInput, View } from "react-native";
+import { useCallback, useEffect } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
-import { AppButton, Pill, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
-import { getErrorMessage } from "@/shared/utils/errors";
-import { residentSignUpSchema, type ResidentSignUpFormValues } from "@/types/forms";
 
-const personalFields = ["email", "password", "confirmPassword", "fullName"] as const;
-const PILOT_BARANGAY_BANAGO_ID = "c0ffee00-baaa-4aaa-8aaa-0000bac0d001";
-const PILOT_BARANGAY_LABEL = "Barangay Banago, Bacolod City";
+import { useSignUpForm } from "../hooks/useSignUpForm";
+import { requestSignUpPermissionsAsync } from "../services/permissions";
+import { BarangayPicker } from "./BarangayPicker";
+import { SignUpProgressBar } from "./SignUpShared";
+import { SignUpStepDetails } from "./SignUpStepDetails";
+import { SignUpStepHousehold } from "./SignUpStepHousehold";
+import { SignUpStepLocation } from "./SignUpStepLocation";
+import { SignUpStepPermissions } from "./SignUpStepPermissions";
 
 export function SignUpForm() {
   const router = useRouter();
-  const { signUpResident, role, isAuthenticated, isLoading } = useAuth();
-  const [step, setStep] = useState(0);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const fullNameRef = useRef<TextInput>(null);
-  const phoneRef = useRef<TextInput>(null);
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
-  const confirmPasswordRef = useRef<TextInput>(null);
-  const purokRef = useRef<TextInput>(null);
-
-  const form = useForm<ResidentSignUpFormValues>({
-    resolver: zodResolver(residentSignUpSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      confirmPassword: "",
-      fullName: "",
-      phoneNumber: "",
-      barangayId: PILOT_BARANGAY_BANAGO_ID,
-      purok: "",
-    },
-  });
+  const insets = useSafeAreaInsets();
+  const { role, isAuthenticated, isLoading: authLoading } = useAuth();
+  const signUp = useSignUpForm();
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !role) {
+    if (authLoading || !isAuthenticated || !role) return;
+    router.replace("/welcome");
+  }, [authLoading, isAuthenticated, role, router]);
+
+  const goBack = useCallback(() => {
+    if (signUp.step > 0) {
+      signUp.goBack();
       return;
     }
 
-    router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
-  }, [isAuthenticated, isLoading, role, router]);
-
-  useEffect(() => {
-    form.setValue("barangayId", PILOT_BARANGAY_BANAGO_ID, {
-      shouldDirty: false,
-      shouldTouch: false,
-      shouldValidate: false,
-    });
-  }, [form]);
-
-  const nextStep = async () => {
-    if (step === 0) {
-      const isValid = await form.trigger(personalFields);
-      if (isValid) {
-        setStep(1);
-      }
+    if (signUp.form.formState.isDirty) {
+      Alert.alert("Discard changes?", "You have unsaved progress. Going back will discard it.", [
+        { text: "Stay", style: "cancel" },
+        { text: "Discard", style: "destructive", onPress: () => router.back() },
+      ]);
+      return;
     }
-  };
 
-  const handleSubmit = form.handleSubmit(async (values) => {
-    setSubmitError(null);
-    setIsSubmitting(true);
+    router.back();
+  }, [router, signUp]);
 
-    try {
-      await signUpResident({
-        email: values.email,
-        password: values.password,
-        fullName: values.fullName,
-        phoneNumber: values.phoneNumber || null,
-        barangayId: values.barangayId,
-        purok: values.purok,
-      });
-    } catch (error) {
-      setSubmitError(getErrorMessage(error, "Unable to create your account."));
-    } finally {
-      setIsSubmitting(false);
-    }
-  });
+  const handlePermissionsAndSubmit = useCallback(async () => {
+    await requestSignUpPermissionsAsync();
+    await signUp.handleFinalSubmit();
+  }, [signUp]);
 
   return (
-    <AuthFormScroll>
-      <ScreenHeader
-        eyebrow="Resident sign-up"
-        title="Create your resident account"
-        description="This is a short two-step flow for Banago residents: personal info, then purok assignment."
-      />
-
-      <SectionCard
-        title={`Step ${step + 1} of 2`}
-        subtitle={
-          step === 0
-            ? "Start with your personal details and login credentials."
-            : "Finish your setup with your purok."
-        }
-        right={<Pill label={step === 0 ? "Personal" : "Purok"} tone="info" />}
-      >
-        {step === 0 ? (
-          <View className="gap-4">
-            <Controller
-              control={form.control}
-              name="fullName"
-              render={({ field, fieldState }) => (
-                <TextField
-                  ref={fullNameRef}
-                  label="Full name"
-                  value={field.value ?? ""}
-                  onChangeText={field.onChange}
-                  placeholder="Juan Dela Cruz"
-                  textContentType="name"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => phoneRef.current?.focus()}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-            <Controller
-              control={form.control}
-              name="phoneNumber"
-              render={({ field, fieldState }) => (
-                <TextField
-                  ref={phoneRef}
-                  label="Phone number"
-                  value={field.value ?? ""}
-                  onChangeText={field.onChange}
-                  placeholder="09xxxxxxxxx"
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => emailRef.current?.focus()}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-            <Controller
-              control={form.control}
-              name="email"
-              render={({ field, fieldState }) => (
-                <TextField
-                  ref={emailRef}
-                  label="Email"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  placeholder="you@example.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => passwordRef.current?.focus()}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-            <Controller
-              control={form.control}
-              name="password"
-              render={({ field, fieldState }) => (
-                <TextField
-                  ref={passwordRef}
-                  label="Password"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  placeholder="Create a password"
-                  secureTextEntry
-                  textContentType="newPassword"
-                  autoComplete="password-new"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
-            <Controller
-              control={form.control}
-              name="confirmPassword"
-              render={({ field, fieldState }) => (
-                <TextField
-                  ref={confirmPasswordRef}
-                  label="Confirm password"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  placeholder="Repeat your password"
-                  secureTextEntry
-                  textContentType="newPassword"
-                  autoComplete="password-new"
-                  returnKeyType="done"
-                  onSubmitEditing={() => void nextStep()}
-                  error={fieldState.error?.message}
-                />
-              )}
-            />
+    <>
+      <AuthFormScroll>
+        <View className="px-6" style={{ paddingTop: insets.top + 8 }}>
+          <View className="flex-row items-center justify-between">
+            <Pressable onPress={goBack} className="flex-row items-center gap-1 py-2">
+              <Ionicons name="chevron-back" size={20} color="#334155" />
+              <Text className="text-[15px] font-medium text-slate-700">Back</Text>
+            </Pressable>
+            <View className="rounded-lg bg-blue-50 px-2.5 py-1">
+              <Text className="text-[11px] font-semibold text-blue-600">Resident</Text>
+            </View>
           </View>
-        ) : null}
+          <View className="mt-3">
+            <SignUpProgressBar step={signUp.step} />
+          </View>
+        </View>
 
-        {step === 1 ? (
-          <View className="gap-4">
-            <View className="gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
-              <Text className="text-sm font-medium text-slate-700">Assigned pilot barangay</Text>
-              <Text className="text-base font-semibold text-slate-950">{PILOT_BARANGAY_LABEL}</Text>
-              <Text className="text-sm text-slate-600">
-                Agap v1 currently supports resident registration for Banago only, so your account will be assigned here automatically.
+        <View className="px-6 pt-5">
+          {!signUp.isOnline ? (
+            <View className="mb-4 flex-row items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-3">
+              <Ionicons name="cloud-offline-outline" size={16} color="#d97706" />
+              <Text className="flex-1 text-[13px] font-medium text-amber-700">
+                You're offline — please connect to complete registration.
               </Text>
             </View>
-            {form.formState.errors.barangayId?.message ? (
-              <Text className="text-sm text-rose-600">{form.formState.errors.barangayId.message}</Text>
-            ) : null}
-            <Controller
-              control={form.control}
-              name="purok"
-              render={({ field, fieldState }) => (
-                <TextField
-                  ref={purokRef}
-                  label="Purok"
-                  value={field.value ?? ""}
-                  onChangeText={field.onChange}
-                  placeholder="Purok 3"
-                  returnKeyType="done"
-                  onSubmitEditing={() => void handleSubmit()}
-                  error={fieldState.error?.message}
-                  helperText="You can edit this later from your profile."
-                />
-              )}
+          ) : null}
+
+          {signUp.step === 0 ? (
+            <SignUpStepDetails
+              form={signUp.form}
+              goNext={signUp.goNext}
+              fullNameRef={signUp.fullNameRef}
+              phoneRef={signUp.phoneRef}
+              emailRef={signUp.emailRef}
+              passwordRef={signUp.passwordRef}
+              confirmPasswordRef={signUp.confirmPasswordRef}
             />
-            {submitError ? <Text className="text-sm text-rose-600">{submitError}</Text> : null}
+          ) : null}
+
+          {signUp.step === 1 ? (
+            <SignUpStepLocation
+              form={signUp.form}
+              selectedBarangay={signUp.selectedBarangay}
+              selectedBarangayId={signUp.selectedBarangayId}
+              goNext={signUp.goNext}
+              setShowBarangayPicker={signUp.setShowBarangayPicker}
+              setBarangaySearch={signUp.setBarangaySearch}
+              addressRef={signUp.addressRef}
+              bottomSheetRef={signUp.bottomSheetRef}
+              showBarangayPicker={signUp.showBarangayPicker}
+            />
+          ) : null}
+
+          {signUp.step === 2 ? (
+            <SignUpStepHousehold
+              form={signUp.form}
+              totalMembers={signUp.totalMembers}
+              vulnFlags={signUp.vulnFlags}
+              isSmsOnly={signUp.isSmsOnly}
+              goNext={signUp.goNext}
+              toggleVulnerabilityFlag={signUp.toggleVulnerabilityFlag}
+            />
+          ) : null}
+
+          {signUp.step === 3 ? (
+            <SignUpStepPermissions
+              submitError={signUp.submitError}
+              isSubmitting={signUp.isSubmitting}
+              isOnline={signUp.isOnline}
+              handlePermissionsAndSubmit={handlePermissionsAndSubmit}
+              handleSkipPermissions={signUp.handleSkipPermissions}
+            />
+          ) : null}
+
+          <View className="mt-6 pb-8">
+            <Pressable onPress={() => router.replace("/(auth)/sign-in")}>
+              <Text className="text-center text-[13px] text-slate-400">
+                Already have an account? <Text className="font-medium text-blue-600">Sign in</Text>
+              </Text>
+            </Pressable>
           </View>
-        ) : null}
-
-        <View className="mt-6 flex-row gap-3">
-          {step > 0 ? <AppButton label="Back" onPress={() => setStep((value) => value - 1)} variant="ghost" /> : null}
-          {step < 1 ? <AppButton label="Continue" onPress={() => void nextStep()} /> : null}
-          {step === 1 ? <AppButton label="Create account" onPress={handleSubmit} loading={isSubmitting} /> : null}
         </View>
-      </SectionCard>
+      </AuthFormScroll>
 
-      <SectionCard title="Already registered?" subtitle="Returning residents can sign in with their email and password.">
-        <Pressable onPress={() => router.replace("/(auth)/sign-in")}>
-          <Text className="text-sm font-medium text-blue-700">Go to sign in</Text>
-        </Pressable>
-      </SectionCard>
-    </AuthFormScroll>
+      <BarangayPicker
+        showBarangayPicker={signUp.showBarangayPicker}
+        bottomSheetRef={signUp.bottomSheetRef}
+        barangaySearch={signUp.barangaySearch}
+        setBarangaySearch={signUp.setBarangaySearch}
+        filteredBarangays={signUp.filteredBarangays}
+        selectedBarangayId={signUp.selectedBarangayId}
+        form={signUp.form}
+        setShowBarangayPicker={signUp.setShowBarangayPicker}
+        isLoading={signUp.barangaysQuery.isLoading}
+      />
+    </>
   );
 }
