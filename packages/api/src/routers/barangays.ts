@@ -5,9 +5,6 @@ import { publicProcedure, router } from "../index";
 import { uuidSchema } from "../schemas";
 import type { Barangay } from "../supabase";
 
-/** Pilot barangay; keep in sync with packages/db/supabase/migrations/20260330120000_seed_barangay_banago.sql */
-export const PILOT_BARANGAY_BANAGO_ID = "c0ffee00-baaa-4aaa-8aaa-0000bac0d001";
-
 const barangayIdSchema = z.object({
   id: uuidSchema,
 });
@@ -42,14 +39,6 @@ export const barangaysRouter = router({
       "Failed to list barangays.",
     ) ?? [];
 
-    return [...barangays].sort((left, right) => {
-      const leftPilot = left.id === PILOT_BARANGAY_BANAGO_ID ? 0 : 1;
-      const rightPilot = right.id === PILOT_BARANGAY_BANAGO_ID ? 0 : 1;
-      if (leftPilot !== rightPilot) {
-        return leftPilot - rightPilot;
-      }
-
-      return left.name.localeCompare(right.name);
-    });
+    return barangays;
   }),
 });

@@ -49,4 +49,8 @@ export type SmsDeliveryStatus = "queued" | "sent" | "delivered" | "failed" | "re
 export type SmsKeyword = "LIGTAS" | "TULONG" | "NASAAN" | "SINO" | "unknown";
 export type NeedsReportStatus = "pending" | "acknowledged" | "resolved";
 export type PushPlatform = "ios" | "android";
-export type IncidentReportGenerationSource = "template_free" | "cached_fallback";
+export type IncidentReportGenerationSource =
+  | "anthropic"
+  | "template_free"
+  | "template_fallback"
+  | "cached_fallback";
