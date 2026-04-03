@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
 import {
   householdSchema,

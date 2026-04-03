@@ -4,6 +4,7 @@ import { useCallback, useEffect } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { haptics } from "@/services/haptics";
 import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { useAuth } from "@/shared/hooks/useAuth";
 
