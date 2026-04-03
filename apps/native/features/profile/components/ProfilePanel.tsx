@@ -6,6 +6,7 @@ import { ScreenHeader } from "@/shared/components/ui";
 import { PersonalInformationCard } from "./PersonalInformationCard";
 import { ProfileAssignmentCard } from "./ProfileAssignmentCard";
 import { HouseholdRegistrationCard } from "./HouseholdRegistrationCard";
+import { LanguagePickerCard } from "./LanguagePickerCard";
 import { ProfileAccountCard } from "./ProfileAccountCard";
 import { useProfilePanel } from "../hooks/useProfilePanel";
 
@@ -63,6 +64,7 @@ export function ProfilePanel() {
         onFillFromProfile={fillHouseholdFromProfile}
         onSubmit={handleHouseholdSubmit}
       />
+      <LanguagePickerCard />
       <ProfileAccountCard
         email={accountEmail}
         resetFeedback={accountFeedback}
