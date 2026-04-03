@@ -38,6 +38,13 @@ export default function OfficialLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons color={color} name="document-text-outline" size={size} />,
         }}
       />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: "Account",
+          tabBarIcon: ({ color, size }) => <Ionicons color={color} name="person-circle-outline" size={size} />,
+        }}
+      />
     </Tabs>
   );
 }
