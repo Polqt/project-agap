@@ -11,13 +11,15 @@ const updateProfileSchema = z
     phoneNumber: z.string().trim().min(1).max(40).nullable().optional(),
     barangayId: uuidSchema.nullable().optional(),
     purok: z.string().trim().min(1).max(120).nullable().optional(),
+    isSmsOnly: z.boolean().optional(),
   })
   .refine(
     (value) =>
       value.fullName !== undefined ||
       value.phoneNumber !== undefined ||
       value.barangayId !== undefined ||
-      value.purok !== undefined,
+      value.purok !== undefined ||
+      value.isSmsOnly !== undefined,
     {
       message: "At least one field must be provided.",
     },
@@ -50,6 +52,7 @@ export const profileRouter = router({
         ...(input.phoneNumber !== undefined ? { phone_number: input.phoneNumber } : {}),
         ...(input.barangayId !== undefined ? { barangay_id: input.barangayId } : {}),
         ...(input.purok !== undefined ? { purok: input.purok } : {}),
+        ...(input.isSmsOnly !== undefined ? { is_sms_only: input.isSmsOnly } : {}),
       };
 
       const profile = getFoundOrThrow<Profile | null>(
@@ -90,5 +93,17 @@ export const profileRouter = router({
         success: true,
         token: input.token,
       };
+    }),
+
+  deactivatePushToken: protectedProcedure
+    .input(z.object({ token: z.string().trim().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.supabase
+        .from("push_tokens")
+        .update({ is_active: false })
+        .eq("token", input.token)
+        .eq("resident_id", ctx.session.id);
+
+      return { success: true };
     }),
 });

@@ -33,7 +33,7 @@ export function WelfareCheckPanel() {
       <ScreenHeader
         eyebrow="Field welfare"
         title="Welfare check"
-        description="Door-to-door outcomes for households assigned to you. Official field mode (Tanod)."
+        description="Door-to-door outcomes for households assigned to you. Record visit outcomes: Safe, Need Help, Not Home, or Dispatch Again."
         action={
           <AppButton label="Back" onPress={() => router.back()} variant="ghost" />
         }

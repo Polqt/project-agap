@@ -1,6 +1,9 @@
-import { Text, View } from "react-native";
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { AppButton, EmptyState, Pill, SectionCard } from "@/shared/components/ui";
+import { trpc } from "@/services/trpc";
 import type { EvacuationCenter } from "@project-agap/api/supabase";
 
 type Props = {
@@ -9,6 +12,81 @@ type Props = {
   updatingCenterId?: string;
   onToggle: (centerId: string, isOpen: boolean) => void;
 };
+
+function SupplyRow({ label, value, low }: { label: string; value: number; low: boolean }) {
+  return (
+    <View className="flex-row items-center justify-between py-0.5">
+      <Text className="text-[12px] text-slate-500">{label}</Text>
+      <Text className={`text-[12px] font-semibold ${low ? "text-rose-600" : "text-slate-700"}`}>
+        {value} {low ? "⚠" : ""}
+      </Text>
+    </View>
+  );
+}
+
+function CenterSuppliesSection({ centerId }: { centerId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ food: "", water: "", medicine: "", blankets: "" });
+
+  const suppliesQuery = useQuery(
+    trpc.evacuationCenters.getSupplies.queryOptions({ centerId }),
+  );
+  const updateMutation = useMutation(trpc.evacuationCenters.updateSupplies.mutationOptions());
+
+  const supplies = suppliesQuery.data;
+  if (!supplies) return null;
+
+  async function handleSave() {
+    await updateMutation.mutateAsync({
+      centerId,
+      ...(draft.food !== "" ? { foodPacks: Number(draft.food) } : {}),
+      ...(draft.water !== "" ? { waterLiters: Number(draft.water) } : {}),
+      ...(draft.medicine !== "" ? { medicineUnits: Number(draft.medicine) } : {}),
+      ...(draft.blankets !== "" ? { blankets: Number(draft.blankets) } : {}),
+    });
+    await suppliesQuery.refetch();
+    setEditing(false);
+    setDraft({ food: "", water: "", medicine: "", blankets: "" });
+  }
+
+  return (
+    <View className="mt-3 rounded-xl bg-white p-3 border border-slate-100">
+      <View className="flex-row items-center justify-between mb-1">
+        <Text className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Supplies</Text>
+        <Pressable onPress={() => setEditing(true)}>
+          <Text className="text-[11px] font-semibold text-blue-600">Update</Text>
+        </Pressable>
+      </View>
+      <SupplyRow label="Food packs" value={supplies.food_packs} low={supplies.food_packs < 10} />
+      <SupplyRow label="Water (L)" value={supplies.water_liters} low={supplies.water_liters < 50} />
+      <SupplyRow label="Medicine" value={supplies.medicine_units} low={supplies.medicine_units < 5} />
+      <SupplyRow label="Blankets" value={supplies.blankets} low={supplies.blankets < 10} />
+
+      <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
+        <Pressable className="flex-1 items-center justify-center bg-black/50" onPress={() => setEditing(false)}>
+          <Pressable className="mx-6 w-full max-w-sm rounded-2xl bg-white p-6" onPress={(e) => e.stopPropagation()}>
+            <Text className="mb-4 text-[16px] font-bold text-slate-900">Update Supplies</Text>
+            {(["food", "water", "medicine", "blankets"] as const).map((key) => (
+              <View key={key} className="mb-3">
+                <Text className="mb-1 text-[12px] font-medium text-slate-600 capitalize">
+                  {key === "food" ? "Food packs" : key === "water" ? "Water (liters)" : key === "medicine" ? "Medicine units" : "Blankets"}
+                </Text>
+                <TextInput
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-[14px] text-slate-900"
+                  value={draft[key]}
+                  onChangeText={(v) => setDraft((d) => ({ ...d, [key]: v }))}
+                  keyboardType="number-pad"
+                  placeholder={`${key === "food" ? supplies.food_packs : key === "water" ? supplies.water_liters : key === "medicine" ? supplies.medicine_units : supplies.blankets}`}
+                />
+              </View>
+            ))}
+            <AppButton label="Save" onPress={() => void handleSave()} loading={updateMutation.isPending} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
 
 export function CenterStatusCard({
   centers,
@@ -36,6 +114,7 @@ export function CenterStatusCard({
                 tone={center.is_open ? "success" : "warning"}
               />
             </View>
+            <CenterSuppliesSection centerId={center.id} />
             <View className="mt-4">
               <AppButton
                 label={center.is_open ? "Close center" : "Open center"}

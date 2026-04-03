@@ -4,13 +4,27 @@ import { ScreenShell } from "@/shared/components/screen-shell";
 import { SectionCard } from "@/shared/components/ui";
 
 import { IncidentReportCard } from "./IncidentReportCard";
+import { LguExportCard } from "./LguExportCard";
 import { NeedsReportFormCard } from "./NeedsReportFormCard";
 import { RecentNeedsReportsCard } from "./RecentNeedsReportsCard";
 import { useIncidentReportsPanel } from "../hooks/useIncidentReportsPanel";
 import { useNeedsReportsPanel } from "../hooks/useNeedsReportsPanel";
 
 export function NeedsReportsPanel() {
-  const { form, feedback, centers, reports, isOnline, submitMutation, handleSubmit } = useNeedsReportsPanel();
+  const {
+    form,
+    feedback,
+    centers,
+    reports,
+    needsSummary,
+    isLoadingSummary,
+    exportLanguage,
+    setExportLanguage,
+    isOnline,
+    submitMutation,
+    handleSubmit,
+    copyNeedsSummary,
+  } = useNeedsReportsPanel();
   const {
     feedback: incidentFeedback,
     language,
@@ -54,6 +68,15 @@ export function NeedsReportsPanel() {
         centers={centers}
         isSubmitting={submitMutation.isPending}
         onSubmit={handleSubmit}
+      />
+      <LguExportCard
+        summary={needsSummary}
+        language={exportLanguage}
+        onLanguageChange={setExportLanguage}
+        onCopy={(lang) => {
+          void copyNeedsSummary(lang);
+        }}
+        isLoading={isLoadingSummary}
       />
       <RecentNeedsReportsCard reports={reports} />
     </ScreenShell>

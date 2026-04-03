@@ -1,4 +1,4 @@
-import type { Profile } from "@project-agap/api/supabase";
+import type { Profile, VulnerabilityFlag } from "@project-agap/api/supabase";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
@@ -6,11 +6,9 @@ import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } fro
 import { AuthContext, type ResidentSignUpInput } from "@/shared/hooks/useAuth";
 import { useNotifications } from "@/shared/hooks/useNotifications";
 import { clearStoredSupabaseSession, supabase } from "@/services/supabase";
-import { queryClient } from "@/services/trpc";
+import { clearRegisteredPushToken, getRegisteredPushToken } from "@/services/notifications";
+import { queryClient, trpcClient } from "@/services/trpc";
 import { resetAppShellStore, setSelectedRole } from "@/stores/app-shell-store";
-
-const profileSelect =
-  "id, role, full_name, phone_number, barangay_id, purok, is_sms_only, created_at, updated_at";
 
 function mapSessionRole(profile: Profile | null) {
   return profile?.role ?? null;
@@ -29,22 +27,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return null;
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(profileSelect)
-      .eq("id", currentUserId)
-      .maybeSingle();
-
-    if (error) {
+    try {
+      const data = await trpcClient.profile.getMe.query();
+      setProfile(data);
+      setSelectedRole(data?.role ?? null);
+      return data;
+    } catch {
       setProfile(null);
       setSelectedRole(null);
       return null;
     }
-
-    setProfile(data);
-    setSelectedRole(data?.role ?? null);
-
-    return data;
   }, [session?.user.id]);
 
   const handleSessionChange = useCallback(
@@ -60,18 +52,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         setSession(nextSession);
 
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(profileSelect)
-          .eq("id", nextSession.user.id)
-          .maybeSingle();
-
-        if (error) {
-          setProfile(null);
-          setSelectedRole(null);
-          return;
-        }
-
+        const data = await trpcClient.profile.getMe.query();
         setProfile(data);
         setSelectedRole(data?.role ?? null);
       } catch {
@@ -101,22 +82,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setSession(currentSession);
 
         if (currentSession) {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select(profileSelect)
-            .eq("id", currentSession.user.id)
-            .maybeSingle();
-
           if (!isMounted) {
             return;
           }
 
-          if (error) {
-            setProfile(null);
-            setSelectedRole(null);
-          } else {
+          try {
+            const data = await trpcClient.profile.getMe.query();
+            if (!isMounted) {
+              return;
+            }
             setProfile(data);
             setSelectedRole(data?.role ?? null);
+          } catch {
+            setProfile(null);
+            setSelectedRole(null);
           }
         }
       } catch {
@@ -188,18 +167,37 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          full_name: input.fullName,
-          phone_number: input.phoneNumber ?? null,
-          barangay_id: input.barangayId,
-          purok: input.purok,
-        })
-        .eq("id", data.user.id);
+      if (!data.session) {
+        return;
+      }
 
-      if (updateError) {
-        throw updateError;
+      setSession(data.session);
+
+      await trpcClient.profile.update.mutate({
+        fullName: input.fullName,
+        phoneNumber: input.phoneNumber ?? null,
+        barangayId: input.barangayId,
+        purok: input.purok,
+        isSmsOnly: input.isSmsOnly ?? false,
+      });
+
+      try {
+        await trpcClient.households.register.mutate({
+          householdHead: input.fullName,
+          purok: input.purok,
+          address: input.address ?? input.purok,
+          phoneNumber: input.phoneNumber ?? null,
+          totalMembers: input.totalMembers ?? 1,
+          vulnerabilityFlags: (input.vulnerabilityFlags ?? []) as VulnerabilityFlag[],
+          isSmsOnly: input.isSmsOnly ?? false,
+          members: [],
+          notes: null,
+        });
+      } catch (householdError) {
+        console.warn(
+          "Household registration failed:",
+          householdError instanceof Error ? householdError.message : "Unknown household error.",
+        );
       }
 
       if (data.session) {
@@ -211,6 +209,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const signOut = useCallback(async () => {
+    const token = getRegisteredPushToken();
+    if (token) {
+      try {
+        await trpcClient.profile.deactivatePushToken.mutate({ token });
+      } catch {
+        // Token deactivation should never block sign-out.
+      }
+      clearRegisteredPushToken();
+    }
+
     await supabase.auth.signOut();
     await clearStoredSupabaseSession();
     queryClient.clear();

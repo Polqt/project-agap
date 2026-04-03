@@ -147,14 +147,14 @@ export default function BroadcastPage() {
 
   const finalMessage = selectedTemplate
     ? customNote
-      ? `${selectedTemplate.messageFil}\n\n${customNote}\n\nSumagot "LIGTAS" kung ligtas ka na.`
-      : `${selectedTemplate.messageFil}\n\nSumagot "LIGTAS" kung ligtas ka na.`
+      ? `${selectedTemplate.messageEng}\n\n${customNote}\n\nReply "SAFE" when you are already safe.`
+      : `${selectedTemplate.messageEng}\n\nReply "SAFE" when you are already safe.`
     : "";
 
   const finalMessageFil = selectedTemplate
     ? customNote
-      ? `${selectedTemplate.messageFil}\n\n${customNote}`
-      : selectedTemplate.messageFil
+      ? `${selectedTemplate.messageFil}\n\n${customNote}\n\nSumagot ng "LIGTAS" kung ligtas ka na.`
+      : `${selectedTemplate.messageFil}\n\nSumagot ng "LIGTAS" kung ligtas ka na.`
     : "";
 
   // Calculate available characters for custom note
@@ -168,8 +168,9 @@ export default function BroadcastPage() {
     createBroadcast.mutate({
       broadcastType: selectedType,
       message: finalMessage,
+      messageFilipino: finalMessageFil || null,
     });
-  }, [selectedType, finalMessage, createBroadcast]);
+  }, [selectedType, finalMessage, finalMessageFil, createBroadcast]);
 
   const resetForm = useCallback(() => {
     setSelectedType(null);
@@ -445,7 +446,7 @@ function ConfirmModal({
               </p>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              This will be sent to all registered residents via push notification and SMS.
+              This will be sent to registered residents via push notification and SMS.
             </p>
           </div>
 

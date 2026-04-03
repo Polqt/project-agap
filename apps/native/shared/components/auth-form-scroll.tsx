@@ -19,7 +19,7 @@ export function AuthFormScroll({ children, bottomOffset = BOTTOM_OFFSET }: AuthF
 
   return (
     <KeyboardAwareScrollView
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-white"
       contentContainerStyle={{ flexGrow: 1, paddingBottom }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}

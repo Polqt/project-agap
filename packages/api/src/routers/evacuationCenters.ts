@@ -8,7 +8,7 @@ import {
 } from "../router-helpers";
 import { officialProcedure, publicProcedure, router } from "../index";
 import { locationSchema, uuidSchema } from "../schemas";
-import type { EvacuationCenter, NearbyCenter } from "../supabase";
+import type { CenterSupplies, EvacuationCenter, NearbyCenter } from "../supabase";
 
 export const evacuationCentersRouter = router({
   listByBarangay: publicProcedure
@@ -107,5 +107,90 @@ export const evacuationCentersRouter = router({
       );
 
       return center;
+    }),
+
+  getSupplies: officialProcedure
+    .input(z.object({ centerId: uuidSchema }))
+    .query(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      // Verify center belongs to this barangay
+      getFoundOrThrow<EvacuationCenter | null>(
+        getSupabaseDataOrThrow<EvacuationCenter | null>(
+          await ctx.supabase
+            .from("evacuation_centers")
+            .select("id")
+            .eq("id", input.centerId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to verify center.",
+        ),
+        "Center not found.",
+      );
+
+      const supplies = getSupabaseDataOrThrow<CenterSupplies | null>(
+        await ctx.supabase
+          .from("center_supplies")
+          .select("center_id, food_packs, water_liters, medicine_units, blankets, updated_at, updated_by")
+          .eq("center_id", input.centerId)
+          .maybeSingle(),
+        "Failed to load center supplies.",
+      );
+
+      return supplies ?? {
+        center_id: input.centerId,
+        food_packs: 0,
+        water_liters: 0,
+        medicine_units: 0,
+        blankets: 0,
+        updated_at: null,
+        updated_by: null,
+      };
+    }),
+
+  updateSupplies: officialProcedure
+    .input(
+      z.object({
+        centerId: uuidSchema,
+        foodPacks: z.number().int().min(0).optional(),
+        waterLiters: z.number().int().min(0).optional(),
+        medicineUnits: z.number().int().min(0).optional(),
+        blankets: z.number().int().min(0).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      getFoundOrThrow<EvacuationCenter | null>(
+        getSupabaseDataOrThrow<EvacuationCenter | null>(
+          await ctx.supabase
+            .from("evacuation_centers")
+            .select("id")
+            .eq("id", input.centerId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to verify center.",
+        ),
+        "Center not found.",
+      );
+
+      const upsertPayload = {
+        center_id: input.centerId,
+        ...(input.foodPacks !== undefined ? { food_packs: input.foodPacks } : {}),
+        ...(input.waterLiters !== undefined ? { water_liters: input.waterLiters } : {}),
+        ...(input.medicineUnits !== undefined ? { medicine_units: input.medicineUnits } : {}),
+        ...(input.blankets !== undefined ? { blankets: input.blankets } : {}),
+        updated_at: new Date().toISOString(),
+        updated_by: ctx.session.id,
+      };
+
+      return getSupabaseDataOrThrow<CenterSupplies | null>(
+        await ctx.supabase
+          .from("center_supplies")
+          .upsert(upsertPayload)
+          .select("center_id, food_packs, water_liters, medicine_units, blankets, updated_at, updated_by")
+          .maybeSingle(),
+        "Failed to update center supplies.",
+      );
     }),
 });

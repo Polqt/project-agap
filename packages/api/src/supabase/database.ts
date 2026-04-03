@@ -25,6 +25,12 @@ import type {
   AlertsRow,
   AlertsUpdate,
   BarangaysInsert,
+  CenterSuppliesInsert,
+  CenterSuppliesRow,
+  CenterSuppliesUpdate,
+  MissingPersonsInsert,
+  MissingPersonsRow,
+  MissingPersonsUpdate,
   BarangaysRow,
   BarangaysUpdate,
   BroadcastsInsert,
@@ -82,6 +88,8 @@ export interface Database {
       sms_logs: Table<SmsLogsRow, SmsLogsInsert, SmsLogsUpdate>;
       needs_reports: Table<NeedsReportsRow, NeedsReportsInsert, NeedsReportsUpdate>;
       incident_reports: Table<IncidentReportsRow, IncidentReportsInsert, IncidentReportsUpdate>;
+      center_supplies: Table<CenterSuppliesRow, CenterSuppliesInsert, CenterSuppliesUpdate>;
+      missing_persons: Table<MissingPersonsRow, MissingPersonsInsert, MissingPersonsUpdate>;
     };
     Views: Record<string, never>;
     Functions: {

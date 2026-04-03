@@ -25,13 +25,25 @@ type Props = {
 function syncLabel(syncState: BroadcastTimelineItem["syncState"]) {
   switch (syncState) {
     case "publishing":
-      return { label: "Syncing", tone: "bg-blue-100 text-blue-700" };
+      return { label: "Syncing", dot: "bg-blue-500" };
     case "queued":
-      return { label: "Queued", tone: "bg-amber-100 text-amber-700" };
+      return { label: "Queued", dot: "bg-amber-500" };
     case "failed":
-      return { label: "Retry", tone: "bg-rose-100 text-rose-700" };
+      return { label: "Retry", dot: "bg-rose-500" };
     default:
-      return { label: "Sent", tone: "bg-emerald-100 text-emerald-700" };
+      return { label: "Sent", dot: "bg-emerald-500" };
+  }
+}
+
+function severityColor(severity: Alert["severity"]) {
+  switch (severity) {
+    case "warning":
+    case "danger":
+      return "border-rose-200 bg-rose-50";
+    case "watch":
+      return "border-amber-200 bg-amber-50";
+    default:
+      return "border-slate-200 bg-slate-50";
   }
 }
 
@@ -43,62 +55,64 @@ export function RecentBroadcastsCard({
   onLongPressBroadcast,
 }: Props) {
   return (
-    <View className="mx-5 mt-5 mb-8 gap-5">
-      <View className="rounded-[34px] bg-white px-5 py-5 shadow-sm">
-        <View className="flex-row items-start justify-between gap-4">
-          <View className="flex-1">
-            <Text className="text-lg font-semibold text-slate-950">Active agency alerts</Text>
-            <Text className="mt-1 text-sm leading-6 text-slate-500">
-              PAGASA and PHIVOLCS alerts stay pinned here while they are active.
-            </Text>
-          </View>
-          {isRefreshing ? <Text className="text-xs font-semibold text-slate-400">Refreshing</Text> : null}
+    <View className="mx-6 mt-4 gap-6">
+      {/* Active agency alerts */}
+      <View className="gap-3">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+            Agency alerts
+          </Text>
+          {isRefreshing ? (
+            <Text className="text-[11px] font-medium text-slate-300">Refreshing</Text>
+          ) : null}
         </View>
 
         {alerts.length ? (
-          <View className="mt-4 gap-3">
+          <View className="gap-2.5">
             {alerts.map((alert) => (
-              <View key={alert.id} className="rounded-[26px] bg-slate-100 px-4 py-4">
-                <View className="flex-row items-start justify-between gap-3">
-                  <View className="flex-1">
-                    <Text className="text-xs font-semibold uppercase tracking-[1.1px] text-slate-500">
-                      {alert.source.toUpperCase()} / {alert.severity.toUpperCase()}
-                    </Text>
-                    <Text className="mt-2 text-base font-semibold text-slate-950">{alert.title}</Text>
-                    <Text className="mt-2 text-sm leading-6 text-slate-600">{alert.body}</Text>
-                  </View>
-                  <Text className="text-xs text-slate-400">{formatDateTime(alert.issued_at)}</Text>
+              <View
+                key={alert.id}
+                className={`rounded-xl border p-3.5 ${severityColor(alert.severity)}`}
+              >
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {alert.source} / {alert.severity}
+                  </Text>
+                  <Text className="text-[11px] text-slate-400">
+                    {formatDateTime(alert.issued_at)}
+                  </Text>
                 </View>
+                <Text className="mt-2 text-[15px] font-semibold text-slate-900">
+                  {alert.title}
+                </Text>
+                <Text className="mt-1 text-[13px] leading-5 text-slate-600">{alert.body}</Text>
               </View>
             ))}
           </View>
         ) : (
-          <View className="mt-4">
-            <EmptyState
-              title="No active PAGASA or PHIVOLCS alerts"
-              description="Agency alerts will appear here automatically when they are active for Banago."
-            />
-          </View>
+          <EmptyState
+            title="No active alerts"
+            description="PAGASA and PHIVOLCS alerts appear here when active."
+          />
         )}
       </View>
 
-      <View className="rounded-[34px] bg-white px-5 py-5 shadow-sm">
-        <Text className="text-lg font-semibold text-slate-950">Broadcast history</Text>
-        <Text className="mt-1 text-sm leading-6 text-slate-500">
-          Long-press any item to load it back into Send for a fast re-broadcast.
+      {/* Broadcast history */}
+      <View className="gap-3">
+        <Text className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+          Broadcast history
         </Text>
 
         {broadcasts.length ? (
-          <View className="mt-4 gap-3">
+          <View className="gap-2.5">
             {broadcasts.map((broadcast) => {
-              const stats =
-                deliveryStatsByBroadcastId.get(broadcast.id) ?? {
-                  sent: 0,
-                  delivered: 0,
-                  replied: 0,
-                  failed: 0,
-                  total: 0,
-                };
+              const stats = deliveryStatsByBroadcastId.get(broadcast.id) ?? {
+                sent: 0,
+                delivered: 0,
+                replied: 0,
+                failed: 0,
+                total: 0,
+              };
               const sync = syncLabel(broadcast.syncState);
 
               return (
@@ -106,52 +120,62 @@ export function RecentBroadcastsCard({
                   key={broadcast.id}
                   onLongPress={() => onLongPressBroadcast(broadcast)}
                   delayLongPress={220}
-                  className="rounded-[26px] bg-slate-100 px-4 py-4"
+                  className="rounded-xl border border-slate-200 bg-white p-3.5"
                 >
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold uppercase tracking-[1.1px] text-slate-500">
-                        {broadcast.broadcast_type.replaceAll("_", " ")}
-                      </Text>
-                      <Text className="mt-2 text-base font-semibold text-slate-950">{broadcast.message}</Text>
-                      <Text className="mt-2 text-sm text-slate-500">
-                        {broadcast.target_purok ? `Target: ${broadcast.target_purok}` : "Target: Entire barangay"}
-                      </Text>
-                    </View>
-                    <View className={`rounded-full px-3 py-1 ${sync.tone}`}>
-                      <Text className="text-xs font-semibold">{sync.label}</Text>
+                  {/* Header: type + sync state */}
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      {broadcast.broadcast_type.replaceAll("_", " ")}
+                    </Text>
+                    <View className="flex-row items-center gap-1.5">
+                      <View className={`h-1.5 w-1.5 rounded-full ${sync.dot}`} />
+                      <Text className="text-[11px] font-semibold text-slate-500">{sync.label}</Text>
                     </View>
                   </View>
 
-                  <View className="mt-4 flex-row flex-wrap gap-2">
-                    <View className="rounded-full bg-white px-3 py-1">
-                      <Text className="text-xs font-semibold text-slate-700">Sent {stats.sent}</Text>
-                    </View>
-                    <View className="rounded-full bg-white px-3 py-1">
-                      <Text className="text-xs font-semibold text-slate-700">Delivered {stats.delivered}</Text>
-                    </View>
-                    <View className="rounded-full bg-white px-3 py-1">
-                      <Text className="text-xs font-semibold text-slate-700">Replied {stats.replied}</Text>
-                    </View>
+                  {/* Message */}
+                  <Text className="mt-2 text-[14px] font-medium leading-5 text-slate-800" numberOfLines={2}>
+                    {broadcast.message}
+                  </Text>
+
+                  {/* Target */}
+                  <Text className="mt-1 text-[12px] text-slate-400">
+                    {broadcast.target_purok ?? "Entire barangay"}
+                  </Text>
+
+                  {/* Delivery stats */}
+                  <View className="mt-3 flex-row gap-3">
+                    <Text className="text-[11px] font-medium text-slate-500">
+                      {stats.sent} sent
+                    </Text>
+                    <Text className="text-[11px] font-medium text-slate-500">
+                      {stats.delivered} delivered
+                    </Text>
+                    {stats.replied > 0 ? (
+                      <Text className="text-[11px] font-medium text-emerald-600">
+                        {stats.replied} replied
+                      </Text>
+                    ) : null}
                     {stats.failed > 0 ? (
-                      <View className="rounded-full bg-white px-3 py-1">
-                        <Text className="text-xs font-semibold text-rose-700">Failed {stats.failed}</Text>
-                      </View>
+                      <Text className="text-[11px] font-medium text-rose-500">
+                        {stats.failed} failed
+                      </Text>
                     ) : null}
                   </View>
 
-                  <Text className="mt-3 text-xs text-slate-400">{formatDateTime(broadcast.sent_at)}</Text>
+                  {/* Timestamp */}
+                  <Text className="mt-2 text-[11px] text-slate-300">
+                    {formatDateTime(broadcast.sent_at)}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
         ) : (
-          <View className="mt-4">
-            <EmptyState
-              title="No broadcasts yet"
-              description="The first direct broadcast will appear here with delivery stats once it is sent."
-            />
-          </View>
+          <EmptyState
+            title="No broadcasts yet"
+            description="Your first broadcast and its delivery stats will appear here."
+          />
         )}
       </View>
     </View>

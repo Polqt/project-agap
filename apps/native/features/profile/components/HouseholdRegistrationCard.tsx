@@ -1,5 +1,7 @@
 import { Controller, type UseFormReturn } from "react-hook-form";
-import { Switch, Text, View } from "react-native";
+import { Modal, Pressable, Share, Switch, Text, View } from "react-native";
+import QRCode from "react-native-qrcode-svg";
+import { useState } from "react";
 
 import { AppButton, EmptyState, Pill, SectionCard, TextField } from "@/shared/components/ui";
 import type { HouseholdWithMembers } from "@project-agap/api/supabase";
@@ -27,6 +29,8 @@ export function HouseholdRegistrationCard({
   onSubmit,
 }: Props) {
   const statusMeta = household ? evacuationStatusMeta[household.evacuation_status] : null;
+  const [showQr, setShowQr] = useState(false);
+  const householdQrValue = household ? `AGAP:HH:${household.id}` : null;
 
   return (
     <SectionCard
@@ -56,6 +60,51 @@ export function HouseholdRegistrationCard({
           ) : null}
         </View>
       ) : null}
+
+      {/* Family Reunification QR */}
+      {household && householdQrValue ? (
+        <View className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4">
+          <Text className="text-[13px] font-semibold text-sky-800">Family Reunification QR</Text>
+          <Text className="mt-1 text-[12px] leading-5 text-sky-600">
+            Any barangay official can scan this to confirm your household is safe, even across different evacuation centers.
+          </Text>
+          <View className="mt-3 flex-row gap-2">
+            <Pressable
+              onPress={() => setShowQr(true)}
+              className="flex-1 items-center rounded-xl bg-sky-600 py-2.5 active:bg-sky-700"
+            >
+              <Text className="text-[13px] font-semibold text-white">Show QR</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => void Share.share({ message: `Family QR Code\nScan to confirm: ${householdQrValue}` })}
+              className="flex-1 items-center rounded-xl border border-sky-300 py-2.5 active:bg-sky-100"
+            >
+              <Text className="text-[13px] font-semibold text-sky-700">Share</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* QR Modal */}
+      <Modal visible={showQr} transparent animationType="fade" onRequestClose={() => setShowQr(false)}>
+        <Pressable
+          className="flex-1 items-center justify-center bg-black/60"
+          onPress={() => setShowQr(false)}
+        >
+          <View className="items-center rounded-3xl bg-white p-8 mx-8">
+            <Text className="mb-4 text-[16px] font-bold text-slate-900">Family ID</Text>
+            {householdQrValue ? (
+              <QRCode value={householdQrValue} size={220} />
+            ) : null}
+            <Text className="mt-4 text-[12px] text-slate-500 text-center">
+              {household?.household_head}
+            </Text>
+            <Text className="mt-1 text-[11px] text-slate-400 text-center">
+              Show this to any barangay official to mark your family as located
+            </Text>
+          </View>
+        </Pressable>
+      </Modal>
 
       <View className="gap-4">
         <Controller

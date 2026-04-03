@@ -14,6 +14,9 @@ export function DashboardSummaryCards({ summary }: { summary: DashboardSummary |
         <StatCard label="Need help" value={summary?.need_help_count ?? 0} tone="danger" />
         <StatCard label="Checked in" value={summary?.checked_in_count ?? 0} tone="info" />
         <StatCard label="Unaccounted" value={summary?.unaccounted_count ?? 0} tone="warning" />
+        {(summary?.sms_replied_count ?? 0) > 0 ? (
+          <StatCard label="SMS replies" value={summary?.sms_replied_count ?? 0} tone="warning" />
+        ) : null}
       </View>
     </SectionCard>
   );

@@ -1,5 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useStore } from "@tanstack/react-store";
+import { View } from "react-native";
+
+import { appShellStore } from "@/stores/app-shell-store";
+
+function AlertBadge() {
+  const hasUnread = useStore(appShellStore, (s) => s.hasUnreadAlert);
+  if (!hasUnread) return null;
+  return (
+    <View className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500" />
+  );
+}
 
 export default function ResidentLayout() {
   return (
@@ -18,6 +30,15 @@ export default function ResidentLayout() {
       }}
     >
       <Tabs.Screen
+        name="status"
+        options={{
+          title: "Status",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={color} name="shield-checkmark-outline" size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="map"
         options={{
           title: "Mapa",
@@ -25,30 +46,30 @@ export default function ResidentLayout() {
         }}
       />
       <Tabs.Screen
-        name="status"
+        name="checkin"
         options={{
-          title: "Status",
+          title: "Check-In",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="heart-half-outline" size={size} />
+            <Ionicons color={color} name="qr-code-outline" size={size} />
           ),
         }}
       />
       <Tabs.Screen
         name="alerts"
         options={{
-          title: "Alerts",
+          title: "Alerto",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="notifications-outline" size={size} />
+            <View>
+              <Ionicons color={color} name="notifications-outline" size={size} />
+              <AlertBadge />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="person-circle-outline" size={size} />
-          ),
+          href: null,
         }}
       />
     </Tabs>
