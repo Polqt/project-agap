@@ -10,6 +10,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { useSignUpForm } from "../hooks/useSignUpForm";
 import { requestSignUpPermissionsAsync } from "../services/permissions";
 import { BarangayPicker } from "./BarangayPicker";
+import { PurokPicker } from "./PurokPicker";
 import { SignUpProgressBar } from "./SignUpShared";
 import { SignUpStepDetails } from "./SignUpStepDetails";
 import { SignUpStepHousehold } from "./SignUpStepHousehold";
@@ -94,11 +95,15 @@ export function SignUpForm() {
               form={signUp.form}
               selectedBarangay={signUp.selectedBarangay}
               selectedBarangayId={signUp.selectedBarangayId}
+              selectedPurok={signUp.selectedPurok}
+              availablePuroks={signUp.availablePuroks}
               goNext={signUp.goNext}
               setShowBarangayPicker={signUp.setShowBarangayPicker}
               setBarangaySearch={signUp.setBarangaySearch}
+              setShowPurokPicker={signUp.setShowPurokPicker}
               addressRef={signUp.addressRef}
               bottomSheetRef={signUp.bottomSheetRef}
+              purokBottomSheetRef={signUp.purokBottomSheetRef}
               showBarangayPicker={signUp.showBarangayPicker}
             />
           ) : null}
@@ -144,6 +149,15 @@ export function SignUpForm() {
         form={signUp.form}
         setShowBarangayPicker={signUp.setShowBarangayPicker}
         isLoading={signUp.barangaysQuery.isLoading}
+      />
+
+      <PurokPicker
+        visible={signUp.showPurokPicker}
+        bottomSheetRef={signUp.purokBottomSheetRef}
+        puroks={signUp.availablePuroks}
+        selectedPurok={signUp.selectedPurok}
+        form={signUp.form}
+        onClose={() => signUp.setShowPurokPicker(false)}
       />
     </>
   );

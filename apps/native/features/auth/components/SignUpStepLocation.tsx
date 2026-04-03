@@ -1,29 +1,47 @@
 import { Ionicons } from "@expo/vector-icons";
+import type BottomSheet from "@gorhom/bottom-sheet";
+import type { RefObject } from "react";
 import { Controller } from "react-hook-form";
 import { Pressable, Text, View } from "react-native";
+import type { UseFormReturn } from "react-hook-form";
+import type { TextInput } from "react-native";
 
 import { AppButton, TextField } from "@/shared/components/ui";
+import type { ResidentSignUpFormValues } from "@/types/forms";
 
-import { BANAGO_PUROKS } from "../constants";
-import type { SignUpFormActions, SignUpFormState, SignUpRefs } from "../types";
 import { SignUpStepHeader } from "./SignUpShared";
 
-type Props = Pick<
-  SignUpFormState,
-  "form" | "selectedBarangay" | "showBarangayPicker" | "selectedBarangayId"
-> &
-  Pick<SignUpFormActions, "goNext" | "setShowBarangayPicker" | "setBarangaySearch"> &
-  Pick<SignUpRefs, "addressRef" | "bottomSheetRef">;
+type Props = {
+  form: UseFormReturn<ResidentSignUpFormValues>;
+  selectedBarangay: { id: string; name: string; municipality: string; province: string } | undefined;
+  selectedBarangayId: string;
+  selectedPurok: string;
+  availablePuroks: readonly string[];
+  goNext: () => Promise<void>;
+  setShowBarangayPicker: (value: boolean) => void;
+  setBarangaySearch: (value: string) => void;
+  setShowPurokPicker: (value: boolean) => void;
+  addressRef: RefObject<TextInput | null>;
+  bottomSheetRef: RefObject<BottomSheet | null>;
+  purokBottomSheetRef: RefObject<BottomSheet | null>;
+  showBarangayPicker: boolean;
+};
 
 export function SignUpStepLocation({
   form,
   selectedBarangay,
+  selectedPurok,
+  availablePuroks,
   goNext,
   setShowBarangayPicker,
   setBarangaySearch,
+  setShowPurokPicker,
   addressRef,
   bottomSheetRef,
+  purokBottomSheetRef,
 }: Props) {
+  const hasPuroks = availablePuroks.length > 0;
+
   return (
     <View className="gap-5">
       <SignUpStepHeader step={1} title="Your location" />
@@ -44,33 +62,63 @@ export function SignUpStepLocation({
           <Ionicons name="chevron-down" size={18} color="#94a3b8" />
         </Pressable>
         {form.formState.errors.barangayId?.message ? (
-          <Text className="text-[12px] text-rose-500">{form.formState.errors.barangayId.message}</Text>
+          <Text className="text-[12px] text-rose-500">
+            {form.formState.errors.barangayId.message}
+          </Text>
         ) : (
-          <Text className="text-[11px] text-slate-400">Only barangays enrolled in Agap are shown.</Text>
+          <Text className="text-[11px] text-slate-400">
+            Only barangays enrolled in Agap are shown.
+          </Text>
         )}
       </View>
 
       <View className="gap-2">
         <Text className="text-[13px] font-medium text-slate-600">Purok / Sitio</Text>
-        <View className="flex-row flex-wrap gap-2">
-          {BANAGO_PUROKS.map((purok) => {
-            const isActive = form.watch("purok") === purok;
-            return (
-              <Pressable
-                key={purok}
-                onPress={() => form.setValue("purok", purok, { shouldValidate: true })}
-                className={`rounded-lg px-3.5 py-2.5 ${isActive ? "bg-slate-900" : "bg-slate-100"}`}
-                style={{ minHeight: 36 }}
-              >
-                <Text className={`text-[13px] font-semibold ${isActive ? "text-white" : "text-slate-600"}`}>
-                  {purok}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {form.formState.errors.purok?.message ? (
-          <Text className="text-[12px] text-rose-500">{form.formState.errors.purok.message}</Text>
+        {hasPuroks ? (
+          <Pressable
+            onPress={() => {
+              if (!selectedBarangay) return;
+              setShowPurokPicker(true);
+              setTimeout(() => purokBottomSheetRef.current?.expand(), 100);
+            }}
+            className="min-h-11 flex-row items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5"
+          >
+            <Text
+              className={`text-[15px] ${selectedPurok ? "text-slate-900" : "text-slate-400"}`}
+            >
+              {selectedPurok || "Select purok / sitio"}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color="#94a3b8" />
+          </Pressable>
+        ) : (
+          <Controller
+            control={form.control}
+            name="purok"
+            render={({ field, fieldState }) => (
+              <TextField
+                label=""
+                value={field.value}
+                onChangeText={field.onChange}
+                placeholder={
+                  selectedBarangay
+                    ? "Enter your purok / sitio"
+                    : "Select a barangay first"
+                }
+                editable={!!selectedBarangay}
+                error={fieldState.error?.message}
+              />
+            )}
+          />
+        )}
+        {form.formState.errors.purok?.message && hasPuroks ? (
+          <Text className="text-[12px] text-rose-500">
+            {form.formState.errors.purok.message}
+          </Text>
+        ) : null}
+        {!selectedBarangay ? (
+          <Text className="text-[11px] text-slate-400">
+            Select a barangay to see available puroks.
+          </Text>
         ) : null}
       </View>
 

@@ -19,6 +19,7 @@ export type SignUpRefs = {
   confirmPasswordRef: RefObject<TextInput | null>;
   addressRef: RefObject<TextInput | null>;
   bottomSheetRef: RefObject<BottomSheet | null>;
+  purokBottomSheetRef: RefObject<BottomSheet | null>;
 };
 
 export type SignUpFormState = {
@@ -26,6 +27,7 @@ export type SignUpFormState = {
   submitError: string | null;
   isSubmitting: boolean;
   showBarangayPicker: boolean;
+  showPurokPicker: boolean;
   barangaySearch: string;
   isOnline: boolean;
   form: UseFormReturn<ResidentSignUpFormValues>;
@@ -33,6 +35,8 @@ export type SignUpFormState = {
   filteredBarangays: BarangayOption[];
   selectedBarangay: BarangayOption | undefined;
   selectedBarangayId: string;
+  selectedPurok: string;
+  availablePuroks: readonly string[];
   vulnFlags: string[];
   totalMembers: number;
   isSmsOnly: boolean;
@@ -45,6 +49,7 @@ export type SignUpFormActions = {
   handleSkipPermissions: () => void;
   handlePermissionsAndSubmit: () => Promise<void>;
   setShowBarangayPicker: (value: boolean) => void;
+  setShowPurokPicker: (value: boolean) => void;
   setBarangaySearch: (value: string) => void;
   toggleVulnerabilityFlag: (flag: string) => void;
   setSubmitError: (value: string | null) => void;

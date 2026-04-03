@@ -60,7 +60,11 @@ export function BarangayPicker({
               <Pressable
                 key={barangay.id}
                 onPress={() => {
+                  const prevId = form.getValues("barangayId");
                   form.setValue("barangayId", barangay.id, { shouldValidate: true });
+                  if (prevId !== barangay.id) {
+                    form.setValue("purok", "", { shouldValidate: false });
+                  }
                   setShowBarangayPicker(false);
                   bottomSheetRef.current?.close();
                 }}

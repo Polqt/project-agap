@@ -12,6 +12,8 @@ import { getErrorMessage } from "@/shared/utils/errors";
 import { residentSignUpSchema, type ResidentSignUpFormValues } from "@/types/forms";
 import type { VulnerabilityFlag } from "@project-agap/api/supabase/types";
 
+import { getPuroksForBarangay } from "../constants";
+
 export function useSignUpForm() {
   const { signUpResident } = useAuth();
   const { isOnline } = useOfflineQueue();
@@ -20,6 +22,7 @@ export function useSignUpForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBarangayPicker, setShowBarangayPicker] = useState(false);
+  const [showPurokPicker, setShowPurokPicker] = useState(false);
   const [barangaySearch, setBarangaySearch] = useState("");
 
   const fullNameRef = useRef<TextInput>(null);
@@ -29,6 +32,7 @@ export function useSignUpForm() {
   const confirmPasswordRef = useRef<TextInput>(null);
   const addressRef = useRef<TextInput>(null);
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const purokBottomSheetRef = useRef<BottomSheet>(null);
 
   const form = useForm<ResidentSignUpFormValues>({
     resolver: zodResolver(residentSignUpSchema),
@@ -72,6 +76,12 @@ export function useSignUpForm() {
 
   const selectedBarangayId = form.watch("barangayId");
   const selectedBarangay = barangays.find((barangay) => barangay.id === selectedBarangayId);
+  const selectedPurok = form.watch("purok");
+
+  const availablePuroks = useMemo(
+    () => (selectedBarangayId ? getPuroksForBarangay(selectedBarangayId) : []),
+    [selectedBarangayId],
+  );
 
   const stepOneFields = ["fullName", "phoneNumber", "email", "password", "confirmPassword"] as const;
   const stepTwoFields = ["barangayId", "purok"] as const;
@@ -156,6 +166,8 @@ export function useSignUpForm() {
     isSubmitting,
     showBarangayPicker,
     setShowBarangayPicker,
+    showPurokPicker,
+    setShowPurokPicker,
     barangaySearch,
     setBarangaySearch,
     isOnline,
@@ -169,6 +181,8 @@ export function useSignUpForm() {
     filteredBarangays,
     selectedBarangayId,
     selectedBarangay,
+    selectedPurok,
+    availablePuroks,
     vulnFlags,
     totalMembers,
     isSmsOnly,
@@ -180,5 +194,6 @@ export function useSignUpForm() {
     confirmPasswordRef,
     addressRef,
     bottomSheetRef,
+    purokBottomSheetRef,
   };
 }
