@@ -31,12 +31,16 @@ export function SignInForm() {
   });
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !role) {
+    if (isLoading) {
+      return;
+    }
+
+    if (!isAuthenticated || !role) {
       return;
     }
 
     router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
-  }, [isAuthenticated, isLoading, role, router]);
+  }, [isAuthenticated, role, router]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);
@@ -77,10 +81,10 @@ export function SignInForm() {
       <ScreenHeader
         eyebrow={selectedRole === "official" ? "Official sign-in" : "Sign in"}
         title="Welcome back"
-        description="Use your email and password to continue. Officials and returning residents both use this screen."
+        description="Use your email and password to continue."
       />
 
-      <SectionCard title="Account access" subtitle="Officials are pre-created. Residents can sign in here after their first registration.">
+      <SectionCard title="Account access">
         <View className="gap-4">
           <Controller
             control={form.control}
@@ -135,7 +139,7 @@ export function SignInForm() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Need a resident account?" subtitle="New residents create an account through the guided onboarding flow.">
+      <SectionCard title="Need a resident account?">
         <Pressable onPress={() => router.replace("/(auth)/sign-up")}>
           <Text className="text-sm font-medium text-blue-700">
             Create a resident account

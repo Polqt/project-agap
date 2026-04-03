@@ -7,9 +7,14 @@ const CREATE_QUEUE_TABLE_SQL = `
     type TEXT NOT NULL,
     payload TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    retries INTEGER DEFAULT 0
+    retries INTEGER DEFAULT 0,
+    failed_at INTEGER,
+    last_error TEXT
   );
 `;
+
+const ADD_FAILED_AT_COLUMN_SQL = "ALTER TABLE offline_queue ADD COLUMN failed_at INTEGER;";
+const ADD_LAST_ERROR_COLUMN_SQL = "ALTER TABLE offline_queue ADD COLUMN last_error TEXT;";
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -20,6 +25,8 @@ function mapRow(row: OfflineQueueRow): QueuedAction {
     payload: JSON.parse(row.payload) as QueuedAction["payload"],
     createdAt: row.created_at,
     retries: row.retries,
+    failedAt: row.failed_at,
+    lastError: row.last_error,
   };
 }
 
@@ -27,6 +34,7 @@ export async function getOfflineQueueDatabase() {
   if (!databasePromise) {
     databasePromise = SQLite.openDatabaseAsync("agap-offline.db").then(async (database) => {
       await database.execAsync(CREATE_QUEUE_TABLE_SQL);
+      await ensureOfflineQueueColumns(database);
       return database;
     });
   }
@@ -34,10 +42,23 @@ export async function getOfflineQueueDatabase() {
   return databasePromise;
 }
 
+async function ensureOfflineQueueColumns(database: SQLite.SQLiteDatabase) {
+  const tableInfo = await database.getAllAsync<{ name: string }>("PRAGMA table_info(offline_queue)");
+  const columnNames = new Set(tableInfo.map((column) => column.name));
+
+  if (!columnNames.has("failed_at")) {
+    await database.execAsync(ADD_FAILED_AT_COLUMN_SQL);
+  }
+
+  if (!columnNames.has("last_error")) {
+    await database.execAsync(ADD_LAST_ERROR_COLUMN_SQL);
+  }
+}
+
 export async function listQueuedActions() {
   const database = await getOfflineQueueDatabase();
   const rows = await database.getAllAsync<OfflineQueueRow>(
-    "SELECT id, type, payload, created_at, retries FROM offline_queue ORDER BY created_at ASC",
+    "SELECT id, type, payload, created_at, retries, failed_at, last_error FROM offline_queue ORDER BY created_at ASC",
   );
 
   return rows.map(mapRow);
@@ -46,12 +67,14 @@ export async function listQueuedActions() {
 export async function insertQueuedAction(action: QueuedAction) {
   const database = await getOfflineQueueDatabase();
   await database.runAsync(
-    "INSERT OR REPLACE INTO offline_queue (id, type, payload, created_at, retries) VALUES (?, ?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO offline_queue (id, type, payload, created_at, retries, failed_at, last_error) VALUES (?, ?, ?, ?, ?, ?, ?)",
     action.id,
     action.type,
     JSON.stringify(action.payload),
     action.createdAt,
     action.retries,
+    action.failedAt,
+    action.lastError,
   );
 }
 
@@ -63,4 +86,26 @@ export async function deleteQueuedAction(id: string) {
 export async function updateQueuedActionRetries(id: string, retries: number) {
   const database = await getOfflineQueueDatabase();
   await database.runAsync("UPDATE offline_queue SET retries = ? WHERE id = ?", retries, id);
+}
+
+export async function markQueuedActionFailed(id: string, error: string) {
+  const database = await getOfflineQueueDatabase();
+  await database.runAsync(
+    "UPDATE offline_queue SET failed_at = ?, last_error = ? WHERE id = ?",
+    Date.now(),
+    error,
+    id,
+  );
+}
+
+export async function resetFailedQueuedActions() {
+  const database = await getOfflineQueueDatabase();
+  await database.runAsync(
+    "UPDATE offline_queue SET failed_at = NULL, last_error = NULL, retries = 0 WHERE failed_at IS NOT NULL",
+  );
+}
+
+export async function clearQueuedActions() {
+  const database = await getOfflineQueueDatabase();
+  await database.runAsync("DELETE FROM offline_queue");
 }

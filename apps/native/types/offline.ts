@@ -10,7 +10,9 @@ export type OfflineActionType =
   | "check-in.qr"
   | "check-in.manual"
   | "check-in.proxy"
-  | "welfare.recordOutcome";
+  | "welfare.recordOutcome"
+  | "needs-report.submit"
+  | "broadcast.create";
 
 export type StatusPingQueuePayload = {
   householdId?: string | null;
@@ -44,12 +46,34 @@ export type CheckInProxyQueuePayload = {
   longitude?: number;
 };
 
+export type NeedsReportSubmitQueuePayload = {
+  centerId?: string;
+  totalEvacuees: number;
+  needsFoodPacks: number;
+  needsWaterLiters: number;
+  needsBlankets: number;
+  needsMedicine: boolean;
+  medicalCases?: string;
+  notes?: string;
+};
+
+export type BroadcastCreateQueuePayload = {
+  broadcastId?: string;
+  sentAt?: string;
+  broadcastType: "evacuate_now" | "stay_alert" | "all_clear" | "custom";
+  message: string;
+  messageFilipino?: string | null;
+  targetPurok?: string | null;
+};
+
 export type OfflinePayloadMap = {
   "status-ping.submit": StatusPingQueuePayload;
   "check-in.qr": CheckInQrQueuePayload;
   "check-in.manual": CheckInManualQueuePayload;
   "check-in.proxy": CheckInProxyQueuePayload;
   "welfare.recordOutcome": WelfareRecordOutcomeQueuePayload;
+  "needs-report.submit": NeedsReportSubmitQueuePayload;
+  "broadcast.create": BroadcastCreateQueuePayload;
 };
 
 export type QueuedAction<TType extends OfflineActionType = OfflineActionType> = {
@@ -58,6 +82,8 @@ export type QueuedAction<TType extends OfflineActionType = OfflineActionType> = 
   payload: OfflinePayloadMap[TType];
   createdAt: number;
   retries: number;
+  failedAt: number | null;
+  lastError: string | null;
 };
 
 export type OfflineQueueRow = {
@@ -66,4 +92,6 @@ export type OfflineQueueRow = {
   payload: string;
   created_at: number;
   retries: number;
+  failed_at: number | null;
+  last_error: string | null;
 };

@@ -1,7 +1,7 @@
+import { ScreenShell } from "@/shared/components/screen-shell";
 import { useRouter } from "expo-router";
-import { Text, View } from "react-native";
-
-import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
+import { Pressable, Text, View } from "react-native";
+import { AppButton } from "@/shared/components/ui";
 
 import { CenterQrCard } from "./CenterQrCard";
 import { CenterStatusCard } from "./CenterStatusCard";
@@ -16,6 +16,7 @@ export function OfficialDashboard() {
   const {
     signOut,
     feedback,
+    isLoading,
     summary,
     unresolvedPings,
     centers,
@@ -28,25 +29,32 @@ export function OfficialDashboard() {
     shareCenterToken,
   } = useOfficialDashboard();
 
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/onboarding");
+  }
+
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
-      <ScreenHeader
-        eyebrow="5.3.1 Live dashboard"
-        title="Barangay command view"
-        description="Track safe, need-help, checked-in, and unaccounted households from one screen."
-        action={
-          <View className="max-w-[52%] flex-row flex-wrap items-end justify-end gap-2">
-            <AppButton label="Welfare" onPress={() => router.push("/(shared)/welfare-check")} variant="ghost" />
-            <AppButton label="Kiosk" onPress={() => router.push("/(shared)/kiosk")} variant="ghost" />
-            <AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />
-          </View>
-        }
-      />
-      {feedback ? (
-        <SectionCard>
-          <Text className="text-sm leading-6 text-slate-600">{feedback}</Text>
-        </SectionCard>
-      ) : null}
+    <ScreenShell
+      title="Command"
+      description="Live command surface for Banago."
+      action={<AppButton label="Sign out" onPress={() => void signOut()} variant="ghost" />}
+      feedback={feedback}
+      isLoading={isLoading}
+      loadingLabel="Refreshing dashboard data..."
+      floatingAction={
+        <View className="items-end px-5">
+          <Pressable
+            onPress={() => {
+              router.push({ pathname: "/broadcast", params: { tab: "send", compose: String(Date.now()) } });
+            }}
+            className="rounded-full bg-blue-700 px-5 py-4 shadow-sm"
+          >
+            <Text className="text-sm font-semibold text-white">Quick Broadcast</Text>
+          </Pressable>
+        </View>
+      }
+    >
       <DashboardSummaryCards summary={summary} />
       <PriorityQueueCard
         unresolvedPings={unresolvedPings}
@@ -80,6 +88,6 @@ export function OfficialDashboard() {
           void rotateQrMutation.mutateAsync({ centerId });
         }}
       />
-    </View>
+    </ScreenShell>
   );
 }

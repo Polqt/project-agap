@@ -4,12 +4,19 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { trpc } from "@/services/trpc";
-import { getErrorMessage } from "@/shared/utils/errors";
+import {
+  getErrorMessage,
+  getServerConnectionErrorMessage,
+  isOfflineLikeError,
+} from "@/shared/utils/errors";
 import { needsReportSchema, type NeedsReportFormValues } from "@/types/forms";
 
 export function useNeedsReportsPanel() {
   const { profile } = useAuth();
+  const { isOnline, queueAction } = useOfflineQueue();
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const form = useForm<NeedsReportFormValues>({
@@ -34,12 +41,9 @@ export function useNeedsReportsPanel() {
   );
 
   const reportsQuery = useQuery(
-    trpc.needsReports.list.queryOptions(
-      { barangayId: profile?.barangay_id ?? undefined },
-      {
-        enabled: Boolean(profile?.barangay_id),
-      },
-    ),
+    trpc.needsReports.list.queryOptions({ barangayId: profile?.barangay_id ?? undefined }, {
+      enabled: Boolean(profile?.barangay_id),
+    }),
   );
 
   const submitMutation = useMutation(
@@ -62,20 +66,57 @@ export function useNeedsReportsPanel() {
   );
 
   const handleSubmit = form.handleSubmit(async (values) => {
-    try {
-      await submitMutation.mutateAsync({
-        centerId: values.centerId || undefined,
-        totalEvacuees: Number(values.totalEvacuees),
-        needsFoodPacks: Number(values.needsFoodPacks),
-        needsWaterLiters: Number(values.needsWaterLiters),
-        needsBlankets: Number(values.needsBlankets),
-        needsMedicine: values.needsMedicine,
-        medicalCases: values.medicalCases || undefined,
-        notes: values.notes || undefined,
+    const payload = {
+      centerId: values.centerId || undefined,
+      totalEvacuees: Number(values.totalEvacuees),
+      needsFoodPacks: Number(values.needsFoodPacks),
+      needsWaterLiters: Number(values.needsWaterLiters),
+      needsBlankets: Number(values.needsBlankets),
+      needsMedicine: values.needsMedicine,
+      medicalCases: values.medicalCases || undefined,
+      notes: values.notes || undefined,
+    };
+
+    if (!isOnline) {
+      await queueAction(createQueuedAction("needs-report.submit", payload));
+      form.reset({
+        centerId: "",
+        totalEvacuees: "0",
+        needsFoodPacks: "0",
+        needsWaterLiters: "0",
+        needsBlankets: "0",
+        needsMedicine: false,
+        medicalCases: "",
+        notes: "",
       });
+      setFeedback("No connection. Needs report queued and will sync when online.");
+      return;
+    }
+
+    try {
+      await submitMutation.mutateAsync(payload);
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(createQueuedAction("needs-report.submit", payload));
+        form.reset({
+          centerId: "",
+          totalEvacuees: "0",
+          needsFoodPacks: "0",
+          needsWaterLiters: "0",
+          needsBlankets: "0",
+          needsMedicine: false,
+          medicalCases: "",
+          notes: "",
+        });
+        setFeedback("Connection dropped. Needs report queued for auto-sync.");
+        return;
+      }
+
       form.setError("root", {
-        message: getErrorMessage(error, "Unable to submit the needs report."),
+        message:
+          getErrorMessage(error, "") === "Network request failed"
+            ? getServerConnectionErrorMessage("Unable to submit the needs report.")
+            : getErrorMessage(error, "Unable to submit the needs report."),
       });
     }
   });
@@ -85,6 +126,7 @@ export function useNeedsReportsPanel() {
     feedback,
     centers: centersQuery.data ?? [],
     reports: reportsQuery.data ?? [],
+    isOnline,
     submitMutation,
     handleSubmit,
   };

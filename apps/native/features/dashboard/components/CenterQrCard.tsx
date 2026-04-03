@@ -40,7 +40,12 @@ export function CenterQrCard({
               <Pill label={center.is_open ? "Open" : "Closed"} tone={center.is_open ? "success" : "warning"} />
             </View>
             <View className="mt-4 gap-3">
-              <AppButton label="Copy token" onPress={() => onCopy(center)} variant="ghost" />
+              <AppButton
+                label="Copy token"
+                onPress={() => onCopy(center)}
+                variant="ghost"
+                disabled={!center.qr_code_token}
+              />
               <AppButton label="Share print packet" onPress={() => onShare(center)} variant="secondary" />
               <AppButton
                 label="Rotate token"

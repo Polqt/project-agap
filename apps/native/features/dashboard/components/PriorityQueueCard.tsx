@@ -23,7 +23,7 @@ export function PriorityQueueCard({
       subtitle="Unresolved need-help pings are surfaced first for quick action."
     >
       {unresolvedPings.length ? (
-        unresolvedPings.map((ping) => (
+        unresolvedPings.slice(0, 8).map((ping) => (
           <View key={ping.id} className="mb-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
             <View className="flex-row items-start justify-between gap-4">
               <View className="flex-1">
@@ -57,6 +57,11 @@ export function PriorityQueueCard({
           description="Need-help pings will appear here as soon as residents or SMS-only households report them."
         />
       )}
+      {unresolvedPings.length > 8 ? (
+        <Text className="mt-2 text-xs text-slate-500">
+          Showing first 8 pings. Resolve items to keep this queue manageable.
+        </Text>
+      ) : null}
     </SectionCard>
   );
 }

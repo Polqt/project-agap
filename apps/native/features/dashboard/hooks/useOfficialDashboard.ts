@@ -64,6 +64,13 @@ export function useOfficialDashboard() {
     ),
   );
 
+  const isLoading =
+    summaryQuery.isLoading ||
+    unresolvedQuery.isLoading ||
+    centersQuery.isLoading ||
+    unaccountedQuery.isLoading ||
+    welfareDispatchQuery.isLoading;
+
   const resolveMutation = useMutation(
     trpc.statusPings.resolve.mutationOptions({
       onSuccess: () => {
@@ -120,6 +127,7 @@ export function useOfficialDashboard() {
   return {
     signOut,
     feedback,
+    isLoading,
     summary: summaryQuery.data,
     unresolvedPings: unresolvedQuery.data ?? [],
     centers: centersQuery.data ?? [],

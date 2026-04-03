@@ -1,18 +1,33 @@
 import { Controller, type UseFormReturn } from "react-hook-form";
 import { Switch, Text, View } from "react-native";
 
-import { AppButton, EmptyState, SectionCard, TextField } from "@/shared/components/ui";
+import { AppButton, EmptyState, Pill, SectionCard, TextField } from "@/shared/components/ui";
 import type { HouseholdWithMembers } from "@project-agap/api/supabase";
 import type { HouseholdFormValues } from "@/types/forms";
+
+import { evacuationStatusMeta } from "../constants";
+import { HouseholdMembersEditor } from "./HouseholdMembersEditor";
+import { VulnerabilityFlagSelector } from "./VulnerabilityFlagSelector";
 
 type Props = {
   household: HouseholdWithMembers | null | undefined;
   form: UseFormReturn<HouseholdFormValues>;
+  feedback: string | null;
   isSaving: boolean;
+  onFillFromProfile: () => void;
   onSubmit: () => void;
 };
 
-export function HouseholdRegistrationCard({ household, form, isSaving, onSubmit }: Props) {
+export function HouseholdRegistrationCard({
+  household,
+  form,
+  feedback,
+  isSaving,
+  onFillFromProfile,
+  onSubmit,
+}: Props) {
+  const statusMeta = household ? evacuationStatusMeta[household.evacuation_status] : null;
+
   return (
     <SectionCard
       title="Household registration"
@@ -30,6 +45,17 @@ export function HouseholdRegistrationCard({ household, form, isSaving, onSubmit 
           />
         </View>
       )}
+
+      {household ? (
+        <View className="mb-4 flex-row flex-wrap gap-2">
+          {statusMeta ? <Pill label={statusMeta.label} tone={statusMeta.tone} /> : null}
+          <Pill label={`${household.total_members} total members`} tone="info" />
+          {household.is_sms_only ? <Pill label="SMS only" tone="warning" /> : null}
+          {household.household_members.length > 0 ? (
+            <Pill label={`${household.household_members.length} added members`} tone="neutral" />
+          ) : null}
+        </View>
+      ) : null}
 
       <View className="gap-4">
         <Controller
@@ -85,6 +111,16 @@ export function HouseholdRegistrationCard({ household, form, isSaving, onSubmit 
             />
           )}
         />
+
+        <View className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <Text className="text-sm leading-6 text-slate-600">
+            Need a quick start? Use your resident profile details as the household baseline, then add the rest of your family below.
+          </Text>
+          <View className="mt-3">
+            <AppButton label="Use my profile details" onPress={onFillFromProfile} variant="ghost" />
+          </View>
+        </View>
+
         <Controller
           control={form.control}
           name="totalMembers"
@@ -95,10 +131,25 @@ export function HouseholdRegistrationCard({ household, form, isSaving, onSubmit 
               onChangeText={field.onChange}
               placeholder="1"
               keyboardType="number-pad"
+              helperText="Include the household head in this count."
               error={fieldState.error?.message}
             />
           )}
         />
+
+        <Controller
+          control={form.control}
+          name="vulnerabilityFlags"
+          render={({ field }) => (
+            <VulnerabilityFlagSelector
+              label="Household priority tags"
+              selectedFlags={field.value ?? []}
+              onChange={field.onChange}
+              helperText="These tags help officials prioritize support during evacuations and follow-up visits."
+            />
+          )}
+        />
+
         <Controller
           control={form.control}
           name="notes"
@@ -113,6 +164,8 @@ export function HouseholdRegistrationCard({ household, form, isSaving, onSubmit 
             />
           )}
         />
+
+        <HouseholdMembersEditor form={form} />
 
         <Controller
           control={form.control}
@@ -130,6 +183,7 @@ export function HouseholdRegistrationCard({ household, form, isSaving, onSubmit 
           )}
         />
 
+        {feedback ? <Text className="text-sm leading-6 text-slate-600">{feedback}</Text> : null}
         <AppButton label="Save household" onPress={onSubmit} loading={isSaving} />
       </View>
     </SectionCard>
