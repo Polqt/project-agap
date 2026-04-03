@@ -11,6 +11,7 @@ type AppShellState = {
     createdAt: number;
     source: "server" | "queue";
   } | null;
+  hasUnreadAlert: boolean;
 };
 
 const initialState: AppShellState = {
@@ -19,6 +20,7 @@ const initialState: AppShellState = {
   failedQueueCount: 0,
   syncStatus: "online",
   lastStatusPing: null,
+  hasUnreadAlert: false,
 };
 
 export const appShellStore = new Store(initialState);
@@ -57,6 +59,13 @@ export function setLastStatusPing(
   appShellStore.setState((state) => ({
     ...state,
     lastStatusPing: status,
+  }));
+}
+
+export function setHasUnreadAlert(hasUnreadAlert: boolean) {
+  appShellStore.setState((state) => ({
+    ...state,
+    hasUnreadAlert,
   }));
 }
 

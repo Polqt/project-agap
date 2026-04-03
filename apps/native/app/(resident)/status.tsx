@@ -1,10 +1,5 @@
-import { Container } from "@/shared/components/container";
-import { PingButtons } from "@/features/status/components/PingButtons";
+import { StatusScreen } from "@/features/status/components/StatusScreen";
 
 export default function ResidentStatusScreen() {
-  return (
-    <Container>
-      <PingButtons />
-    </Container>
-  );
+  return <StatusScreen />;
 }
