@@ -169,21 +169,26 @@ export default function RegistryPage() {
   }, [queryClient]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <ClipboardList className="h-5 w-5" />
-          Household Registry
-        </h1>
-        <Button onClick={openAdd} size="sm">
-          <Plus data-icon="inline-start" className="h-3.5 w-3.5" />
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+            <ClipboardList className="h-6 w-6" />
+            Household Registry
+          </h1>
+          <p className="text-base text-muted-foreground">
+            Manage resident households, vulnerabilities, and contact channels.
+          </p>
+        </div>
+        <Button onClick={openAdd} size="default" className="h-10 rounded-md px-3 text-sm">
+          <Plus data-icon="inline-start" className="h-4 w-4" />
           Add Household
         </Button>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search by name, purok, phone…"
           value={searchQuery}
@@ -191,49 +196,49 @@ export default function RegistryPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="pl-8"
+          className="h-10 rounded-md bg-background pl-9 text-sm"
         />
       </div>
 
       {/* Table */}
-      <Card>
+      <Card className="rounded-xl">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="space-y-2 p-4">
+            <div className="space-y-3 p-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-full" />
+                <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
               <ClipboardList className="h-10 w-10 text-muted-foreground/50" />
               <div>
-                <p className="font-medium">No households found</p>
-                <p className="text-muted-foreground">
+                <p className="text-lg font-medium">No households found</p>
+                <p className="text-base text-muted-foreground">
                   {searchQuery
                     ? "Try a different search term."
                     : "Get started by adding your first household."}
                 </p>
               </div>
               {!searchQuery && (
-                <Button onClick={openAdd} variant="outline" size="sm">
-                  <Plus data-icon="inline-start" className="h-3.5 w-3.5" />
+                <Button onClick={openAdd} variant="outline" size="default" className="h-9 rounded-md px-3 text-sm">
+                  <Plus data-icon="inline-start" className="h-4 w-4" />
                   Add Household
                 </Button>
               )}
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full min-w-[920px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Head Name</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Purok</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium text-center">Members</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Vulnerability</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Phone</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Channel</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Status</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Head Name</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Purok</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-center text-sm font-semibold">Members</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Vulnerability</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Phone</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Channel</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -243,33 +248,33 @@ export default function RegistryPage() {
                       onClick={() => openEdit(h)}
                       className="cursor-pointer border-b border-border transition-colors hover:bg-muted/50"
                     >
-                      <td className="whitespace-nowrap px-4 py-2.5 font-medium">
+                      <td className="whitespace-nowrap px-4 py-3 font-medium">
                         {h.household_head}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5">{h.purok}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-center">
+                      <td className="whitespace-nowrap px-4 py-3">{h.purok}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center font-medium">
                         {h.total_members}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
                           {h.vulnerability_flags.map((f) => (
                             <span
                               key={f}
-                              className={`inline-block rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${flagColor(f)}`}
+                              className={`inline-block rounded-md px-2 py-1 text-xs font-medium ${flagColor(f)}`}
                             >
                               {f.replace("_", " ")}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5">
+                      <td className="whitespace-nowrap px-4 py-3">
                         {h.phone_number ?? (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5">
+                      <td className="whitespace-nowrap px-4 py-3">
                         {h.is_sms_only ? (
-                          <span className="inline-flex items-center gap-1 rounded-sm bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
                             <Smartphone className="h-2.5 w-2.5" />
                             SMS
                           </span>
@@ -280,9 +285,9 @@ export default function RegistryPage() {
                           </span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5">
+                      <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`inline-block rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${statusBadge(h.evacuation_status)}`}
+                          className={`inline-block rounded-md px-2 py-1 text-xs font-medium ${statusBadge(h.evacuation_status)}`}
                         >
                           {h.evacuation_status?.replace("_", " ") ?? "none"}
                         </span>
@@ -298,30 +303,32 @@ export default function RegistryPage() {
 
       {/* Pagination */}
       {!isSearching && totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalCount)} of{" "}
             {totalCount}
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              size="icon-xs"
+              size="icon-sm"
+              className="rounded-md"
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
             >
-              <ChevronLeft className="h-3 w-3" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="px-2">
+            <span className="px-2 font-medium text-foreground">
               {page} / {totalPages}
             </span>
             <Button
               variant="outline"
-              size="icon-xs"
+              size="icon-sm"
+              className="rounded-md"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              <ChevronRight className="h-3 w-3" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

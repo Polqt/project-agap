@@ -2,10 +2,12 @@
 
 import { useState, useMemo } from "react";
 import {
+  BarChart3,
   MessageSquare,
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  Filter,
   Search,
   X,
   ArrowUpRight,
@@ -99,12 +101,12 @@ const KEYWORD_STYLE: Record<string, string> = {
 };
 
 const SELECT_CLS =
-  "h-8 rounded-none border border-input bg-transparent px-2.5 text-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30";
+  "h-10 rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 dark:bg-input/30";
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${className}`}
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${className}`}
     >
       {children}
     </span>
@@ -180,46 +182,104 @@ export default function SmsPage() {
     return smsLogs.filter((l) => l.phone_number.toLowerCase().includes(q));
   }, [smsLogs, phoneSearch]);
 
+  const summaryStats = useMemo(() => {
+    const base = filteredLogs;
+    return {
+      total: base.length,
+      replied: base.filter((log) => log.delivery_status === "replied").length,
+      failed: base.filter((log) => log.delivery_status === "failed").length,
+      inbound: base.filter((log) => log.direction === "inbound").length,
+    };
+  }, [filteredLogs]);
+
   /* ── Render ────────────────────────────────────────────── */
 
   return (
-    <div className="space-y-4">
-      <h1 className="flex items-center gap-2 text-xl font-semibold">
-        <MessageSquare className="h-5 w-5" />
-        SMS Monitor
-      </h1>
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-md bg-muted px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Operations Feed
+          </span>
+          <span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+            Two-way SMS
+          </span>
+        </div>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <MessageSquare className="h-6 w-6" />
+          SMS Monitor
+        </h1>
+        <p className="text-base text-muted-foreground">
+          Track message delivery, replies, and follow-up actions.
+        </p>
+      </div>
 
       {/* ── Broadcast selector ───────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-xs font-medium text-muted-foreground">
-          Broadcast
-        </label>
-        <select
-          className={SELECT_CLS + " min-w-[240px]"}
-          value={selectedBroadcastId}
-          onChange={(e) => {
-            setSelectedBroadcastId(e.target.value);
-            setThreadSelection(null);
-          }}
-        >
-          <option value="">All broadcasts</option>
-          {broadcasts.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.broadcast_type.toUpperCase()} — {formatPHT(b.sent_at)}
-            </option>
-          ))}
-        </select>
-        {broadcastsQuery.isLoading && (
-          <Skeleton className="h-8 w-60" />
-        )}
+      <Card className="border-border/70">
+        <CardHeader className="border-b border-border/70 pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Filter className="h-4 w-4 text-primary" />
+            Broadcast scope
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+          <label className="text-sm font-medium text-muted-foreground">
+            Broadcast
+          </label>
+          <select
+            className={SELECT_CLS + " min-w-[240px]"}
+            value={selectedBroadcastId}
+            onChange={(e) => {
+              setSelectedBroadcastId(e.target.value);
+              setThreadSelection(null);
+            }}
+          >
+            <option value="">All broadcasts</option>
+            {broadcasts.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.broadcast_type.toUpperCase()} - {formatPHT(b.sent_at)}
+              </option>
+            ))}
+          </select>
+          {broadcastsQuery.isLoading && (
+            <Skeleton className="h-10 w-60" />
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="border-border/70 bg-muted/20">
+          <CardContent className="py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Visible logs</p>
+            <p className="mt-1 text-2xl font-semibold">{summaryStats.total}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/70 bg-green-500/5">
+          <CardContent className="py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Replied</p>
+            <p className="mt-1 text-2xl font-semibold text-green-700 dark:text-green-400">{summaryStats.replied}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/70 bg-red-500/5">
+          <CardContent className="py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Failed</p>
+            <p className="mt-1 text-2xl font-semibold text-red-700 dark:text-red-400">{summaryStats.failed}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/70 bg-blue-500/5">
+          <CardContent className="py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inbound replies</p>
+            <p className="mt-1 text-2xl font-semibold text-blue-700 dark:text-blue-400">{summaryStats.inbound}</p>
+          </CardContent>
+        </Card>
       </div>
 
       <>
         {/* ── Follow-up section ──────────────────────────── */}
         {selectedBroadcastId && (
-          <Card>
+          <Card className="border-border/70">
             <CardHeader
-              className="cursor-pointer select-none"
+              className="cursor-pointer select-none border-b border-border/70"
               onClick={() => setFollowupOpen((v) => !v)}
             >
               <CardTitle className="flex items-center gap-2">
@@ -241,15 +301,15 @@ export default function SmsPage() {
             </CardHeader>
 
             {followupOpen && (
-              <CardContent>
+              <CardContent className="pt-4">
                 {followupQuery.isLoading ? (
                   <div className="space-y-2">
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-10 w-full" />
+                      <Skeleton key={i} className="h-12 w-full" />
                     ))}
                   </div>
                 ) : sortedFollowups.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-muted-foreground">
+                  <p className="py-4 text-center text-sm text-muted-foreground">
                     All recipients have responded
                   </p>
                 ) : (
@@ -257,18 +317,18 @@ export default function SmsPage() {
                     {sortedFollowups.map((item) => (
                       <div
                         key={item.household_id}
-                        className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2"
+                        className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
                       >
                         <span className="text-sm font-medium">
                           {item.household_head}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           Purok {item.purok}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           {item.phone_number}
                         </span>
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {item.minutes_since_sent}m ago
                         </span>
                         <div className="flex flex-wrap gap-1">
@@ -291,50 +351,60 @@ export default function SmsPage() {
         )}
 
           {/* ── Filters ────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              className={SELECT_CLS}
-              value={directionFilter}
-              onChange={(e) => setDirectionFilter(e.target.value)}
-            >
-              <option value="">All directions</option>
-              <option value="outbound">Outbound</option>
-              <option value="inbound">Inbound</option>
-            </select>
+          <Card className="border-border/70">
+            <CardContent className="flex flex-wrap items-center gap-3 py-4">
+              <select
+                className={SELECT_CLS}
+                value={directionFilter}
+                onChange={(e) => setDirectionFilter(e.target.value)}
+              >
+                <option value="">All directions</option>
+                <option value="outbound">Outbound</option>
+                <option value="inbound">Inbound</option>
+              </select>
 
-            <select
-              className={SELECT_CLS}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">All statuses</option>
-              <option value="queued">Queued</option>
-              <option value="sent">Sent</option>
-              <option value="delivered">Delivered</option>
-              <option value="failed">Failed</option>
-              <option value="replied">Replied</option>
-            </select>
+              <select
+                className={SELECT_CLS}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="queued">Queued</option>
+                <option value="sent">Sent</option>
+                <option value="delivered">Delivered</option>
+                <option value="failed">Failed</option>
+                <option value="replied">Replied</option>
+              </select>
 
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-7"
-                placeholder="Search phone…"
-                value={phoneSearch}
-                onChange={(e) => setPhoneSearch(e.target.value)}
-              />
-            </div>
-          </div>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="h-10 rounded-md bg-background pl-9 text-sm"
+                  value={phoneSearch}
+                  onChange={(e) => setPhoneSearch(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
           {/* ── Table + Thread panel ───────────────────────── */}
           <div className="flex gap-4">
             {/* Table */}
-            <Card className="min-w-0 flex-1">
+            <Card className="min-w-0 flex-1 border-border/70">
+              <CardHeader className="border-b border-border/70 pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  Message logs
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {filteredLogs.length}
+                  </span>
+                </CardTitle>
+              </CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 {smsQuery.isLoading ? (
                   <div className="space-y-2 p-4">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <Skeleton key={i} className="h-8 w-full" />
+                      <Skeleton key={i} className="h-10 w-full" />
                     ))}
                   </div>
                 ) : filteredLogs.length === 0 ? (
@@ -345,28 +415,28 @@ export default function SmsPage() {
                     message="No SMS logs found"
                   />
                 ) : (
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[980px] text-sm">
                     <thead>
-                      <tr className="border-b border-border text-left text-muted-foreground">
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                      <tr className="border-b border-border bg-muted/20 text-left text-muted-foreground">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Phone
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Message
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Dir
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Sent At
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Status
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Keyword
                         </th>
-                        <th className="whitespace-nowrap px-3 py-2 font-medium">
+                        <th className="whitespace-nowrap px-3 py-3 text-sm font-semibold">
                           Replied At
                         </th>
                       </tr>
@@ -393,16 +463,16 @@ export default function SmsPage() {
                               }
                             }}
                           >
-                            <td className="whitespace-nowrap px-3 py-2 font-mono">
+                            <td className="whitespace-nowrap px-3 py-3 font-mono">
                               {log.phone_number}
                             </td>
                             <td
-                              className="max-w-[200px] truncate px-3 py-2"
+                              className="max-w-[260px] truncate px-3 py-3"
                               title={log.message}
                             >
                               {log.message}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-3">
                               {log.direction === "outbound" ? (
                                 <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                                   <ArrowUpRight className="mr-0.5 h-3 w-3" />
@@ -415,10 +485,10 @@ export default function SmsPage() {
                                 </Badge>
                               )}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                            <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                               {log.sent_at ? formatPHT(log.sent_at) : "—"}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-3">
                               <Badge
                                 className={
                                   DELIVERY_STYLE[log.delivery_status] ?? ""
@@ -427,7 +497,7 @@ export default function SmsPage() {
                                 {log.delivery_status}
                               </Badge>
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-3">
                               {log.keyword_reply ? (
                                 <Badge
                                   className={
@@ -441,7 +511,7 @@ export default function SmsPage() {
                                 <span className="text-muted-foreground">—</span>
                               )}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                            <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                               {log.replied_at
                                 ? formatPHT(log.replied_at)
                                 : "—"}
@@ -457,15 +527,16 @@ export default function SmsPage() {
 
             {/* ── Thread panel ─────────────────────────────── */}
             {threadSelection && (
-              <Card className="w-96 shrink-0">
-                <CardHeader className="border-b border-border">
+              <Card className="w-96 shrink-0 border-border/70">
+                <CardHeader className="border-b border-border/70">
                   <CardTitle className="flex items-center justify-between text-sm">
                     <span className="font-mono">
                       {threadSelection.phoneNumber}
                     </span>
                     <Button
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon-sm"
+                      className="rounded-md"
                       onClick={() => setThreadSelection(null)}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -483,7 +554,7 @@ export default function SmsPage() {
                       ))}
                     </div>
                   ) : threadLogs.length === 0 ? (
-                    <p className="py-8 text-center text-xs text-muted-foreground">
+                    <p className="py-8 text-center text-sm text-muted-foreground">
                       No messages
                     </p>
                   ) : (
@@ -491,7 +562,7 @@ export default function SmsPage() {
                       {threadLogs.map((msg) => (
                         <div
                           key={msg.id}
-                          className={`max-w-[85%] rounded px-3 py-2 text-xs ${
+                          className={`max-w-[85%] rounded-md px-3 py-2 text-sm ${
                             msg.direction === "outbound"
                               ? "ml-auto bg-primary/10"
                               : "mr-auto bg-muted"

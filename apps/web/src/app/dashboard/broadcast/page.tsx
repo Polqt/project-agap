@@ -178,13 +178,33 @@ export default function BroadcastPage() {
   }, []);
 
   const history: Broadcast[] = (broadcastList.data ?? []).slice(0, 10);
+  const selectedTone = selectedTemplate
+    ? selectedTemplate.type === "evacuate_now"
+      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+      : selectedTemplate.type === "stay_alert"
+        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+        : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+    : "bg-muted text-muted-foreground";
 
   return (
-    <div className="space-y-6">
-      <h1 className="flex items-center gap-2 text-xl font-semibold">
-        <Bell className="h-5 w-5" />
-        Broadcast Alert
-      </h1>
+    <div className="space-y-7">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-md bg-muted px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Command Center
+          </span>
+          <span className="rounded-md bg-sky-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">
+            SMS + Push
+          </span>
+        </div>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <Bell className="h-6 w-6" />
+          Broadcast Alert
+        </h1>
+        <p className="text-base text-muted-foreground">
+          Send verified emergency instructions quickly across SMS and push.
+        </p>
+      </div>
 
       {/* Success State */}
       {successState && (
@@ -192,14 +212,14 @@ export default function BroadcastPage() {
           <CardContent className="flex items-center gap-3 py-4">
             <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+              <p className="text-base font-semibold text-green-700 dark:text-green-400">
                 Broadcast sent successfully
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {formatPHT(successState.sentAt)}
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={resetForm}>
+            <Button variant="outline" size="default" className="h-9 rounded-md px-3 text-sm" onClick={resetForm}>
               Send Another
             </Button>
           </CardContent>
@@ -207,94 +227,129 @@ export default function BroadcastPage() {
       )}
 
       {/* Template Selector */}
-      <div>
-        <p className="mb-3 text-sm font-medium">Select alert type</p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {TEMPLATES.map((tpl) => {
-            const Icon = tpl.icon;
-            const isSelected = selectedType === tpl.type;
-            return (
-              <button
-                key={tpl.type}
-                type="button"
-                onClick={() => {
-                  setSelectedType(tpl.type);
-                  setSuccessState(null);
-                }}
-                className={`flex flex-col gap-2.5 rounded-none border p-4 text-left transition-all ${
-                  isSelected ? tpl.selectedRing : tpl.accent
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Icon className="h-4 w-4" />
-                  <span className="text-sm font-semibold">{tpl.label}</span>
-                </div>
-                <p className="text-xs font-medium leading-relaxed">{tpl.messageFil}</p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {tpl.messageEng}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <Card className="border-border/70">
+        <CardHeader className="border-b border-border/70 pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Megaphone className="h-4 w-4 text-primary" />
+            Select alert type
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {TEMPLATES.map((tpl) => {
+              const Icon = tpl.icon;
+              const isSelected = selectedType === tpl.type;
+              return (
+                <button
+                  key={tpl.type}
+                  type="button"
+                  onClick={() => {
+                    setSelectedType(tpl.type);
+                    setSuccessState(null);
+                  }}
+                  className={`flex flex-col gap-2.5 rounded-xl border p-4 text-left transition-all ${
+                    isSelected ? tpl.selectedRing : tpl.accent
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      <span className="text-base font-semibold">{tpl.label}</span>
+                    </div>
+                    <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Template
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium leading-relaxed">{tpl.messageFil}</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {tpl.messageEng}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {selectedTemplate && (
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-sm">
+              <span className={`rounded-md px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${selectedTone}`}>
+                Active
+              </span>
+              <span className="font-medium">{selectedTemplate.label}</span>
+              <span className="text-muted-foreground">template will be used for broadcast.</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Free-text Override */}
       {selectedType && (
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">
-                Custom note <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <span
-                className={`text-xs tabular-nums ${
-                  finalMessage.length > CHAR_LIMIT
-                    ? "text-destructive"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {finalMessage.length}/{CHAR_LIMIT}
-              </span>
-            </div>
-            <textarea
-              value={customNote}
-              onChange={(e) => setCustomNote(e.target.value)}
-              rows={3}
-              className="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full resize-none rounded-none border bg-transparent px-2.5 py-2 text-xs outline-none transition-colors focus-visible:ring-1"
-              placeholder={`Append a custom message to the broadcast… (${availableForCustomNote} chars available)`}
-            />
-            <p className="text-xs text-muted-foreground">
-              {availableForCustomNote} characters available for custom note (modern SMS supports up to {CHAR_LIMIT} chars)
-            </p>
-          </div>
-          
-          <div className="space-y-3 pt-2">
-            <p className="text-sm font-medium">Add data from external sources</p>
-            <ExternalAlerts
-              onAppendNote={(text) => {
-                const newNote = customNote ? `${customNote}\n\n${text}` : text;
-                setCustomNote(newNote);
-              }}
-            />
-          </div>
+          <Card className="border-border/70">
+            <CardHeader className="border-b border-border/70 pb-3">
+              <CardTitle className="text-base">
+                Custom note <span className="font-normal text-muted-foreground">(optional)</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Personalize the outgoing advisory.</span>
+                <span
+                  className={`text-sm tabular-nums ${
+                    finalMessage.length > CHAR_LIMIT
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {finalMessage.length}/{CHAR_LIMIT}
+                </span>
+              </div>
+              <textarea
+                value={customNote}
+                onChange={(e) => setCustomNote(e.target.value)}
+                rows={3}
+                className="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-1"
+              />
+              <p className="text-sm text-muted-foreground">
+                {availableForCustomNote} characters available for custom note (modern SMS supports up to {CHAR_LIMIT} chars)
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70">
+            <CardHeader className="border-b border-border/70 pb-3">
+              <CardTitle className="text-base">Add data from external sources</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <ExternalAlerts
+                onAppendNote={(text) => {
+                  const newNote = customNote ? `${customNote}\n\n${text}` : text;
+                  setCustomNote(newNote);
+                }}
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {/* Send Button */}
-      <Button
-        size="lg"
-        className="w-full"
-        disabled={!selectedType || cooldown > 0 || createBroadcast.isPending}
-        onClick={() => setConfirmOpen(true)}
-      >
-        <Send data-icon="inline-start" className="h-4 w-4" />
-        {cooldown > 0
-          ? `Wait ${cooldown}s before sending again`
-          : createBroadcast.isPending
-            ? "Sending…"
-            : "Send to All Residents"}
-      </Button>
+      <Card className="border-border/70 bg-muted/20">
+        <CardContent className="space-y-3 py-4">
+          <p className="text-sm text-muted-foreground">
+            Confirm details before dispatching to all registered residents.
+          </p>
+          <Button
+            size="lg"
+            className="h-11 w-full rounded-md text-base"
+            disabled={!selectedType || cooldown > 0 || createBroadcast.isPending}
+            onClick={() => setConfirmOpen(true)}
+          >
+            <Send data-icon="inline-start" className="h-4 w-4" />
+            {cooldown > 0
+              ? `Wait ${cooldown}s before sending again`
+              : createBroadcast.isPending
+                ? "Sending..."
+                : "Send to All Residents"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Confirmation Modal */}
       {confirmOpen && selectedTemplate && (
@@ -310,17 +365,18 @@ export default function BroadcastPage() {
       )}
 
       {/* Broadcast History */}
-      <div className="border-t border-border pt-4">
+      <Card className="border-border/70">
+        <CardHeader className="border-b border-border/70 pb-3">
         <button
           type="button"
-          className="flex w-full items-center justify-between text-sm font-medium"
+            className="flex w-full items-center justify-between text-left text-base font-semibold"
           onClick={() => setHistoryOpen((v) => !v)}
         >
           <span className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
             Broadcast History
             {history.length > 0 && (
-              <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 {history.length}
               </span>
             )}
@@ -331,37 +387,38 @@ export default function BroadcastPage() {
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           )}
         </button>
+        </CardHeader>
 
         {historyOpen && (
-          <div className="mt-3 space-y-2">
+          <CardContent className="mt-3 space-y-2 pt-0">
             {broadcastList.isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-14 w-full" />
               ))
             ) : history.length === 0 ? (
-              <p className="py-6 text-center text-xs text-muted-foreground">
+              <p className="py-6 text-center text-sm text-muted-foreground">
                 No broadcasts sent yet.
               </p>
             ) : (
               history.map((b) => (
                 <div
                   key={b.id}
-                  className="flex items-start gap-3 rounded-sm border border-border p-3"
+                    className="flex items-start gap-3 rounded-xl border border-border p-3"
                 >
                   <Megaphone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center gap-2">
                       <span
-                        className={`inline-block rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${typeBadge(b.broadcast_type)}`}
+                        className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${typeBadge(b.broadcast_type)}`}
                       >
                         {b.broadcast_type.replace("_", " ")}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {formatPHT(b.sent_at)}
                       </span>
                     </div>
-                    <p className="truncate text-xs">{b.message}</p>
-                    <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground">
+                    <p className="truncate text-sm">{b.message}</p>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Smartphone className="h-2.5 w-2.5" />
                         {b.sms_sent_count} SMS
@@ -375,9 +432,9 @@ export default function BroadcastPage() {
                 </div>
               ))
             )}
-          </div>
+          </CardContent>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -414,14 +471,14 @@ function ConfirmModal({
         }}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-none border border-border bg-card shadow-xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="w-full max-w-md rounded-md border border-border bg-card shadow-xl animate-in fade-in zoom-in-95 duration-150">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Icon className="h-4 w-4" />
-              <h3 className="text-sm font-semibold">Confirm Broadcast</h3>
+              <h3 className="text-base font-semibold">Confirm Broadcast</h3>
             </div>
-            <Button variant="ghost" size="icon-xs" onClick={onCancel}>
+            <Button variant="ghost" size="icon-sm" className="rounded-md" onClick={onCancel}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -429,33 +486,33 @@ function ConfirmModal({
           {/* Body */}
           <div className="space-y-3 p-4">
             <div>
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Filipino
               </p>
-              <p className="whitespace-pre-wrap text-xs leading-relaxed">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
                 {finalMessageFil}
               </p>
             </div>
             <div>
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 English
               </p>
-              <p className="whitespace-pre-wrap text-xs leading-relaxed">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
                 {finalMessage}
               </p>
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               This will be sent to all registered residents via push notification and SMS.
             </p>
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-            <Button variant="outline" size="sm" onClick={onCancel} disabled={isPending}>
+            <Button variant="outline" size="default" className="h-9 rounded-md px-3 text-sm" onClick={onCancel} disabled={isPending}>
               Cancel
             </Button>
-            <Button size="sm" disabled={isPending} onClick={onConfirm}>
-              <Send data-icon="inline-start" className="h-3 w-3" />
+            <Button size="default" className="h-9 rounded-md px-3 text-sm" disabled={isPending} onClick={onConfirm}>
+              <Send data-icon="inline-start" className="h-3.5 w-3.5" />
               {isPending ? "Sending…" : "Confirm & Send"}
             </Button>
           </div>
