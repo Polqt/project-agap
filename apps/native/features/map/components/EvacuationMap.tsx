@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useTranslation } from "react-i18next";
+
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
@@ -43,14 +45,15 @@ function getRouteCoords(route: EvacuationRoute): { latitude: number; longitude: 
   return (geojson.coordinates ?? []).map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
 }
 
-function getWalkMinutes(km: number): string {
+function getWalkMinutes(km: number, walkMinutesTemplate: string): string {
   const mins = Math.round((km / 4.5) * 60);
-  return `~${mins} min walk`;
+  return walkMinutesTemplate.replace("{{minutes}}", String(mins));
 }
 
 export function EvacuationMap() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { profile } = useAuth();
   const { isOnline } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
@@ -180,7 +183,7 @@ export function EvacuationMap() {
               key={center.id}
               coordinate={{ latitude: center.latitude, longitude: center.longitude }}
               title={center.name}
-              description={center.is_open ? "Open" : "Closed"}
+              description={center.is_open ? t("map.openNow") : t("map.closed")}
               pinColor={center.is_open ? "#16a34a" : "#dc2626"}
               onPress={() => handleMarkerPress(center)}
             />
@@ -226,10 +229,10 @@ export function EvacuationMap() {
         <View className="flex-1 items-center justify-center bg-slate-100 px-8">
           <Ionicons name="map-outline" size={48} color="#94a3b8" />
           <Text className="mt-4 text-center text-[15px] font-medium text-slate-500">
-            Map unavailable in Expo Go
+            {t("map.noLocation")}
           </Text>
           <Text className="mt-1 text-center text-[13px] text-slate-400">
-            Use a development build. Center list available below.
+            {t("map.evacuationCenters")}
           </Text>
         </View>
       )}
@@ -244,7 +247,7 @@ export function EvacuationMap() {
           {!isOnline ? (
             <View className="flex-row items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5">
               <View className="h-2 w-2 rounded-full bg-amber-500" />
-              <Text className="text-[11px] font-semibold text-amber-800">Offline</Text>
+              <Text className="text-[11px] font-semibold text-amber-800">{t("common.offline")}</Text>
             </View>
           ) : null}
           {/* F2: Heatmap toggle */}
@@ -258,7 +261,7 @@ export function EvacuationMap() {
               color={showHeatmap ? "#fff" : "#334155"}
             />
             <Text className={`text-[11px] font-semibold ${showHeatmap ? "text-white" : "text-slate-700"}`}>
-              Heatmap
+              {t("map.heatmap")}
             </Text>
           </Pressable>
         </View>
@@ -279,13 +282,13 @@ export function EvacuationMap() {
         >
           <Ionicons name="navigate-outline" size={18} color="white" />
           <View className="flex-1">
-            <Text className="text-[12px] font-semibold text-sky-100">Recommended route</Text>
+            <Text className="text-[12px] font-semibold text-sky-100">{t("map.recommendedRoute")}</Text>
             <Text className="text-[14px] font-bold text-white" numberOfLines={1}>
               {recommendedCenter.name}
             </Text>
           </View>
           <Text className="text-[12px] font-semibold text-sky-100">
-            {getWalkMinutes(recommendedDistance)}
+            {getWalkMinutes(recommendedDistance, t("map.walkMinutes"))}
           </Text>
         </View>
       ) : null}
@@ -301,7 +304,7 @@ export function EvacuationMap() {
           className="flex-row items-center gap-2 rounded-full bg-blue-700 px-5 py-3.5 shadow-lg active:bg-blue-800"
         >
           <Ionicons name="qr-code-outline" size={18} color="white" />
-          <Text className="text-[14px] font-semibold text-white">Check-In</Text>
+          <Text className="text-[14px] font-semibold text-white">{t("map.checkIn")}</Text>
         </Pressable>
       </View>
 
@@ -336,21 +339,21 @@ export function EvacuationMap() {
                       selectedCenter.is_open ? "text-emerald-700" : "text-rose-700"
                     }`}
                   >
-                    {selectedCenter.is_open ? "Open" : "Closed"}
+                    {selectedCenter.is_open ? t("map.openNow") : t("map.closed")}
                   </Text>
                 </View>
               </View>
 
               {selectedDistance != null ? (
                 <Text className="text-[13px] text-slate-500">
-                  {formatDistanceKm(selectedDistance)} away
+                  {formatDistanceKm(selectedDistance)} · {t("map.nearbyCenter")}
                 </Text>
               ) : null}
 
               {/* Capacity bar */}
               <View className="gap-2">
                 <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-                  Capacity
+                  {t("map.capacity")}
                 </Text>
                 <View className="h-3 overflow-hidden rounded-full bg-slate-200">
                   <View
@@ -381,13 +384,13 @@ export function EvacuationMap() {
                   onPress={() => router.push("/(resident)/checkin")}
                   className="items-center rounded-xl bg-emerald-600 py-3.5 active:bg-emerald-700"
                 >
-                  <Text className="text-[15px] font-semibold text-white">Check in here</Text>
+                  <Text className="text-[15px] font-semibold text-white">{t("map.checkIn")}</Text>
                 </Pressable>
               ) : null}
             </View>
           ) : (
             <Text className="py-8 text-center text-[14px] text-slate-400">
-              Tap a center pin to see details.
+              {t("map.centerDetails")}
             </Text>
           )}
 
@@ -426,7 +429,7 @@ export function EvacuationMap() {
                           center.is_open ? "text-emerald-700" : "text-rose-700"
                         }`}
                       >
-                        {center.is_open ? "Open" : "Closed"}
+                        {center.is_open ? t("map.openNow") : t("map.closed")}
                       </Text>
                     </View>
                   </Pressable>
