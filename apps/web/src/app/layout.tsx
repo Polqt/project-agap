@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "../index.css";
+import "leaflet/dist/leaflet.css";
 import LayoutContent from "@/components/layout-content";
 import Providers from "@/components/providers";
 
