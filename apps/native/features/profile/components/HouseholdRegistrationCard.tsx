@@ -3,7 +3,7 @@ import { Modal, Pressable, Share, Switch, Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { useState } from "react";
 
-import { AppButton, EmptyState, Pill, SectionCard, TextField } from "@/shared/components/ui";
+import { AppButton, EmptyState, Pill, TextField } from "@/shared/components/ui";
 import type { HouseholdWithMembers } from "@project-agap/api/supabase";
 import type { HouseholdFormValues } from "@/types/forms";
 
@@ -33,10 +33,7 @@ export function HouseholdRegistrationCard({
   const householdQrValue = household ? `AGAP:HH:${household.id}` : null;
 
   return (
-    <SectionCard
-      title="Household registration"
-      subtitle="This powers proxy check-ins, household search, and official accountability."
-    >
+    <View>
       {household ? (
         <Text className="mb-4 text-sm leading-6 text-slate-600">
           Your household is already registered. Update the fields below whenever details change.
@@ -235,6 +232,6 @@ export function HouseholdRegistrationCard({
         {feedback ? <Text className="text-sm leading-6 text-slate-600">{feedback}</Text> : null}
         <AppButton label="Save household" onPress={onSubmit} loading={isSaving} />
       </View>
-    </SectionCard>
+    </View>
   );
 }
