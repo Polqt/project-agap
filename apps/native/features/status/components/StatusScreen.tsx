@@ -4,7 +4,6 @@ import { useStore } from "@tanstack/react-store";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { useTranslation } from "react-i18next";
 
 import { haptics } from "@/services/haptics";
@@ -26,7 +25,6 @@ export function StatusScreen() {
   const { isOnline, pendingActions, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const lastPingPreview = useStore(appShellStore, (s) => s.lastStatusPing);
-  const [message, setMessage] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const householdQuery = useQuery(
@@ -54,20 +52,11 @@ export function StatusScreen() {
           source: "server",
         });
         setFeedback(t("status.statusSent"));
-        setMessage("");
       },
     }),
   );
 
   async function handleSubmit(status: "safe" | "need_help") {
-    const payload = {
-      householdId: householdQuery.data?.id ?? undefined,
-      status,
-      message: message.trim() || undefined,
-      latitude: location?.latitude,
-      longitude: location?.longitude,
-    };
-
     setFeedback(null);
 
     if (status === "need_help") {
@@ -76,11 +65,17 @@ export function StatusScreen() {
       void haptics.light().catch(() => {});
     }
 
+    const payload = {
+      householdId: householdQuery.data?.id ?? undefined,
+      status,
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+    };
+
     if (!isOnline) {
       await queueAction(createQueuedAction("status-ping.submit", payload));
       setLastStatusPing({ status, createdAt: Date.now(), source: "queue" });
       setFeedback(t("common.queued"));
-      setMessage("");
       return;
     }
 
@@ -90,8 +85,7 @@ export function StatusScreen() {
       if (isOfflineLikeError(error)) {
         await queueAction(createQueuedAction("status-ping.submit", payload));
         setLastStatusPing({ status, createdAt: Date.now(), source: "queue" });
-        setFeedback("Connection dropped. Queued locally.");
-        setMessage("");
+        setFeedback(t("common.queued"));
         return;
       }
       setFeedback(getErrorMessage(error, "Unable to submit your status."));
@@ -100,6 +94,7 @@ export function StatusScreen() {
 
   const latestPing = latestPingQuery.data;
   const queuedCount = pendingActions.filter((a) => a.type === "status-ping.submit").length;
+  const firstName = profile?.full_name?.split(" ")[0] ?? "Resident";
 
   const lastStatusLabel =
     latestPing?.status === "safe"
@@ -108,110 +103,124 @@ export function StatusScreen() {
         ? t("status.iNeedHelp")
         : null;
 
-  const lastStatusTone =
-    latestPing?.status === "need_help" ? "rose" : "emerald";
+  const lastStatusTone = latestPing?.status === "need_help" ? "rose" : "emerald";
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-slate-50">
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Greeting */}
-        <View className="px-5">
-          <Text className="text-[15px] text-slate-500">
-            Kamusta ka, {profile?.full_name?.split(" ")[0] ?? "Resident"}?
+        {/* ── Greeting header ── */}
+        <View className="px-5 pb-6">
+          <Text className="text-[13px] font-medium text-slate-400 uppercase tracking-wider">
+            {t("status.title")}
+          </Text>
+          <Text className="mt-1 text-[28px] font-bold text-slate-900">
+            {firstName}
           </Text>
           {profile?.purok ? (
-            <Text className="mt-0.5 text-[13px] text-slate-400">
-              Bgy. {/* barangay name will come from profile context */}
-              {profile.purok}
-            </Text>
+            <View className="mt-1.5 flex-row items-center gap-1.5">
+              <Ionicons name="location-outline" size={13} color="#94a3b8" />
+              <Text className="text-[13px] text-slate-400">{profile.purok}</Text>
+            </View>
           ) : null}
         </View>
 
-        {/* Offline banner */}
+        {/* ── Offline banner ── */}
         {!isOnline ? (
-          <View className="mx-5 mt-3 flex-row items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2">
-            <Ionicons name="cloud-offline-outline" size={14} color="#d97706" />
-            <Text className="flex-1 text-[12px] font-medium text-amber-700">
-              {t("common.offline")}{queuedCount > 0 ? ` · ${queuedCount} ping${queuedCount > 1 ? "s" : ""} queued` : ""}
+          <View className="mx-5 mb-4 flex-row items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <Ionicons name="cloud-offline-outline" size={16} color="#d97706" />
+            <Text className="flex-1 text-[13px] font-medium text-amber-700">
+              {t("common.offline")}
+              {queuedCount > 0 ? ` · ${queuedCount} ping${queuedCount > 1 ? "s" : ""} queued` : ""}
             </Text>
           </View>
         ) : null}
 
-        {/* Last status card */}
+        {/* ── Last ping status ── */}
         {latestPing ? (
-          <View className="mx-5 mt-4">
-            <Text className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-slate-400">
+          <View className="mx-5 mb-5">
+            <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
               {t("status.lastPing")}
             </Text>
             <View
-              className={`flex-row items-center gap-3 rounded-2xl border px-4 py-3 ${
+              className={`flex-row items-center gap-3 rounded-2xl border px-4 py-3.5 ${
                 lastStatusTone === "rose"
                   ? "border-rose-200 bg-rose-50"
                   : "border-emerald-200 bg-emerald-50"
               }`}
             >
               <View
-                className={`h-8 w-8 items-center justify-center rounded-full ${
+                className={`h-10 w-10 items-center justify-center rounded-full ${
                   lastStatusTone === "rose" ? "bg-rose-200" : "bg-emerald-200"
                 }`}
               >
                 <Ionicons
                   name={lastStatusTone === "rose" ? "alert-circle" : "shield-checkmark"}
-                  size={16}
+                  size={20}
                   color={lastStatusTone === "rose" ? "#e11d48" : "#059669"}
                 />
               </View>
               <View className="flex-1">
-                <Text className="text-[15px] font-semibold text-slate-900">{lastStatusLabel}</Text>
+                <Text className="text-[15px] font-bold text-slate-900">{lastStatusLabel}</Text>
                 <Text className="text-[12px] text-slate-500">
                   {formatRelativeTime(latestPing.pinged_at)} · synced
                 </Text>
               </View>
+              <View
+                className={`h-2 w-2 rounded-full ${
+                  lastStatusTone === "rose" ? "bg-rose-400" : "bg-emerald-400"
+                }`}
+              />
             </View>
           </View>
         ) : lastPingPreview ? (
-          <View className="mx-5 mt-4">
-            <Text className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-slate-400">
+          <View className="mx-5 mb-5">
+            <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
               {t("status.lastPing")}
             </Text>
-            <View className="flex-row items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <View className="h-8 w-8 items-center justify-center rounded-full bg-amber-200">
-                <Ionicons name="time-outline" size={16} color="#d97706" />
+            <View className="flex-row items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-amber-200">
+                <Ionicons name="time-outline" size={20} color="#d97706" />
               </View>
               <View className="flex-1">
-                <Text className="text-[15px] font-semibold text-slate-900">
+                <Text className="text-[15px] font-bold text-slate-900">
                   {lastPingPreview.status === "safe" ? t("status.iAmSafe") : t("status.iNeedHelp")}
                 </Text>
                 <Text className="text-[12px] text-amber-700">
                   {formatRelativeTime(lastPingPreview.createdAt)} · queued
                 </Text>
               </View>
+              <View className="h-2 w-2 rounded-full bg-amber-400" />
             </View>
           </View>
         ) : null}
 
-        {/* Hero action buttons */}
-        <View className="mt-5 gap-3 px-5">
+        {/* ── Action buttons ── */}
+        <View className="px-5 gap-3">
           {/* SAFE */}
           <Pressable
             onPress={() => void handleSubmit("safe")}
             disabled={submitMutation.isPending}
-            className="overflow-hidden rounded-3xl border-2 border-emerald-200 bg-emerald-50 px-5 active:opacity-80"
-            style={{ minHeight: 88 }}
+            className="overflow-hidden rounded-3xl bg-emerald-500 shadow-sm active:opacity-80"
+            style={{ minHeight: 96 }}
           >
-            <View className="flex-1 flex-row items-center gap-4 py-4">
-              <View className="h-12 w-12 items-center justify-center rounded-full bg-emerald-200">
-                <Ionicons name="shield-checkmark" size={24} color="#059669" />
+            <View className="flex-row items-center gap-4 px-6 py-5">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-emerald-400">
+                <Ionicons name="shield-checkmark" size={28} color="#ffffff" />
               </View>
               <View className="flex-1">
-                <Text className="text-[22px] font-bold text-slate-900">{t("status.iAmSafe")}</Text>
-                <Text className="text-[13px] text-slate-500">{t("status.safeDescription")}</Text>
+                <Text className="text-[22px] font-black text-white tracking-tight">
+                  {t("status.iAmSafe")}
+                </Text>
+                <Text className="mt-0.5 text-[13px] text-emerald-100">
+                  {t("status.safeDescription")}
+                </Text>
               </View>
+              <Ionicons name="chevron-forward" size={20} color="#a7f3d0" />
             </View>
           </Pressable>
 
@@ -219,32 +228,38 @@ export function StatusScreen() {
           <Pressable
             onPress={() => void handleSubmit("need_help")}
             disabled={submitMutation.isPending}
-            className="overflow-hidden rounded-3xl border-2 border-rose-200 bg-rose-50 px-5 active:opacity-80"
-            style={{ minHeight: 88 }}
+            className="overflow-hidden rounded-3xl bg-rose-500 shadow-sm active:opacity-80"
+            style={{ minHeight: 96 }}
           >
-            <View className="flex-1 flex-row items-center gap-4 py-4">
-              <View className="h-12 w-12 items-center justify-center rounded-full bg-rose-200">
-                <Ionicons name="alert-circle" size={24} color="#e11d48" />
+            <View className="flex-row items-center gap-4 px-6 py-5">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-rose-400">
+                <Ionicons name="alert-circle" size={28} color="#ffffff" />
               </View>
               <View className="flex-1">
-                <Text className="text-[22px] font-bold text-slate-900">{t("status.iNeedHelp")}</Text>
-                <Text className="text-[13px] text-slate-500">{t("status.needHelpDescription")}</Text>
+                <Text className="text-[22px] font-black text-white tracking-tight">
+                  {t("status.iNeedHelp")}
+                </Text>
+                <Text className="mt-0.5 text-[13px] text-rose-100">
+                  {t("status.needHelpDescription")}
+                </Text>
               </View>
+              <Ionicons name="chevron-forward" size={20} color="#fecdd3" />
             </View>
           </Pressable>
         </View>
 
-        {/* Feedback */}
+        {/* ── Feedback toast ── */}
         {feedback ? (
-          <View className="mx-5 mt-3 rounded-xl bg-slate-100 px-4 py-2.5">
-            <Text className="text-[13px] text-slate-600">{feedback}</Text>
+          <View className="mx-5 mt-4 flex-row items-center gap-2 rounded-2xl bg-white border border-slate-200 px-4 py-3 shadow-sm">
+            <Ionicons name="checkmark-circle" size={16} color="#059669" />
+            <Text className="text-[13px] font-medium text-slate-700">{feedback}</Text>
           </View>
         ) : null}
 
-        {/* Divider */}
-        <View className="mx-5 mt-6 border-t border-slate-100" />
+        {/* ── Divider ── */}
+        <View className="mx-5 mt-8 border-t border-slate-200" />
 
-        {/* Proxy ping section */}
+        {/* ── Proxy ping section ── */}
         <ProxyPingSection />
       </ScrollView>
     </View>

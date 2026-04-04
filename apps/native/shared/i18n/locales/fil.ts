@@ -60,6 +60,7 @@ export default {
   },
   status: {
     title: "Katayuan",
+    greeting: "Kumusta ka,",
     iAmSafe: "Ligtas Ako",
     iNeedHelp: "Tulong!",
     statusSent: "Naipadala ang katayuan.",

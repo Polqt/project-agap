@@ -35,23 +35,28 @@ function detectDeviceLanguage(): AppLanguage {
   return "fil";
 }
 
-void i18n.use(initReactI18next).init({
-  resources: {
-    en: { translation: en },
-    fil: { translation: fil },
-    hil: { translation: hil },
-    ceb: { translation: ceb },
-    krj: { translation: krj },
-  },
-  lng: detectDeviceLanguage(),
-  fallbackLng: "fil",
-  interpolation: { escapeValue: false },
-  compatibilityJSON: "v4",
-});
+// Keep a promise so loadPersistedLanguage() can await init completion
+const i18nReady: Promise<void> = i18n
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: { translation: en },
+      fil: { translation: fil },
+      hil: { translation: hil },
+      ceb: { translation: ceb },
+      krj: { translation: krj },
+    },
+    lng: detectDeviceLanguage(),
+    fallbackLng: "fil",
+    interpolation: { escapeValue: false },
+    compatibilityJSON: "v4",
+  });
 
 /** Load persisted language preference from AsyncStorage. Call once on app boot. */
 export async function loadPersistedLanguage() {
   try {
+    // Wait for i18n to finish initialising before changing language
+    await i18nReady;
     const stored = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (stored && ["en", "fil", "hil", "ceb", "krj"].includes(stored)) {
       await i18n.changeLanguage(stored);
@@ -63,6 +68,7 @@ export async function loadPersistedLanguage() {
 
 /** Persist and switch the active language. */
 export async function setAppLanguage(lang: AppLanguage) {
+  await i18nReady;
   await i18n.changeLanguage(lang);
   await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
 }

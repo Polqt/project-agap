@@ -61,6 +61,7 @@ export default {
   },
   status: {
     title: "Kahimtang",
+    greeting: "Kumusta ka,",
     iAmSafe: "Luwas Ako",
     iNeedHelp: "Tabang!",
     statusSent: "Gipadala na ang kahimtang.",

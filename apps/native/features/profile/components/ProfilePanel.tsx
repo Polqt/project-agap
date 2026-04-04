@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useProfilePanel } from "../hooks/useProfilePanel";
@@ -61,6 +62,7 @@ function AccordionRow({
 export function ProfilePanel() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [openSection, setOpenSection] = useState<Section | null>(null);
 
   const {
@@ -142,7 +144,7 @@ export function ProfilePanel() {
           ) : (
             <View className="flex-row items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5">
               <Ionicons name="warning-outline" size={12} color="#d97706" />
-              <Text className="text-[12px] font-medium text-amber-700">No household yet</Text>
+              <Text className="text-[12px] font-medium text-amber-700">{t("profile.noHousehold")}</Text>
             </View>
           )}
         </View>
@@ -154,7 +156,7 @@ export function ProfilePanel() {
         <View className="h-px bg-slate-100" />
 
         <AccordionRow
-          label="Personal Information"
+          label={t("profile.personalInfo")}
           value={profile?.full_name}
           open={openSection === "personal"}
           onPress={() => toggle("personal")}
@@ -168,11 +170,11 @@ export function ProfilePanel() {
         </AccordionRow>
 
         <AccordionRow
-          label="Household"
+          label={t("profile.household")}
           value={
             household
-              ? `${household.household_head} · ${household.total_members} members`
-              : "Not registered"
+              ? `${household.household_head} · ${household.total_members} ${t("profile.members").toLowerCase()}`
+              : t("profile.noHousehold")
           }
           open={openSection === "household"}
           onPress={() => toggle("household")}
@@ -188,7 +190,7 @@ export function ProfilePanel() {
         </AccordionRow>
 
         <AccordionRow
-          label="Language"
+          label={t("profile.language")}
           value={undefined}
           open={openSection === "language"}
           onPress={() => toggle("language")}
@@ -203,7 +205,7 @@ export function ProfilePanel() {
             className="flex-row items-center justify-between py-4"
           >
             <Text className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-              Account
+              {t("profile.accountSettings")}
             </Text>
             <Ionicons
               name={openSection === "account" ? "chevron-up" : "chevron-down"}
@@ -229,7 +231,7 @@ export function ProfilePanel() {
                 onPress={() => void handleSignOut()}
                 className="mt-2 items-center rounded-2xl bg-rose-50 py-4"
               >
-                <Text className="text-[15px] font-semibold text-rose-600">Sign out</Text>
+                <Text className="text-[15px] font-semibold text-rose-600">{t("profile.signOut")}</Text>
               </Pressable>
             </View>
           ) : null}

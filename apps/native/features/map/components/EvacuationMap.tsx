@@ -301,10 +301,9 @@ export function EvacuationMap() {
       >
         <Pressable
           onPress={() => router.push("/(resident)/checkin")}
-          className="flex-row items-center gap-2 rounded-full bg-blue-700 px-5 py-3.5 shadow-lg active:bg-blue-800"
+          className="h-14 w-14 items-center justify-center rounded-full bg-blue-700 shadow-lg active:bg-blue-800"
         >
-          <Ionicons name="qr-code-outline" size={18} color="white" />
-          <Text className="text-[14px] font-semibold text-white">{t("map.checkIn")}</Text>
+          <Ionicons name="qr-code-outline" size={24} color="white" />
         </Pressable>
       </View>
 
