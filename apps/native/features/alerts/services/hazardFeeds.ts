@@ -313,41 +313,110 @@ const NEWS_FEEDS: Array<{ source: string; url: string; category: NewsCategory; c
   { source: "Visayan Star", url: "https://visayandailystar.com/feed/",                        category: "regional", color: "#db2777" },
 ];
 
-async function fetchFeed(feed: (typeof NEWS_FEEDS)[number]): Promise<PhNewsArticle[]> {
+// Parse raw RSS/Atom XML into article list (fallback when rss2json is rate-limited)
+function parseRssXml(
+  xml: string,
+  feed: (typeof NEWS_FEEDS)[number],
+): PhNewsArticle[] {
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi;
+  const articles: PhNewsArticle[] = [];
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+
+  function parseBlock(block: string) {
+    const title = extractTag(block, "title").replace(/^<!\[CDATA\[|\]\]>$/g, "").trim();
+    const link =
+      extractTag(block, "link") ||
+      /<link[^>]+href="([^"]+)"/.exec(block)?.[1] ||
+      "";
+    const pubDate =
+      extractTag(block, "pubDate") ||
+      extractTag(block, "published") ||
+      extractTag(block, "updated") ||
+      "";
+    const description = extractTag(block, "description")
+      .replace(/^<!\[CDATA\[|\]\]>$/g, "")
+      .replace(/<[^>]+>/g, "")
+      .trim()
+      .slice(0, 200);
+
+    if (!title || (pubDate && Date.parse(pubDate) < cutoff)) return;
+    articles.push({
+      title,
+      link,
+      pubDate,
+      source: feed.source,
+      category: feed.category,
+      color: feed.color,
+      thumbnail: null,
+      description,
+    });
+  }
+
+  let m: RegExpExecArray | null;
+  while ((m = itemRegex.exec(xml)) !== null) parseBlock(m[1] ?? "");
+  while ((m = entryRegex.exec(xml)) !== null) parseBlock(m[1] ?? "");
+  return articles;
+}
+
+async function fetchViaAllOrigins(
+  feed: (typeof NEWS_FEEDS)[number],
+): Promise<PhNewsArticle[]> {
   try {
-    const res = await fetch(`${RSS2JSON}${encodeURIComponent(feed.url)}&count=5`);
+    const res = await fetch(proxied(feed.url));
     if (!res.ok) return [];
-    const data = (await res.json()) as {
-      status: string;
-      items?: Array<{
-        title?: string;
-        link?: string;
-        pubDate?: string;
-        thumbnail?: string;
-        description?: string;
-        enclosure?: { link?: string };
-      }>;
-    };
-    if (data.status !== "ok" || !data.items) return [];
-    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
-    return data.items
-      .filter((item) => {
-        const pub = item.pubDate ? Date.parse(item.pubDate) : 0;
-        return pub > cutoff;
-      })
-      .map((item) => ({
-        title: item.title?.trim() ?? "",
-        link: item.link ?? "",
-        pubDate: item.pubDate ?? "",
-        source: feed.source,
-        category: feed.category,
-        color: feed.color,
-        thumbnail: item.thumbnail ?? item.enclosure?.link ?? null,
-        description: item.description?.replace(/<[^>]+>/g, "").trim().slice(0, 200) ?? "",
-      }));
+    const wrapper = (await res.json()) as { contents?: string };
+    if (!wrapper.contents) return [];
+    return parseRssXml(wrapper.contents, feed);
   } catch {
     return [];
   }
+}
+
+async function fetchFeed(feed: (typeof NEWS_FEEDS)[number]): Promise<PhNewsArticle[]> {
+  // Try rss2json first (returns clean JSON)
+  try {
+    const res = await fetch(`${RSS2JSON}${encodeURIComponent(feed.url)}&count=8`, {
+      signal: AbortSignal.timeout(6000),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        status: string;
+        items?: Array<{
+          title?: string;
+          link?: string;
+          pubDate?: string;
+          thumbnail?: string;
+          description?: string;
+          enclosure?: { link?: string };
+        }>;
+      };
+      if (data.status === "ok" && data.items && data.items.length > 0) {
+        const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+        const mapped = data.items
+          .filter((item) => {
+            const pub = item.pubDate ? Date.parse(item.pubDate) : 0;
+            return pub > cutoff;
+          })
+          .map((item) => ({
+            title: item.title?.trim() ?? "",
+            link: item.link ?? "",
+            pubDate: item.pubDate ?? "",
+            source: feed.source,
+            category: feed.category,
+            color: feed.color,
+            thumbnail: item.thumbnail ?? item.enclosure?.link ?? null,
+            description: item.description?.replace(/<[^>]+>/g, "").trim().slice(0, 200) ?? "",
+          }));
+        if (mapped.length > 0) return mapped;
+      }
+    }
+  } catch {
+    // fall through to allorigins
+  }
+
+  // Fallback: fetch raw RSS via allorigins CORS proxy + parse XML
+  return fetchViaAllOrigins(feed);
 }
 
 export async function fetchPhilippineNews(): Promise<PhNewsArticle[]> {

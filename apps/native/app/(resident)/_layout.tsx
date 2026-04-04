@@ -1,8 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useStore } from "@tanstack/react-store";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
+
+import { i18n } from "@/shared/i18n";
 
 import { appShellStore } from "@/stores/app-shell-store";
 
@@ -16,9 +19,16 @@ function AlertBadge() {
 
 export default function ResidentLayout() {
   const { t } = useTranslation();
+  const [langKey, setLangKey] = useState(i18n.language);
+
+  useEffect(() => {
+    const handler = (lang: string) => setLangKey(lang);
+    i18n.on("languageChanged", handler);
+    return () => i18n.off("languageChanged", handler);
+  }, []);
 
   return (
-    <Tabs
+    <Tabs key={langKey}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#1A56C4",
