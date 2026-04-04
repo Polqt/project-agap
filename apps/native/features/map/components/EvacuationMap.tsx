@@ -333,14 +333,12 @@ export function EvacuationMap() {
                   longitude: route.center.longitude,
                 }}
                 title={route.center.name}
-                description={route.center.address}
+                description={`${route.center.address} • ${getCenterAvailabilityLabel(route.center.currentOccupancy, route.center.capacity).label}`}
+                pinColor={
+                  selectedRoute?.center.id === route.center.id ? "#15803d" : "#22c55e"
+                }
                 onPress={() => handleSelectCenter(route.center.id)}
-              >
-                <DestinationMarker
-                  route={route}
-                  isSelected={selectedRoute?.center.id === route.center.id}
-                />
-              </MarkerComponent>
+              />
             ))}
 
             {activePolyline.length > 1 ? (
@@ -477,34 +475,6 @@ function UserLocationMarker({ isPinned }: { isPinned: boolean }) {
   );
 }
 
-function DestinationMarker({
-  route,
-  isSelected,
-}: {
-  route: RankedEvacuationRoute;
-  isSelected: boolean;
-}) {
-  const status = getCenterAvailabilityLabel(route.center.currentOccupancy, route.center.capacity);
-  const fillColor = isSelected ? "#2563eb" : status.color;
-
-  return (
-    <View className="items-center">
-      <View
-        className="min-w-10 items-center rounded-2xl border-2 border-white px-3 py-2 shadow-lg"
-        style={{ backgroundColor: fillColor }}
-      >
-        <Text className="text-base font-bold text-white">{route.rank}</Text>
-      </View>
-      <View className="mt-2 rounded-2xl bg-white/95 px-3 py-2 shadow">
-        <Text className="text-xs font-semibold text-slate-900">{route.center.name}</Text>
-        <Text className="mt-0.5 text-[11px] font-medium" style={{ color: fillColor }}>
-          {status.label}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function FloatingIconButton({
   icon,
   onPress,
@@ -544,6 +514,7 @@ function getCenterAvailabilityLabel(currentOccupancy: number, capacity: number) 
 
   return { label: "Available", color: "#059669" };
 }
+
 
 function getActivePolyline(
   selectedRoute: RankedEvacuationRoute | null,
