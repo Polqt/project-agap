@@ -13,6 +13,14 @@ export type ResidentHeatmapPoint = {
   longitude: number;
 };
 
+export type NeedHelpPingPoint = {
+  id: string;
+  resident_id: string | null;
+  latitude: number;
+  longitude: number;
+  pinged_at: string;
+};
+
 type LeafletHeatLayerFactory = (
   latlngs: Array<[number, number, number?]>,
   options?: {
@@ -66,7 +74,7 @@ function HeatLayer({ points }: { points: ResidentHeatmapPoint[] }) {
   return null;
 }
 
-function FitToPoints({ points }: { points: ResidentHeatmapPoint[] }) {
+function NeedHelpPingLayer({ points }: { points: NeedHelpPingPoint[] }) {
   const map = useMap();
 
   useEffect(() => {
@@ -74,34 +82,101 @@ function FitToPoints({ points }: { points: ResidentHeatmapPoint[] }) {
       return;
     }
 
-    if (points.length === 1) {
-      const point = points[0];
-      map.setView([point.latitude, point.longitude], 15);
-      return;
+    const layer = L.layerGroup();
+
+    for (const point of points) {
+      const icon = L.divIcon({
+        className: "need-help-ping-icon",
+        html: '<span class="need-help-ping-dot"></span>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+
+      const marker = L.marker([point.latitude, point.longitude], { icon });
+      marker.bindTooltip("Need help ping", {
+        direction: "top",
+        offset: [0, -12],
+      });
+      marker.addTo(layer);
     }
 
-    const bounds: LatLngBoundsExpression = points.map((point) => [point.latitude, point.longitude]);
-    map.fitBounds(bounds, { padding: [24, 24] });
+    layer.addTo(map);
+
+    return () => {
+      layer.removeFrom(map);
+    };
   }, [map, points]);
 
   return null;
 }
 
-export function ResidentHeatmap({ points }: { points: ResidentHeatmapPoint[] }) {
+function FitToPoints({
+  points,
+  needHelpPings,
+}: {
+  points: ResidentHeatmapPoint[];
+  needHelpPings: NeedHelpPingPoint[];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const allPoints: Array<[number, number]> = [
+      ...points.map((point) => [point.latitude, point.longitude] as [number, number]),
+      ...needHelpPings.map((point) => [point.latitude, point.longitude] as [number, number]),
+    ];
+
+    if (!allPoints.length) {
+      return;
+    }
+
+    if (allPoints.length === 1) {
+      const [latitude, longitude] = allPoints[0];
+      map.setView([latitude, longitude], 15);
+      return;
+    }
+
+    const bounds: LatLngBoundsExpression = allPoints;
+    map.fitBounds(bounds, { padding: [24, 24] });
+  }, [map, points, needHelpPings]);
+
+  return null;
+}
+
+export function ResidentHeatmap({
+  points,
+  needHelpPings = [],
+}: {
+  points: ResidentHeatmapPoint[];
+  needHelpPings?: NeedHelpPingPoint[];
+}) {
+  const hasHeatData = points.length > 0;
   const center = points[0]
     ? ([points[0].latitude, points[0].longitude] as [number, number])
     : FALLBACK_CENTER;
 
   return (
-    <div className="h-80 overflow-hidden rounded-lg border border-border">
+    <div className="relative h-[26rem] overflow-hidden rounded-xl border border-border">
       <MapContainerAny center={center} zoom={13} scrollWheelZoom className="h-full w-full">
         <TileLayerAny
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <HeatLayer points={points} />
-        <FitToPoints points={points} />
+        <NeedHelpPingLayer points={needHelpPings} />
+        <FitToPoints points={points} needHelpPings={needHelpPings} />
       </MapContainerAny>
+
+      <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-border/70 bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Map Layer
+        </p>
+        <p className="text-sm font-medium text-foreground">
+          {hasHeatData ? "Heatmap active" : "Base map only"}
+        </p>
+        <p className="text-xs text-red-700 dark:text-red-300">
+          Need help pings: {needHelpPings.length}
+        </p>
+      </div>
     </div>
   );
 }

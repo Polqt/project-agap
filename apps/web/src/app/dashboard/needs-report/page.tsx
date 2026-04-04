@@ -68,7 +68,7 @@ const STATUS_STYLES: Record<NeedsReport["status"], string> = {
 function StatusBadge({ status }: { status: NeedsReport["status"] }) {
   return (
     <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_STYLES[status]}`}
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-sm font-medium capitalize ${STATUS_STYLES[status]}`}
     >
       {status}
     </span>
@@ -76,7 +76,9 @@ function StatusBadge({ status }: { status: NeedsReport["status"] }) {
 }
 
 const TEXTAREA_CLS =
-  "border-input bg-transparent placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 min-h-[60px] w-full rounded-none border px-2.5 py-1.5 text-xs outline-none transition-colors focus-visible:ring-1 resize-y";
+  "border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 min-h-[84px] w-full rounded-md border px-3 py-2.5 text-base outline-none transition-colors focus-visible:ring-1 resize-y";
+const LABEL_CLS = "text-sm font-semibold text-foreground";
+const INPUT_CLS = "h-10 rounded-md bg-background text-base";
 
 export default function NeedsReportPage() {
   const [centerName, setCenterName] = useState("");
@@ -143,11 +145,16 @@ export default function NeedsReportPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="flex items-center gap-2 text-xl font-semibold">
-        <FileText className="h-5 w-5" />
-        Needs Report
-      </h1>
+    <div className="space-y-7">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <FileText className="h-6 w-6" />
+          Needs Report
+        </h1>
+        <p className="text-base text-muted-foreground">
+          Submit and review urgent evacuation center requirements.
+        </p>
+      </div>
 
       {/* ── Success confirmation ────────────────────────────── */}
       {showSuccess && lastSubmitted && (
@@ -155,10 +162,10 @@ export default function NeedsReportPage() {
           <CardContent className="flex items-start gap-3">
             <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
             <div className="flex-1 space-y-1">
-              <p className="font-medium text-green-900 dark:text-green-200">
+              <p className="text-base font-semibold text-green-900 dark:text-green-200">
                 Report submitted successfully
               </p>
-              <p className="text-xs text-green-700 dark:text-green-400">
+              <p className="text-base text-green-700 dark:text-green-400">
                 {lastSubmitted.centerName && `${lastSubmitted.centerName} · `}
                 {lastSubmitted.totalEvacuees} evacuees ·{" "}
                 {lastSubmitted.needsFoodPacks} food packs ·{" "}
@@ -169,7 +176,8 @@ export default function NeedsReportPage() {
             </div>
             <Button
               variant="ghost"
-              size="icon-xs"
+              size="icon-sm"
+              className="rounded-md"
               onClick={() => setShowSuccess(false)}
             >
               <X className="h-3 w-3" />
@@ -181,22 +189,23 @@ export default function NeedsReportPage() {
       {/* ── Submit form ────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Submit Needs Report</CardTitle>
+          <CardTitle className="text-xl">Submit Needs Report</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="centerName">Evacuation Center Name</Label>
+              <Label className={LABEL_CLS} htmlFor="centerName">Evacuation Center Name</Label>
               <Input
                 id="centerName"
                 placeholder="e.g. Barangay Hall, School Gym"
                 value={centerName}
                 onChange={(e) => setCenterName(e.target.value)}
+                className={INPUT_CLS}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="totalEvacuees">
+              <Label className={LABEL_CLS} htmlFor="totalEvacuees">
                 Number of Evacuees{" "}
                 <span className="text-destructive">*</span>
               </Label>
@@ -207,15 +216,16 @@ export default function NeedsReportPage() {
                 placeholder="0"
                 value={totalEvacuees}
                 onChange={(e) => setTotalEvacuees(e.target.value)}
+                className={INPUT_CLS}
                 required
               />
             </div>
 
             <fieldset className="space-y-3">
-              <legend className="text-xs font-medium">Supply Needs</legend>
+              <legend className="text-base font-semibold">Supply Needs</legend>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="foodPacks">Food Packs</Label>
+                  <Label className={LABEL_CLS} htmlFor="foodPacks">Food Packs</Label>
                   <Input
                     id="foodPacks"
                     type="number"
@@ -223,10 +233,11 @@ export default function NeedsReportPage() {
                     placeholder="0"
                     value={foodPacks}
                     onChange={(e) => setFoodPacks(e.target.value)}
+                    className={INPUT_CLS}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="waterLiters">Drinking Water (liters)</Label>
+                  <Label className={LABEL_CLS} htmlFor="waterLiters">Drinking Water (liters)</Label>
                   <Input
                     id="waterLiters"
                     type="number"
@@ -234,10 +245,11 @@ export default function NeedsReportPage() {
                     placeholder="0"
                     value={waterLiters}
                     onChange={(e) => setWaterLiters(e.target.value)}
+                    className={INPUT_CLS}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="blankets">Blankets</Label>
+                  <Label className={LABEL_CLS} htmlFor="blankets">Blankets</Label>
                   <Input
                     id="blankets"
                     type="number"
@@ -245,6 +257,7 @@ export default function NeedsReportPage() {
                     placeholder="0"
                     value={blankets}
                     onChange={(e) => setBlankets(e.target.value)}
+                    className={INPUT_CLS}
                   />
                 </div>
                 <div className="flex items-center gap-2 self-end pb-1.5">
@@ -254,13 +267,13 @@ export default function NeedsReportPage() {
                       setNeedsMedicine(checked as boolean)
                     }
                   />
-                  <span className="select-none text-xs">Medicine Needed</span>
+                  <span className="select-none text-base font-medium">Medicine Needed</span>
                 </div>
               </div>
             </fieldset>
 
             <div className="space-y-1.5">
-              <Label htmlFor="medicalCases">Medical Cases</Label>
+              <Label className={LABEL_CLS} htmlFor="medicalCases">Medical Cases</Label>
               <textarea
                 id="medicalCases"
                 className={TEXTAREA_CLS}
@@ -272,7 +285,7 @@ export default function NeedsReportPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="notes">Special Notes</Label>
+              <Label className={LABEL_CLS} htmlFor="notes">Special Notes</Label>
               <textarea
                 id="notes"
                 className={TEXTAREA_CLS}
@@ -285,6 +298,7 @@ export default function NeedsReportPage() {
 
             <Button
               type="submit"
+              className="h-11 rounded-md px-4 text-base"
               disabled={submitMutation.isPending || !totalEvacuees}
             >
               {submitMutation.isPending ? (
@@ -301,7 +315,7 @@ export default function NeedsReportPage() {
       {/* ── Report history ─────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-xl">
             <Clock className="h-4 w-4" />
             Report History
           </CardTitle>
@@ -316,7 +330,7 @@ export default function NeedsReportPage() {
           ) : sortedReports.length === 0 ? (
             <div className="py-8 text-center">
               <FileText className="mx-auto h-8 w-8 text-muted-foreground/40" />
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 text-base text-muted-foreground">
                 No reports submitted yet
               </p>
             </div>
@@ -325,26 +339,27 @@ export default function NeedsReportPage() {
               {sortedReports.map((report) => (
                 <div
                   key={report.id}
-                  className="flex items-center justify-between gap-4 py-2.5"
+                  className="flex items-center justify-between gap-4 py-3.5"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-base text-muted-foreground">
                         {formatPHT(report.submitted_at)}
                       </span>
                       <StatusBadge status={report.status} />
                     </div>
-                    <p className="mt-0.5 truncate text-sm">
+                    <p className="mt-0.5 truncate text-lg">
                       {report.center_id ?? "N/A"} ·{" "}
                       {report.total_evacuees} evacuees
                     </p>
                   </div>
                   <Button
                     variant="outline"
-                    size="xs"
+                    size="sm"
+                    className="h-9 rounded-md px-3 text-base"
                     onClick={() => setViewingReport(report)}
                   >
-                    <Eye className="h-3 w-3" />
+                    <Eye className="h-4 w-4" />
                     View
                   </Button>
                 </div>
@@ -361,21 +376,22 @@ export default function NeedsReportPage() {
           onClick={() => setViewingReport(null)}
         >
           <div
-            className="mx-4 w-full max-w-lg border border-border bg-card p-6 shadow-lg"
+            className="mx-4 w-full max-w-lg rounded-md border border-border bg-card p-6 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Report Details</h2>
+              <h2 className="text-lg font-semibold">Report Details</h2>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
+                className="rounded-md"
                 onClick={() => setViewingReport(null)}
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
 
-            <dl className="space-y-2.5 text-xs">
+            <dl className="space-y-3 text-base">
               <Row label="Submitted" value={formatPHT(viewingReport.submitted_at)} />
               <div className="flex items-center justify-between">
                 <dt className="text-muted-foreground">Status</dt>
