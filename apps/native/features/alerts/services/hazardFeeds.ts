@@ -172,6 +172,177 @@ export async function fetchGdacsAlerts(): Promise<GdacsAlert[]> {
   return alerts;
 }
 
+// ─── Air Quality & Weather — Open-Meteo (no API key) ─────────────────────────
+
+export type CityAirQuality = {
+  city: string;
+  latitude: number;
+  longitude: number;
+  aqi: number | null;       // US AQI
+  pm25: number | null;
+  pm10: number | null;
+  uvIndex: number | null;
+  temperature: number | null;
+  weatherCode: number | null;
+  windspeed: number | null;
+};
+
+// Key Philippine cities with coords
+const PH_CITIES = [
+  { city: "Manila", latitude: 14.5995, longitude: 120.9842 },
+  { city: "Cebu", latitude: 10.3157, longitude: 123.8854 },
+  { city: "Davao", latitude: 7.1907, longitude: 125.4553 },
+  { city: "Iloilo", latitude: 10.7202, longitude: 122.5621 },
+  { city: "Zamboanga", latitude: 6.9214, longitude: 122.0790 },
+];
+
+export async function fetchCityAirQuality(city: (typeof PH_CITIES)[number]): Promise<CityAirQuality> {
+  try {
+    const aqParams = new URLSearchParams({
+      latitude: String(city.latitude),
+      longitude: String(city.longitude),
+      current: "us_aqi,pm2_5,pm10,uv_index",
+      timezone: "Asia/Manila",
+    });
+    const wxParams = new URLSearchParams({
+      latitude: String(city.latitude),
+      longitude: String(city.longitude),
+      current_weather: "true",
+    });
+
+    const [aqRes, wxRes] = await Promise.allSettled([
+      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${aqParams.toString()}`),
+      fetch(`https://api.open-meteo.com/v1/forecast?${wxParams.toString()}`),
+    ]);
+
+    let aqi: number | null = null;
+    let pm25: number | null = null;
+    let pm10: number | null = null;
+    let uvIndex: number | null = null;
+    let temperature: number | null = null;
+    let weatherCode: number | null = null;
+    let windspeed: number | null = null;
+
+    if (aqRes.status === "fulfilled" && aqRes.value.ok) {
+      const aq = (await aqRes.value.json()) as {
+        current: { us_aqi?: number; pm2_5?: number; pm10?: number; uv_index?: number };
+      };
+      aqi = aq.current?.us_aqi ?? null;
+      pm25 = aq.current?.pm2_5 ?? null;
+      pm10 = aq.current?.pm10 ?? null;
+      uvIndex = aq.current?.uv_index ?? null;
+    }
+
+    if (wxRes.status === "fulfilled" && wxRes.value.ok) {
+      const wx = (await wxRes.value.json()) as {
+        current_weather?: { temperature?: number; weathercode?: number; windspeed?: number };
+      };
+      temperature = wx.current_weather?.temperature ?? null;
+      weatherCode = wx.current_weather?.weathercode ?? null;
+      windspeed = wx.current_weather?.windspeed ?? null;
+    }
+
+    return { city: city.city, latitude: city.latitude, longitude: city.longitude, aqi, pm25, pm10, uvIndex, temperature, weatherCode, windspeed };
+  } catch {
+    return { city: city.city, latitude: city.latitude, longitude: city.longitude, aqi: null, pm25: null, pm10: null, uvIndex: null, temperature: null, weatherCode: null, windspeed: null };
+  }
+}
+
+export async function fetchPhCitiesAirQuality(): Promise<CityAirQuality[]> {
+  return Promise.all(PH_CITIES.map(fetchCityAirQuality));
+}
+
+export function aqiLabel(aqi: number | null): { label: string; color: string; bg: string; text: string } {
+  if (aqi == null) return { label: "—", color: "#94a3b8", bg: "bg-slate-100", text: "text-slate-500" };
+  if (aqi <= 50) return { label: "Good", color: "#16a34a", bg: "bg-emerald-100", text: "text-emerald-700" };
+  if (aqi <= 100) return { label: "Moderate", color: "#d97706", bg: "bg-amber-100", text: "text-amber-700" };
+  if (aqi <= 150) return { label: "Unhealthy*", color: "#ea580c", bg: "bg-orange-100", text: "text-orange-700" };
+  if (aqi <= 200) return { label: "Unhealthy", color: "#dc2626", bg: "bg-rose-100", text: "text-rose-700" };
+  return { label: "Hazardous", color: "#7c3aed", bg: "bg-purple-100", text: "text-purple-700" };
+}
+
+export function wxCodeEmoji(code: number | null): string {
+  if (code == null) return "🌡";
+  if (code === 0) return "☀️";
+  if (code <= 3) return "⛅";
+  if (code <= 9) return "🌫";
+  if (code <= 19) return "🌧";
+  if (code <= 29) return "⛈";
+  if (code <= 39) return "🌨";
+  if (code <= 49) return "🌁";
+  if (code <= 59) return "🌦";
+  if (code <= 69) return "🌧";
+  if (code <= 79) return "❄️";
+  if (code <= 84) return "🌦";
+  if (code <= 99) return "⛈";
+  return "🌡";
+}
+
+// ─── Philippine News RSS ──────────────────────────────────────────────────────
+
+export type PhNewsArticle = {
+  title: string;
+  link: string;
+  pubDate: string;
+  source: string;
+  thumbnail: string | null;
+  description: string;
+};
+
+const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
+
+const NEWS_FEEDS = [
+  { source: "GMA News", url: "https://data.gmanetwork.com/gno/rss/news/feed.xml" },
+  { source: "Rappler", url: "https://www.rappler.com/feed/" },
+  { source: "Inquirer", url: "https://www.inquirer.net/feed/" },
+];
+
+async function fetchFeed(feed: { source: string; url: string }): Promise<PhNewsArticle[]> {
+  try {
+    const res = await fetch(`${RSS2JSON}${encodeURIComponent(feed.url)}&count=5`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      status: string;
+      items?: Array<{
+        title?: string;
+        link?: string;
+        pubDate?: string;
+        thumbnail?: string;
+        description?: string;
+        enclosure?: { link?: string };
+      }>;
+    };
+    if (data.status !== "ok" || !data.items) return [];
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    return data.items
+      .filter((item) => {
+        const pub = item.pubDate ? Date.parse(item.pubDate) : 0;
+        return pub > cutoff;
+      })
+      .map((item) => ({
+        title: item.title?.trim() ?? "",
+        link: item.link ?? "",
+        pubDate: item.pubDate ?? "",
+        source: feed.source,
+        thumbnail: item.thumbnail ?? item.enclosure?.link ?? null,
+        description: item.description?.replace(/<[^>]+>/g, "").trim().slice(0, 200) ?? "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchPhilippineNews(): Promise<PhNewsArticle[]> {
+  const results = await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
+  const all: PhNewsArticle[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") all.push(...r.value);
+  }
+  // Sort newest first
+  all.sort((a, b) => Date.parse(b.pubDate) - Date.parse(a.pubDate));
+  return all.slice(0, 20);
+}
+
 // ─── PAGASA Weather Bulletin ─────────────────────────────────────────────────
 
 export type PagasaBulletin = {

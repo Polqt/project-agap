@@ -28,9 +28,15 @@ import {
   fetchPhilippineEarthquakes,
   fetchGdacsAlerts,
   fetchPagasaBulletin,
+  fetchPhCitiesAirQuality,
+  fetchPhilippineNews,
+  aqiLabel,
+  wxCodeEmoji,
   type UsgsEarthquake,
   type GdacsAlert,
   type PagasaBulletin,
+  type CityAirQuality,
+  type PhNewsArticle,
 } from "../services/hazardFeeds";
 
 const LANG_STORAGE_KEY = "agap-alert-language";
@@ -43,7 +49,7 @@ export function AlertsScreen() {
 
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"alerto" | "mensahe" | "nawawala">("alerto");
+  const [tab, setTab] = useState<"alerto" | "mensahe" | "balita" | "nawawala">("alerto");
   const [language, setLanguage] = useState<AlertLanguage>("filipino");
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportForm, setReportForm] = useState({
@@ -108,6 +114,21 @@ export function AlertsScreen() {
     staleTime: 5 * 60_000,
   });
 
+  const airQualityQuery = useQuery<CityAirQuality[]>({
+    queryKey: ["ph-air-quality"],
+    queryFn: fetchPhCitiesAirQuality,
+    refetchInterval: 15 * 60_000,
+    staleTime: 10 * 60_000,
+  });
+
+  const newsQuery = useQuery<PhNewsArticle[]>({
+    queryKey: ["ph-news"],
+    queryFn: fetchPhilippineNews,
+    refetchInterval: 10 * 60_000,
+    staleTime: 5 * 60_000,
+    enabled: tab === "balita",
+  });
+
   const missingPersonsQuery = useQuery(
     trpc.missingPersons.list.queryOptions(
       { statusFilter: "missing" },
@@ -139,12 +160,15 @@ export function AlertsScreen() {
   const earthquakes = earthquakesQuery.data ?? [];
   const gdacsAlerts = gdacsQuery.data ?? [];
   const bulletin = bulletinQuery.data ?? null;
+  const airQualityData = airQualityQuery.data ?? [];
+  const newsArticles = newsQuery.data ?? [];
   const isRefreshing =
     (alertsQuery.isFetching && !alertsQuery.isLoading) ||
     (broadcastsQuery.isFetching && !broadcastsQuery.isLoading) ||
     (missingPersonsQuery.isFetching && !missingPersonsQuery.isLoading) ||
     earthquakesQuery.isFetching ||
-    gdacsQuery.isFetching;
+    gdacsQuery.isFetching ||
+    newsQuery.isFetching;
 
   // Find highest active signal
   const activeSignal = alerts.reduce<string | null>((best, alert) => {
@@ -167,6 +191,8 @@ export function AlertsScreen() {
       earthquakesQuery.refetch(),
       gdacsQuery.refetch(),
       bulletinQuery.refetch(),
+      airQualityQuery.refetch(),
+      tab === "balita" ? newsQuery.refetch() : Promise.resolve(),
     ]);
   }
 
@@ -210,40 +236,43 @@ export function AlertsScreen() {
           </View>
         ) : null}
 
-        {/* Segmented control: Alerto | Mensahe | Nawawala */}
+        {/* Segmented control: Alerto | Mensahe | Balita | Nawawala */}
         <View className="mx-5 mt-4 flex-row rounded-xl bg-slate-100 p-1">
-          {(["alerto", "mensahe", "nawawala"] as const).map((tabKey) => (
+          {(["alerto", "mensahe", "balita", "nawawala"] as const).map((tabKey) => (
             <Pressable
               key={tabKey}
               onPress={() => setTab(tabKey)}
-              className={`flex-1 items-center rounded-lg py-2.5 ${
+              className={`flex-1 items-center rounded-lg py-2 ${
                 tab === tabKey ? "bg-white shadow-sm" : ""
               }`}
             >
-              <View className="flex-row items-center gap-1.5">
-                <Ionicons
-                  name={
-                    tabKey === "alerto"
-                      ? "warning-outline"
-                      : tabKey === "mensahe"
-                        ? "chatbox-outline"
-                        : "search-outline"
-                  }
-                  size={14}
-                  color={tab === tabKey ? "#0f172a" : "#64748b"}
-                />
-                <Text
-                  className={`text-[12px] font-semibold ${
-                    tab === tabKey ? "text-slate-900" : "text-slate-500"
-                  }`}
-                >
-                  {tabKey === "alerto"
-                    ? t("alerts.tabAlerts")
+              <Ionicons
+                name={
+                  tabKey === "alerto"
+                    ? "warning-outline"
                     : tabKey === "mensahe"
-                      ? t("alerts.tabMessages")
+                      ? "chatbox-outline"
+                      : tabKey === "balita"
+                        ? "newspaper-outline"
+                        : "search-outline"
+                }
+                size={13}
+                color={tab === tabKey ? "#0f172a" : "#64748b"}
+              />
+              <Text
+                className={`mt-0.5 text-[10px] font-semibold ${
+                  tab === tabKey ? "text-slate-900" : "text-slate-500"
+                }`}
+                numberOfLines={1}
+              >
+                {tabKey === "alerto"
+                  ? t("alerts.tabAlerts")
+                  : tabKey === "mensahe"
+                    ? t("alerts.tabMessages")
+                    : tabKey === "balita"
+                      ? t("alerts.tabNews")
                       : t("alerts.tabMissing")}
-                </Text>
-              </View>
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -340,6 +369,52 @@ export function AlertsScreen() {
                     </View>
                   );
                 })}
+              </View>
+            ) : null}
+
+            {/* Air Quality & Weather */}
+            {airQualityData.length > 0 ? (
+              <View className="mx-5 mb-4">
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  {t("alerts.airQuality")}
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-0">
+                  <View className="flex-row gap-2">
+                    {airQualityData.map((city) => {
+                      const aq = aqiLabel(city.aqi);
+                      return (
+                        <View
+                          key={city.city}
+                          className="w-28 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3"
+                        >
+                          <Text className="text-[13px] font-bold text-slate-900">{city.city}</Text>
+                          {city.temperature != null ? (
+                            <Text className="mt-0.5 text-[20px] font-black text-slate-800">
+                              {wxCodeEmoji(city.weatherCode)} {Math.round(city.temperature)}°
+                            </Text>
+                          ) : null}
+                          {city.aqi != null ? (
+                            <View className={`mt-1.5 rounded-full px-2 py-0.5 self-start ${aq.bg}`}>
+                              <Text className={`text-[10px] font-bold ${aq.text}`}>
+                                AQI {city.aqi} · {aq.label}
+                              </Text>
+                            </View>
+                          ) : null}
+                          {city.pm25 != null ? (
+                            <Text className="mt-1 text-[10px] text-slate-400">
+                              PM2.5: {city.pm25.toFixed(1)}
+                            </Text>
+                          ) : null}
+                          {city.windspeed != null ? (
+                            <Text className="text-[10px] text-slate-400">
+                              💨 {city.windspeed} km/h
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
               </View>
             ) : null}
 
@@ -493,6 +568,65 @@ export function AlertsScreen() {
             ))}
           </View>
         ) : null}
+        {/* BALITA TAB */}
+        {tab === "balita" ? (
+          <View className="mt-4">
+            {newsQuery.isLoading ? (
+              <View className="mx-5 items-center py-10">
+                <Text className="text-[13px] text-slate-400">{t("common.loading")}</Text>
+              </View>
+            ) : newsArticles.length === 0 ? (
+              <View className="mx-5 items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8">
+                <Ionicons name="newspaper-outline" size={32} color="#94a3b8" />
+                <Text className="mt-2 text-[14px] font-semibold text-slate-600">
+                  {t("alerts.noNews")}
+                </Text>
+                <Text className="mt-1 text-center text-[13px] text-slate-400">
+                  {t("alerts.noNewsBody")}
+                </Text>
+              </View>
+            ) : null}
+
+            {newsArticles.map((article, i) => {
+              const pubDate = article.pubDate ? new Date(article.pubDate) : null;
+              const timeStr = pubDate
+                ? pubDate.toLocaleDateString("en-PH", { month: "short", day: "numeric" }) +
+                  " · " +
+                  pubDate.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true })
+                : "";
+              const sourceColor =
+                article.source === "GMA News"
+                  ? { bg: "bg-blue-100", text: "text-blue-700" }
+                  : article.source === "Rappler"
+                    ? { bg: "bg-rose-100", text: "text-rose-700" }
+                    : { bg: "bg-emerald-100", text: "text-emerald-700" };
+              return (
+                <View
+                  key={`news-${i}`}
+                  className="mx-5 mb-3 rounded-2xl border border-slate-100 bg-white px-4 py-3.5"
+                >
+                  <View className="flex-row items-center gap-2 mb-1.5">
+                    <View className={`rounded-md px-2 py-0.5 ${sourceColor.bg}`}>
+                      <Text className={`text-[10px] font-bold ${sourceColor.text}`}>
+                        {article.source}
+                      </Text>
+                    </View>
+                    <Text className="text-[11px] text-slate-400">{timeStr}</Text>
+                  </View>
+                  <Text className="text-[14px] font-semibold leading-[19px] text-slate-900" numberOfLines={3}>
+                    {article.title}
+                  </Text>
+                  {article.description ? (
+                    <Text className="mt-1.5 text-[12px] leading-[17px] text-slate-500" numberOfLines={2}>
+                      {article.description}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
         {/* NAWAWALA TAB */}
         {tab === "nawawala" ? (
           <View className="mt-4">
