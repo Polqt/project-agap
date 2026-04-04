@@ -1,38 +1,41 @@
-import { Ionicons } from "@expo/vector-icons";
-import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import Constants from "expo-constants";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { env } from "@project-agap/env/native";
+import { useEffect, useMemo, useState } from "react";
+import { Image, Platform, Text, View } from "react-native";
 
-import { useTranslation } from "react-i18next";
-
+import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
-import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { getResidentMapCache, setResidentMapCache } from "@/services/mapCache";
-import { trpc } from "@/services/trpc";
-import { formatDistanceKm, haversineDistanceKm } from "@/shared/utils/geo";
-import type { CachedResidentMapData } from "@/types/map";
-import type { EvacuationCenter, EvacuationRoute } from "@project-agap/api/supabase";
+import { queryClient, trpc } from "@/services/trpc";
+import { getErrorMessage, getServerConnectionErrorMessage } from "@/shared/utils/errors";
+import { haversineDistanceKm } from "@/shared/utils/geo";
+import type { CachedResidentMapData, LocationPoint } from "@/types/map";
 
 type ReactNativeMapsModule = typeof import("react-native-maps");
 
+/** Barangay Banago focus (Avelino B. Torrecampo Memorial Hall area from pilot seed). */
 const FALLBACK_REGION = {
-  latitude: 10.7036,
-  longitude: 122.9501,
-  latitudeDelta: 0.04,
-  longitudeDelta: 0.04,
+  latitude: 10.7020,
+  longitude: 122.9575,
+  latitudeDelta: 0.012,
+  longitudeDelta: 0.012,
 };
 
-function isExpoGo() {
-  return Constants.executionEnvironment === "storeClient";
+function getStaticMapUrl(latitude: number, longitude: number) {
+  const lat = latitude.toFixed(6);
+  const lon = longitude.toFixed(6);
+
+  // Yandex static maps endpoint is used here because it is reachable in this environment.
+  return `https://static-maps.yandex.ru/1.x/?ll=${lon},${lat}&size=650,350&z=16&l=map&pt=${lon},${lat},pm2rdm`;
 }
 
 function getReactNativeMapsModule() {
-  if (isExpoGo()) return null;
+  // Keep static fallback on web where react-native-maps support is limited.
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   try {
     return require("react-native-maps") as ReactNativeMapsModule;
   } catch {
@@ -40,27 +43,13 @@ function getReactNativeMapsModule() {
   }
 }
 
-function getRouteCoords(route: EvacuationRoute): { latitude: number; longitude: number }[] {
-  const geojson = route.route_geojson as { coordinates?: [number, number][] };
-  return (geojson.coordinates ?? []).map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
-}
-
-function getWalkMinutes(km: number, walkMinutesTemplate: string): string {
-  const mins = Math.round((km / 4.5) * 60);
-  return walkMinutesTemplate.replace("{{minutes}}", String(mins));
-}
-
 export function EvacuationMap() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
   const { profile } = useAuth();
-  const { isOnline } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const [cachedData, setCachedData] = useState<CachedResidentMapData | null>(null);
-  const [selectedCenter, setSelectedCenter] = useState<EvacuationCenter | null>(null);
-  const [showHeatmap, setShowHeatmap] = useState(false);
-  const bottomSheetRef = useRef<BottomSheet>(null);
+  const [isNativeMapReady, setIsNativeMapReady] = useState(false);
+  const [pinnedLocation, setPinnedLocation] = useState<LocationPoint | null>(null);
+  const [pinSyncMessage, setPinSyncMessage] = useState<string | null>(null);
   const mapsModule = useMemo(() => getReactNativeMapsModule(), []);
 
   const routesQuery = useQuery(
@@ -77,367 +66,291 @@ export function EvacuationMap() {
     ),
   );
 
-  const heatmapQuery = useQuery(
-    trpc.dashboard.heatmapData.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) && showHeatmap },
-    ),
-  );
-
   useEffect(() => {
-    if (!profile?.barangay_id) return;
+    if (!profile?.barangay_id) {
+      return;
+    }
+
     void getResidentMapCache(profile.barangay_id).then(setCachedData);
   }, [profile?.barangay_id]);
 
   useEffect(() => {
-    if (!profile?.barangay_id || !centersQuery.data || !routesQuery.data) return;
+    if (!profile?.barangay_id || !centersQuery.data || !routesQuery.data) {
+      return;
+    }
+
     const nextCache: CachedResidentMapData = {
       barangayId: profile.barangay_id,
       centers: centersQuery.data,
       routes: routesQuery.data,
       updatedAt: Date.now(),
     };
+
     setCachedData(nextCache);
     void setResidentMapCache(nextCache);
   }, [centersQuery.data, profile?.barangay_id, routesQuery.data]);
+
+  const pinnedLocationQueryKey = trpc.profile.getPinnedLocation.queryKey();
+  const pinnedLocationQuery = useQuery(
+    trpc.profile.getPinnedLocation.queryOptions(undefined, {
+      enabled: Boolean(profile?.id),
+    }),
+  );
+
+  const setPinnedLocationMutation = useMutation(
+    trpc.profile.setPinnedLocation.mutationOptions({
+      onSuccess: (result) => {
+        queryClient.setQueryData(pinnedLocationQueryKey, result);
+      },
+    }),
+  );
+
+  const clearPinnedLocationMutation = useMutation(
+    trpc.profile.clearPinnedLocation.mutationOptions({
+      onSuccess: () => {
+        queryClient.setQueryData(pinnedLocationQueryKey, null);
+      },
+    }),
+  );
+
+  useEffect(() => {
+    if (!pinnedLocationQuery.data) {
+      return;
+    }
+
+    setPinnedLocation({
+      latitude: pinnedLocationQuery.data.latitude,
+      longitude: pinnedLocationQuery.data.longitude,
+    });
+  }, [pinnedLocationQuery.data]);
+
+  useEffect(() => {
+    if (pinnedLocationQuery.data === null) {
+      setPinnedLocation(null);
+    }
+  }, [pinnedLocationQuery.data]);
 
   const centers = centersQuery.data?.length ? centersQuery.data : cachedData?.centers ?? [];
   const routes = routesQuery.data?.length ? routesQuery.data : cachedData?.routes ?? [];
 
   const sortedCenters = useMemo(() => {
-    return [...centers].sort((a, b) => {
-      const da = location
-        ? haversineDistanceKm(location.latitude, location.longitude, a.latitude, a.longitude)
+    return [...centers].sort((left, right) => {
+      const leftDistance = location
+        ? haversineDistanceKm(location.latitude, location.longitude, left.latitude, left.longitude)
         : Number.MAX_SAFE_INTEGER;
-      const db = location
-        ? haversineDistanceKm(location.latitude, location.longitude, b.latitude, b.longitude)
+      const rightDistance = location
+        ? haversineDistanceKm(location.latitude, location.longitude, right.latitude, right.longitude)
         : Number.MAX_SAFE_INTEGER;
-      return da - db;
+
+      return leftDistance - rightDistance;
     });
   }, [centers, location]);
 
-  const region = {
-    latitude: location?.latitude ?? sortedCenters[0]?.latitude ?? FALLBACK_REGION.latitude,
-    longitude: location?.longitude ?? sortedCenters[0]?.longitude ?? FALLBACK_REGION.longitude,
-    latitudeDelta: FALLBACK_REGION.latitudeDelta,
-    longitudeDelta: FALLBACK_REGION.longitudeDelta,
-  };
-
-  const handleMarkerPress = useCallback(
-    (center: EvacuationCenter) => {
-      setSelectedCenter(center);
-      bottomSheetRef.current?.snapToIndex(0);
-    },
-    [],
+  const region = FALLBACK_REGION;
+  const staticMapPreviewUrl = useMemo(
+    () => getStaticMapUrl(region.latitude, region.longitude),
+    [region.latitude, region.longitude],
   );
 
-  // F9: Recommended route — nearest open center with capacity
-  const recommendedCenter = useMemo(() => {
-    if (!location) return null;
-    const open = sortedCenters.filter(
-      (c) => c.is_open && c.current_occupancy < c.capacity,
-    );
-    return open[0] ?? null;
-  }, [sortedCenters, location]);
+  const MapViewComponent = mapsModule?.default;
+  const MarkerComponent = mapsModule?.Marker;
+  const PolylineComponent = mapsModule?.Polyline;
 
-  const recommendedRoute = useMemo(() => {
-    if (!recommendedCenter) return null;
-    return routes.find((r) => r.center_id === recommendedCenter.id) ?? null;
-  }, [recommendedCenter, routes]);
+  async function persistPinnedLocation(nextPin: LocationPoint) {
+    setPinnedLocation(nextPin);
+    setPinSyncMessage("Saving pin to server...");
 
-  const recommendedDistance = useMemo(() => {
-    if (!recommendedCenter || !location) return null;
-    return haversineDistanceKm(
-      location.latitude,
-      location.longitude,
-      recommendedCenter.latitude,
-      recommendedCenter.longitude,
-    );
-  }, [recommendedCenter, location]);
+    try {
+      await setPinnedLocationMutation.mutateAsync(nextPin);
+      await pinnedLocationQuery.refetch();
+      setPinSyncMessage("Pinned location saved to backend.");
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, "Failed to save pin to backend.");
+      if (errorMessage.toLowerCase().includes("network request failed")) {
+        setPinSyncMessage(getServerConnectionErrorMessage("Unable to reach API for pin save."));
+      } else {
+        setPinSyncMessage(errorMessage);
+      }
+    }
+  }
 
-  const MapView = mapsModule?.default;
-  const Marker = mapsModule?.Marker;
-  const Polyline = mapsModule?.Polyline;
-  const Circle = mapsModule?.Circle;
+  function handlePinMyLocation() {
+    if (!location) {
+      return;
+    }
 
-  const selectedDistance =
-    selectedCenter && location
-      ? haversineDistanceKm(
-          location.latitude,
-          location.longitude,
-          selectedCenter.latitude,
-          selectedCenter.longitude,
-        )
-      : null;
+    void persistPinnedLocation({
+      latitude: location.latitude,
+      longitude: location.longitude,
+    });
+  }
+
+  function handleMapLongPress(event: {
+    nativeEvent: {
+      coordinate: LocationPoint;
+    };
+  }) {
+    void persistPinnedLocation(event.nativeEvent.coordinate);
+  }
+
+  function handlePinnedDragEnd(event: {
+    nativeEvent: {
+      coordinate: LocationPoint;
+    };
+  }) {
+    void persistPinnedLocation(event.nativeEvent.coordinate);
+  }
+
+  async function handleClearPin() {
+    setPinnedLocation(null);
+    setPinSyncMessage("Clearing pinned location on server...");
+
+    try {
+      await clearPinnedLocationMutation.mutateAsync();
+      await pinnedLocationQuery.refetch();
+      setPinSyncMessage("Pinned location cleared from backend.");
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, "Failed to clear pin on backend.");
+      if (errorMessage.toLowerCase().includes("network request failed")) {
+        setPinSyncMessage(getServerConnectionErrorMessage("Unable to reach API for pin clear."));
+      } else {
+        setPinSyncMessage(errorMessage);
+      }
+    }
+  }
 
   return (
-    <View className="flex-1 bg-slate-900">
-      {/* Full-bleed map */}
-      {MapView && Marker && Polyline ? (
-        <MapView className="flex-1" initialRegion={region}>
-          {location ? (
-            <Marker coordinate={location} title="You" pinColor="#2563eb" />
-          ) : null}
-          {sortedCenters.map((center) => (
-            <Marker
-              key={center.id}
-              coordinate={{ latitude: center.latitude, longitude: center.longitude }}
-              title={center.name}
-              description={center.is_open ? t("map.openNow") : t("map.closed")}
-              pinColor={center.is_open ? "#16a34a" : "#dc2626"}
-              onPress={() => handleMarkerPress(center)}
-            />
-          ))}
-          {routes.map((route) => {
-            const coords = getRouteCoords(route);
-            if (!coords.length) return null;
-            const isRecommended = recommendedRoute?.id === route.id;
-            return (
-              <Polyline
-                key={route.id}
-                coordinates={coords}
-                strokeColor={isRecommended ? "#0ea5e9" : (route.color_hex || "#1d4ed8")}
-                strokeWidth={isRecommended ? 6 : 4}
+    <View className="flex-1 bg-slate-50 pb-8">
+      <ScreenHeader
+        eyebrow="5.2.2 Evacuation map"
+        title="Find the nearest open center"
+        description="Map markers, route overlays, and cached center data stay visible even when connectivity gets weak."
+      />
+
+      <SectionCard
+        title="Map"
+        subtitle={
+          cachedData && !centersQuery.data?.length
+            ? "Showing cached center and route data."
+            : "Live center and route data for your barangay. Long-press to pin and save your location."
+        }
+      >
+        {MapViewComponent && MarkerComponent && PolylineComponent ? (
+          <View className="h-[30rem] overflow-hidden rounded-3xl">
+            {!isNativeMapReady ? (
+              <Image
+                source={{ uri: staticMapPreviewUrl }}
+                className="absolute inset-0 h-full w-full"
+                resizeMode="cover"
               />
-            );
-          })}
-          {/* F2: Heatmap circles — need_help density per purok */}
-          {showHeatmap && Circle
-            ? (heatmapQuery.data ?? []).map((stat) => {
-                const color =
-                  stat.count >= 5
-                    ? "rgba(220,38,38,0.35)"
-                    : stat.count >= 2
-                      ? "rgba(245,158,11,0.35)"
-                      : "rgba(34,197,94,0.25)";
-                const strokeColor =
-                  stat.count >= 5 ? "#dc2626" : stat.count >= 2 ? "#f59e0b" : "#22c55e";
-                return (
-                  <Circle
-                    key={stat.purok}
-                    center={{ latitude: stat.latitude, longitude: stat.longitude }}
-                    radius={300}
-                    fillColor={color}
-                    strokeColor={strokeColor}
-                    strokeWidth={1}
-                  />
-                );
-              })
-            : null}
-        </MapView>
-      ) : (
-        <View className="flex-1 items-center justify-center bg-slate-100 px-8">
-          <Ionicons name="map-outline" size={48} color="#94a3b8" />
-          <Text className="mt-4 text-center text-[15px] font-medium text-slate-500">
-            {t("map.noLocation")}
-          </Text>
-          <Text className="mt-1 text-center text-[13px] text-slate-400">
-            {t("map.evacuationCenters")}
-          </Text>
-        </View>
-      )}
-
-      {/* Top bar overlay */}
-      <View
-        className="absolute left-0 right-0 flex-row items-center justify-between px-4"
-        style={{ top: insets.top + 8 }}
-        pointerEvents="box-none"
-      >
-        <View className="flex-row items-center gap-2">
-          {!isOnline ? (
-            <View className="flex-row items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5">
-              <View className="h-2 w-2 rounded-full bg-amber-500" />
-              <Text className="text-[11px] font-semibold text-amber-800">{t("common.offline")}</Text>
-            </View>
-          ) : null}
-          {/* F2: Heatmap toggle */}
-          <Pressable
-            onPress={() => setShowHeatmap((v) => !v)}
-            className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${showHeatmap ? "bg-rose-600" : "bg-white/90"}`}
-          >
-            <Ionicons
-              name="flame-outline"
-              size={14}
-              color={showHeatmap ? "#fff" : "#334155"}
-            />
-            <Text className={`text-[11px] font-semibold ${showHeatmap ? "text-white" : "text-slate-700"}`}>
-              {t("map.heatmap")}
-            </Text>
-          </Pressable>
-        </View>
-        <Pressable
-          onPress={() => router.push("/(resident)/profile")}
-          className="h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm"
-        >
-          <Ionicons name="person-outline" size={18} color="#334155" />
-        </Pressable>
-      </View>
-
-      {/* F9: Recommended route callout */}
-      {recommendedCenter && recommendedDistance != null ? (
-        <View
-          className="absolute left-4 right-4 flex-row items-center gap-3 rounded-2xl bg-sky-600 px-4 py-3 shadow-lg"
-          style={{ top: insets.top + 56 }}
-          pointerEvents="none"
-        >
-          <Ionicons name="navigate-outline" size={18} color="white" />
-          <View className="flex-1">
-            <Text className="text-[12px] font-semibold text-sky-100">{t("map.recommendedRoute")}</Text>
-            <Text className="text-[14px] font-bold text-white" numberOfLines={1}>
-              {recommendedCenter.name}
-            </Text>
-          </View>
-          <Text className="text-[12px] font-semibold text-sky-100">
-            {getWalkMinutes(recommendedDistance, t("map.walkMinutes"))}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* FAB: Check-In shortcut */}
-      <View
-        className="absolute right-4"
-        style={{ bottom: insets.bottom + 24 }}
-        pointerEvents="box-none"
-      >
-        <Pressable
-          onPress={() => router.push("/(resident)/checkin")}
-          className="h-14 w-14 items-center justify-center rounded-full bg-blue-700 shadow-lg active:bg-blue-800"
-        >
-          <Ionicons name="qr-code-outline" size={24} color="white" />
-        </Pressable>
-      </View>
-
-      {/* Bottom sheet: Center detail */}
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={-1}
-        snapPoints={["35%", "65%"]}
-        enablePanDownToClose
-        backgroundStyle={{ backgroundColor: "#ffffff", borderRadius: 24 }}
-        handleIndicatorStyle={{ backgroundColor: "#cbd5e1", width: 36 }}
-      >
-        <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
-          {selectedCenter ? (
-            <View className="gap-4">
-              <View className="flex-row items-start justify-between gap-3">
-                <View className="flex-1">
-                  <Text className="text-[18px] font-bold text-slate-900">
-                    {selectedCenter.name}
-                  </Text>
-                  <Text className="mt-1 text-[13px] text-slate-500">
-                    {selectedCenter.address}
-                  </Text>
-                </View>
-                <View
-                  className={`rounded-full px-3 py-1 ${
-                    selectedCenter.is_open ? "bg-emerald-100" : "bg-rose-100"
-                  }`}
-                >
-                  <Text
-                    className={`text-[12px] font-semibold ${
-                      selectedCenter.is_open ? "text-emerald-700" : "text-rose-700"
-                    }`}
-                  >
-                    {selectedCenter.is_open ? t("map.openNow") : t("map.closed")}
-                  </Text>
-                </View>
-              </View>
-
-              {selectedDistance != null ? (
-                <Text className="text-[13px] text-slate-500">
-                  {formatDistanceKm(selectedDistance)} · {t("map.nearbyCenter")}
-                </Text>
+            ) : null}
+            <MapViewComponent
+              style={{ flex: 1, opacity: isNativeMapReady ? 1 : 0 }}
+              initialRegion={region}
+              scrollEnabled
+              zoomEnabled
+              rotateEnabled
+              pitchEnabled
+              onMapReady={() => setIsNativeMapReady(true)}
+              onLongPress={handleMapLongPress}
+            >
+              {location ? (
+                <MarkerComponent coordinate={location} title="Your location" pinColor="#2563eb" />
               ) : null}
-
-              {/* Capacity bar */}
-              <View className="gap-2">
-                <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-                  {t("map.capacity")}
-                </Text>
-                <View className="h-3 overflow-hidden rounded-full bg-slate-200">
-                  <View
-                    className={`h-full rounded-full ${
-                      selectedCenter.current_occupancy / selectedCenter.capacity > 0.8
-                        ? "bg-amber-500"
-                        : "bg-emerald-500"
-                    }`}
-                    style={{
-                      width: `${Math.min(100, (selectedCenter.current_occupancy / Math.max(1, selectedCenter.capacity)) * 100)}%`,
-                    }}
-                  />
-                </View>
-                <Text className="text-[13px] font-medium text-slate-700">
-                  {selectedCenter.current_occupancy}/{selectedCenter.capacity}
-                </Text>
-              </View>
-
-              {selectedCenter.contact_number ? (
-                <View className="flex-row items-center gap-2">
-                  <Ionicons name="call-outline" size={14} color="#64748b" />
-                  <Text className="text-[13px] text-slate-600">{selectedCenter.contact_number}</Text>
-                </View>
+              {pinnedLocation ? (
+                <MarkerComponent
+                  coordinate={pinnedLocation}
+                  title="Pinned location"
+                  description="Drag to adjust or long-press map to move pin."
+                  pinColor="#dc2626"
+                  draggable
+                  onDragEnd={handlePinnedDragEnd}
+                />
               ) : null}
-
-              {selectedCenter.is_open ? (
-                <Pressable
-                  onPress={() => router.push("/(resident)/checkin")}
-                  className="items-center rounded-xl bg-emerald-600 py-3.5 active:bg-emerald-700"
-                >
-                  <Text className="text-[15px] font-semibold text-white">{t("map.checkIn")}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : (
-            <Text className="py-8 text-center text-[14px] text-slate-400">
-              {t("map.centerDetails")}
-            </Text>
-          )}
-
-          {/* Center list fallback */}
-          {!selectedCenter && sortedCenters.length > 0 ? (
-            <View className="mt-2 gap-2">
-              {sortedCenters.map((center) => {
-                const dist = location
-                  ? haversineDistanceKm(
-                      location.latitude,
-                      location.longitude,
-                      center.latitude,
-                      center.longitude,
+              {sortedCenters.map((center) => (
+                <MarkerComponent
+                  key={center.id}
+                  coordinate={{ latitude: center.latitude, longitude: center.longitude }}
+                  title={center.name}
+                  description={center.address}
+                  pinColor={center.is_open ? "#16a34a" : "#f59e0b"}
+                />
+              ))}
+              {routes.map((route) => {
+                const coordinates = Array.isArray((route.route_geojson as { coordinates?: unknown[] }).coordinates)
+                  ? ((route.route_geojson as { coordinates: [number, number][] }).coordinates ?? []).map(
+                      ([longitude, latitude]) => ({
+                        latitude,
+                        longitude,
+                      }),
                     )
-                  : null;
+                  : [];
+
+                if (!coordinates.length) {
+                  return null;
+                }
+
                 return (
-                  <Pressable
-                    key={center.id}
-                    onPress={() => handleMarkerPress(center)}
-                    className="flex-row items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
-                  >
-                    <View className="flex-1">
-                      <Text className="text-[14px] font-semibold text-slate-900">{center.name}</Text>
-                      <Text className="text-[12px] text-slate-500">
-                        {center.address}
-                        {dist != null ? ` \u00b7 ${formatDistanceKm(dist)}` : ""}
-                      </Text>
-                    </View>
-                    <View
-                      className={`rounded-full px-2 py-0.5 ${
-                        center.is_open ? "bg-emerald-100" : "bg-rose-100"
-                      }`}
-                    >
-                      <Text
-                        className={`text-[11px] font-semibold ${
-                          center.is_open ? "text-emerald-700" : "text-rose-700"
-                        }`}
-                      >
-                        {center.is_open ? t("map.openNow") : t("map.closed")}
-                      </Text>
-                    </View>
-                  </Pressable>
+                  <PolylineComponent
+                    key={route.id}
+                    coordinates={coordinates}
+                    strokeColor={route.color_hex || "#1d4ed8"}
+                    strokeWidth={4}
+                  />
                 );
               })}
+            </MapViewComponent>
+
+            <View className="absolute bottom-3 left-3 right-3 gap-2">
+              <View className="flex-row gap-2">
+                <View className="flex-1">
+                  <AppButton
+                    label={pinnedLocation ? "Move pin to my location" : "Pin my location"}
+                    onPress={handlePinMyLocation}
+                    variant="secondary"
+                    disabled={!location || setPinnedLocationMutation.isPending || clearPinnedLocationMutation.isPending}
+                    loading={setPinnedLocationMutation.isPending}
+                  />
+                </View>
+                {pinnedLocation ? (
+                  <View className="flex-1">
+                    <AppButton
+                      label="Clear pin"
+                      onPress={() => {
+                        void handleClearPin();
+                      }}
+                      variant="ghost"
+                      loading={clearPinnedLocationMutation.isPending}
+                      disabled={setPinnedLocationMutation.isPending || clearPinnedLocationMutation.isPending}
+                    />
+                  </View>
+                ) : null}
+              </View>
+              <View className="rounded-2xl bg-white/90 px-3 py-2">
+                <Text className="text-xs text-slate-700">
+                  {pinSyncMessage ??
+                    (pinnedLocationQuery.data
+                      ? `Server pin: ${pinnedLocationQuery.data.latitude.toFixed(5)}, ${pinnedLocationQuery.data.longitude.toFixed(5)}`
+                      : "Server pin: none")}
+                </Text>
+                <Text className="mt-1 text-[10px] text-slate-500">API: {env.EXPO_PUBLIC_SERVER_URL}</Text>
+              </View>
             </View>
-          ) : null}
-        </BottomSheetScrollView>
-      </BottomSheet>
+          </View>
+        ) : (
+          <View>
+            <Image
+              source={{ uri: staticMapPreviewUrl }}
+              className="h-[30rem] w-full rounded-3xl"
+              resizeMode="cover"
+            />
+            <Text className="mt-3 text-sm text-slate-500">
+              Pinning is available on the interactive mobile map. Long-press to drop a pin.
+            </Text>
+          </View>
+        )}
+      </SectionCard>
+
     </View>
   );
 }
