@@ -7,6 +7,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useStore } from "@tanstack/react-store";
 
+import { getPostAuthRoute } from "@/services/onboarding";
 import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { AppButton, TextField } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -17,7 +18,7 @@ import { appShellStore } from "@/stores/app-shell-store";
 export function SignInForm() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn, role, isAuthenticated, isLoading, resetPassword } = useAuth();
+  const { signIn, role, isAuthenticated, isLoading, resetPassword, session } = useAuth();
   const selectedRole = useStore(appShellStore, (state) => state.selectedRole);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,10 +35,28 @@ export function SignInForm() {
   });
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !role) return;
-    // After login from the sign-in screen, show the welcome pager
-    router.replace("/welcome");
-  }, [isAuthenticated, role, router]);
+    if (isLoading || !isAuthenticated || !role || !session?.user.id) {
+      return;
+    }
+
+    let isCancelled = false;
+    const userId = session.user.id;
+    const resolvedRole = role;
+
+    async function routeAfterSignIn() {
+      const nextRoute = await getPostAuthRoute(userId, resolvedRole);
+
+      if (!isCancelled) {
+        router.replace(nextRoute);
+      }
+    }
+
+    void routeAfterSignIn();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated, isLoading, role, router, session?.user.id]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);

@@ -48,6 +48,9 @@ export type BarangaysRow = TimestampedUpdated &
     region: string;
     alert_level: AlertLevel;
     active_alert_text: string | null;
+    emergency_mode_enabled: boolean;
+    resident_ping_enabled: boolean;
+    resident_checkin_enabled: boolean;
     total_households: number;
   };
 export type BarangaysInsert = ReadonlyMutationShape<

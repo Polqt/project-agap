@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
 import { useTranslation } from "react-i18next";
 
@@ -15,12 +16,11 @@ import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { formatDistanceKm, haversineDistanceKm } from "@/shared/utils/geo";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 
-import type { EvacuationCenter } from "@project-agap/api/supabase";
-
 type Mode = "qr" | "manual";
 
 export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { t } = useTranslation();
   const { profile } = useAuth();
   const { isOnline, queueAction } = useOfflineQueue();
@@ -28,7 +28,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
 
   const [mode, setMode] = useState<Mode>("qr");
   const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isScanLocked, setIsScanLocked] = useState(false);
   const [checkedInMembers, setCheckedInMembers] = useState<string[]>([]);
@@ -41,6 +40,12 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
     }),
   );
 
+  const residentAccessQuery = useQuery(
+    trpc.barangays.getMyResidentAccess.queryOptions(undefined, {
+      enabled: Boolean(profile?.barangay_id),
+    }),
+  );
+
   const centersQuery = useQuery(
     trpc.evacuationCenters.listByBarangay.queryOptions(
       { barangayId: profile?.barangay_id ?? "" },
@@ -49,12 +54,11 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   );
 
   const allCenters = centersQuery.data ?? [];
+  const residentCheckInEnabled = residentAccessQuery.data?.residentCheckInEnabled ?? true;
 
   const sortedCenters = useMemo(() => {
     return [...allCenters].sort((a, b) => {
-      // Open centers first
       if (a.is_open !== b.is_open) return a.is_open ? -1 : 1;
-      // Then by distance
       const da = location
         ? haversineDistanceKm(location.latitude, location.longitude, a.latitude, a.longitude)
         : Number.MAX_SAFE_INTEGER;
@@ -67,7 +71,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
 
   const openCenters = useMemo(() => allCenters.filter((c) => c.is_open), [allCenters]);
 
-  // Auto-select first open center
   useEffect(() => {
     if (!openCenters.length) {
       setSelectedCenterId(null);
@@ -85,9 +88,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   const members = household?.household_members ?? [];
 
   function toggleMember(id: string) {
-    setCheckedInMembers((prev) =>
-      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
-    );
+    setCheckedInMembers((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
   }
 
   const handleBarcodeScanned = useCallback(
@@ -140,7 +141,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
     const payload = {
       centerId: selectedCenterId,
       householdId: household?.id ?? undefined,
-      notes: notes.trim() || undefined,
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
@@ -149,7 +149,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
     if (!isOnline) {
       await queueAction(createQueuedAction("check-in.manual", payload));
       setFeedback("Queued offline.");
-      setNotes("");
       setCheckInSuccess(true);
       return;
     }
@@ -157,13 +156,11 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
     try {
       await manualMutation.mutateAsync(payload);
       setFeedback("Check-in submitted.");
-      setNotes("");
       setCheckInSuccess(true);
     } catch (error) {
       if (isOfflineLikeError(error)) {
         await queueAction(createQueuedAction("check-in.manual", payload));
         setFeedback("Connection dropped. Queued.");
-        setNotes("");
         setCheckInSuccess(true);
         return;
       }
@@ -186,7 +183,36 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
     setFeedback(null);
   }
 
-  // Post-check-in: show household members checklist
+  if (!kioskMode && !residentCheckInEnabled) {
+    return (
+      <View className="flex-1 bg-white">
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="px-5">
+            <View className="rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-6">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-amber-200">
+                <Ionicons name="ban-outline" size={28} color="#d97706" />
+              </View>
+              <Text className="mt-4 text-[22px] font-bold text-slate-900">Check-in is currently paused</Text>
+              <Text className="mt-2 text-[14px] leading-6 text-amber-900">
+                Your barangay has not enabled normal evacuation check-in right now. If a sudden emergency happens, use the emergency help button from the status screen first.
+              </Text>
+              <Pressable
+                onPress={() => router.replace("/(resident)/status")}
+                className="mt-5 min-h-12 items-center justify-center rounded-2xl bg-slate-950"
+              >
+                <Text className="text-[14px] font-semibold text-white">Go to emergency status</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   if (checkInSuccess && members.length > 0) {
     return (
       <View className="flex-1 bg-white">
@@ -209,9 +235,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
             <Text className="mt-5 text-[13px] font-semibold uppercase tracking-wider text-slate-400">
               {t("checkin.proxyCheckIn")}
             </Text>
-            <Text className="mt-1 text-[13px] text-slate-500">
-              {t("checkin.selectMembers")}
-            </Text>
+            <Text className="mt-1 text-[13px] text-slate-500">{t("checkin.selectMembers")}</Text>
 
             <View className="mt-4 gap-2">
               {members.map((member) => {
@@ -225,14 +249,10 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                     }`}
                   >
                     <View className="flex-1">
-                      <Text className="text-[15px] font-medium text-slate-900">
-                        {member.full_name}
-                      </Text>
+                      <Text className="text-[15px] font-medium text-slate-900">{member.full_name}</Text>
                       <Text className="text-[12px] text-slate-500">
                         {member.age != null ? `Age ${member.age}` : ""}
-                        {member.vulnerability_flags?.length
-                          ? ` \u00b7 ${member.vulnerability_flags.join(", ")}`
-                          : ""}
+                        {member.vulnerability_flags?.length ? ` · ${member.vulnerability_flags.join(", ")}` : ""}
                       </Text>
                     </View>
                     <View
@@ -247,10 +267,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
               })}
             </View>
 
-            <Pressable
-              onPress={resetFlow}
-              className="mt-6 items-center rounded-xl bg-slate-900 py-3.5"
-            >
+            <Pressable onPress={resetFlow} className="mt-6 items-center rounded-xl bg-slate-900 py-3.5">
               <Text className="text-[14px] font-semibold text-white">{t("common.done")}</Text>
             </Pressable>
           </View>
@@ -259,7 +276,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
     );
   }
 
-  // Post-check-in without members: simple success
   if (checkInSuccess) {
     return (
       <View className="flex-1 items-center justify-center bg-white px-8">
@@ -268,10 +284,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
         </View>
         <Text className="mt-4 text-[18px] font-bold text-slate-900">{t("checkin.checkInSuccess")}</Text>
         <Text className="mt-1 text-center text-[14px] text-slate-500">{feedback}</Text>
-        <Pressable
-          onPress={resetFlow}
-          className="mt-6 rounded-xl bg-slate-900 px-8 py-3.5"
-        >
+        <Pressable onPress={resetFlow} className="mt-6 rounded-xl bg-slate-900 px-8 py-3.5">
           <Text className="text-[14px] font-semibold text-white">{t("common.done")}</Text>
         </Pressable>
       </View>
@@ -286,20 +299,16 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View className="px-5">
           <Text className="text-[22px] font-bold text-slate-900">{t("checkin.title")}</Text>
         </View>
 
-        {/* Segmented control */}
         <View className="mx-5 mt-4 flex-row rounded-xl bg-slate-100 p-1">
           {(["qr", "manual"] as const).map((m) => (
             <Pressable
               key={m}
               onPress={() => setMode(m)}
-              className={`flex-1 items-center rounded-lg py-2.5 ${
-                mode === m ? "bg-white shadow-sm" : ""
-              }`}
+              className={`flex-1 items-center rounded-lg py-2.5 ${mode === m ? "bg-white shadow-sm" : ""}`}
             >
               <View className="flex-row items-center gap-1.5">
                 <Ionicons
@@ -307,11 +316,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                   size={15}
                   color={mode === m ? "#0f172a" : "#64748b"}
                 />
-                <Text
-                  className={`text-[13px] font-semibold ${
-                    mode === m ? "text-slate-900" : "text-slate-500"
-                  }`}
-                >
+                <Text className={`text-[13px] font-semibold ${mode === m ? "text-slate-900" : "text-slate-500"}`}>
                   {m === "qr" ? t("checkin.scanQr") : t("checkin.manualCheckIn")}
                 </Text>
               </View>
@@ -319,7 +324,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
           ))}
         </View>
 
-        {/* QR Mode */}
         {mode === "qr" ? (
           <View className="mt-4 px-5">
             {!permission?.granted ? (
@@ -328,9 +332,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                 <Text className="mt-3 text-center text-[14px] font-medium text-slate-700">
                   {t("auth.locationPermission")}
                 </Text>
-                <Text className="mt-1 text-center text-[13px] text-slate-500">
-                  {t("checkin.scanQr")}
-                </Text>
+                <Text className="mt-1 text-center text-[13px] text-slate-500">{t("checkin.scanQr")}</Text>
                 <Pressable
                   onPress={() => void handleRequestPermission()}
                   className="mt-4 rounded-xl bg-slate-900 px-6 py-3"
@@ -346,7 +348,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                   barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
                   onBarcodeScanned={handleBarcodeScanned}
                 />
-                {/* Scan zone overlay */}
                 <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
                   <View className="h-48 w-48 rounded-2xl border-2 border-white/60" />
                 </View>
@@ -363,7 +364,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
           </View>
         ) : null}
 
-        {/* Manual Mode */}
         {mode === "manual" ? (
           <View className="mt-4 px-5">
             <Text className="text-[13px] font-semibold uppercase tracking-wider text-slate-400">
@@ -372,12 +372,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
             <View className="mt-3 gap-2">
               {sortedCenters.map((center) => {
                 const dist = location
-                  ? haversineDistanceKm(
-                      location.latitude,
-                      location.longitude,
-                      center.latitude,
-                      center.longitude,
-                    )
+                  ? haversineDistanceKm(location.latitude, location.longitude, center.latitude, center.longitude)
                   : null;
                 const selected = selectedCenterId === center.id;
                 const closed = !center.is_open;
@@ -398,16 +393,11 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                   >
                     <View className="flex-1">
                       <Text className="text-[14px] font-semibold text-slate-900">{center.name}</Text>
-                      <Text className="text-[12px] text-slate-500">
-                        {center.address}
-                      </Text>
+                      <Text className="text-[12px] text-slate-500">{center.address}</Text>
                       <View className="mt-1 flex-row items-center gap-3">
                         {dist != null ? (
-                          <Text className="text-[11px] font-medium text-blue-600">
-                            {formatDistanceKm(dist)}
-                          </Text>
+                          <Text className="text-[11px] font-medium text-blue-600">{formatDistanceKm(dist)}</Text>
                         ) : null}
-                        {/* Mini occupancy bar */}
                         <View className="flex-1 flex-row items-center gap-2">
                           <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
                             <View
@@ -468,7 +458,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
           </View>
         ) : null}
 
-        {/* Feedback */}
         {feedback && !checkInSuccess ? (
           <View className="mx-5 mt-3 rounded-xl bg-slate-100 px-4 py-2.5">
             <Text className="text-[13px] text-slate-600">{feedback}</Text>

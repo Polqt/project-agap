@@ -1,14 +1,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { env } from "@project-agap/env/native";
 import { useEffect, useMemo, useState } from "react";
-import { Image, Platform, Text, View } from "react-native";
+import { Image, Platform, Pressable, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { getResidentMapCache, setResidentMapCache } from "@/services/mapCache";
 import { queryClient, trpc } from "@/services/trpc";
-import { getErrorMessage, getServerConnectionErrorMessage } from "@/shared/utils/errors";
+import { getErrorMessage } from "@/shared/utils/errors";
 import { haversineDistanceKm } from "@/shared/utils/geo";
 import type { CachedResidentMapData, LocationPoint } from "@/types/map";
 
@@ -44,12 +44,12 @@ function getReactNativeMapsModule() {
 }
 
 export function EvacuationMap() {
+  const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const [cachedData, setCachedData] = useState<CachedResidentMapData | null>(null);
   const [isNativeMapReady, setIsNativeMapReady] = useState(false);
   const [pinnedLocation, setPinnedLocation] = useState<LocationPoint | null>(null);
-  const [pinSyncMessage, setPinSyncMessage] = useState<string | null>(null);
   const mapsModule = useMemo(() => getReactNativeMapsModule(), []);
 
   const routesQuery = useQuery(
@@ -158,19 +158,20 @@ export function EvacuationMap() {
 
   async function persistPinnedLocation(nextPin: LocationPoint) {
     setPinnedLocation(nextPin);
-    setPinSyncMessage("Saving pin to server...");
 
     try {
       await setPinnedLocationMutation.mutateAsync(nextPin);
       await pinnedLocationQuery.refetch();
-      setPinSyncMessage("Pinned location saved to backend.");
     } catch (error) {
-      const errorMessage = getErrorMessage(error, "Failed to save pin to backend.");
-      if (errorMessage.toLowerCase().includes("network request failed")) {
-        setPinSyncMessage(getServerConnectionErrorMessage("Unable to reach API for pin save."));
-      } else {
-        setPinSyncMessage(errorMessage);
-      }
+      setPinnedLocation(
+        pinnedLocationQuery.data
+          ? {
+              latitude: pinnedLocationQuery.data.latitude,
+              longitude: pinnedLocationQuery.data.longitude,
+            }
+          : null,
+      );
+      console.warn(getErrorMessage(error, "Failed to save pin to backend."));
     }
   }
 
@@ -203,154 +204,136 @@ export function EvacuationMap() {
 
   async function handleClearPin() {
     setPinnedLocation(null);
-    setPinSyncMessage("Clearing pinned location on server...");
 
     try {
       await clearPinnedLocationMutation.mutateAsync();
       await pinnedLocationQuery.refetch();
-      setPinSyncMessage("Pinned location cleared from backend.");
     } catch (error) {
-      const errorMessage = getErrorMessage(error, "Failed to clear pin on backend.");
-      if (errorMessage.toLowerCase().includes("network request failed")) {
-        setPinSyncMessage(getServerConnectionErrorMessage("Unable to reach API for pin clear."));
-      } else {
-        setPinSyncMessage(errorMessage);
-      }
+      setPinnedLocation(
+        pinnedLocationQuery.data
+          ? {
+              latitude: pinnedLocationQuery.data.latitude,
+              longitude: pinnedLocationQuery.data.longitude,
+            }
+          : null,
+      );
+      console.warn(getErrorMessage(error, "Failed to clear pin on backend."));
     }
   }
 
   return (
-    <View className="flex-1 bg-slate-50 pb-8">
-      <ScreenHeader
-        eyebrow="5.2.2 Evacuation map"
-        title="Find the nearest open center"
-        description="Map markers, route overlays, and cached center data stay visible even when connectivity gets weak."
-      />
-
-      <SectionCard
-        title="Map"
-        subtitle={
-          cachedData && !centersQuery.data?.length
-            ? "Showing cached center and route data."
-            : "Live center and route data for your barangay. Long-press to pin and save your location."
-        }
-      >
-        {MapViewComponent && MarkerComponent && PolylineComponent ? (
-          <View className="h-[30rem] overflow-hidden rounded-3xl">
-            {!isNativeMapReady ? (
-              <Image
-                source={{ uri: staticMapPreviewUrl }}
-                className="absolute inset-0 h-full w-full"
-                resizeMode="cover"
-              />
-            ) : null}
-            <MapViewComponent
-              style={{ flex: 1, opacity: isNativeMapReady ? 1 : 0 }}
-              initialRegion={region}
-              scrollEnabled
-              zoomEnabled
-              rotateEnabled
-              pitchEnabled
-              onMapReady={() => setIsNativeMapReady(true)}
-              onLongPress={handleMapLongPress}
-            >
-              {location ? (
-                <MarkerComponent coordinate={location} title="Your location" pinColor="#2563eb" />
-              ) : null}
-              {pinnedLocation ? (
-                <MarkerComponent
-                  coordinate={pinnedLocation}
-                  title="Pinned location"
-                  description="Drag to adjust or long-press map to move pin."
-                  pinColor="#dc2626"
-                  draggable
-                  onDragEnd={handlePinnedDragEnd}
-                />
-              ) : null}
-              {sortedCenters.map((center) => (
-                <MarkerComponent
-                  key={center.id}
-                  coordinate={{ latitude: center.latitude, longitude: center.longitude }}
-                  title={center.name}
-                  description={center.address}
-                  pinColor={center.is_open ? "#16a34a" : "#f59e0b"}
-                />
-              ))}
-              {routes.map((route) => {
-                const coordinates = Array.isArray((route.route_geojson as { coordinates?: unknown[] }).coordinates)
-                  ? ((route.route_geojson as { coordinates: [number, number][] }).coordinates ?? []).map(
-                      ([longitude, latitude]) => ({
-                        latitude,
-                        longitude,
-                      }),
-                    )
-                  : [];
-
-                if (!coordinates.length) {
-                  return null;
-                }
-
-                return (
-                  <PolylineComponent
-                    key={route.id}
-                    coordinates={coordinates}
-                    strokeColor={route.color_hex || "#1d4ed8"}
-                    strokeWidth={4}
-                  />
-                );
-              })}
-            </MapViewComponent>
-
-            <View className="absolute bottom-3 left-3 right-3 gap-2">
-              <View className="flex-row gap-2">
-                <View className="flex-1">
-                  <AppButton
-                    label={pinnedLocation ? "Move pin to my location" : "Pin my location"}
-                    onPress={handlePinMyLocation}
-                    variant="secondary"
-                    disabled={!location || setPinnedLocationMutation.isPending || clearPinnedLocationMutation.isPending}
-                    loading={setPinnedLocationMutation.isPending}
-                  />
-                </View>
-                {pinnedLocation ? (
-                  <View className="flex-1">
-                    <AppButton
-                      label="Clear pin"
-                      onPress={() => {
-                        void handleClearPin();
-                      }}
-                      variant="ghost"
-                      loading={clearPinnedLocationMutation.isPending}
-                      disabled={setPinnedLocationMutation.isPending || clearPinnedLocationMutation.isPending}
-                    />
-                  </View>
-                ) : null}
-              </View>
-              <View className="rounded-2xl bg-white/90 px-3 py-2">
-                <Text className="text-xs text-slate-700">
-                  {pinSyncMessage ??
-                    (pinnedLocationQuery.data
-                      ? `Server pin: ${pinnedLocationQuery.data.latitude.toFixed(5)}, ${pinnedLocationQuery.data.longitude.toFixed(5)}`
-                      : "Server pin: none")}
-                </Text>
-                <Text className="mt-1 text-[10px] text-slate-500">API: {env.EXPO_PUBLIC_SERVER_URL}</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View>
+    <View className="flex-1 bg-slate-950">
+      {MapViewComponent && MarkerComponent && PolylineComponent ? (
+        <View className="flex-1">
+          {!isNativeMapReady ? (
             <Image
               source={{ uri: staticMapPreviewUrl }}
-              className="h-[30rem] w-full rounded-3xl"
+              className="absolute inset-0 h-full w-full"
               resizeMode="cover"
             />
-            <Text className="mt-3 text-sm text-slate-500">
-              Pinning is available on the interactive mobile map. Long-press to drop a pin.
-            </Text>
-          </View>
-        )}
-      </SectionCard>
+          ) : null}
+          <MapViewComponent
+            style={{ flex: 1, opacity: isNativeMapReady ? 1 : 0 }}
+            initialRegion={region}
+            scrollEnabled
+            zoomEnabled
+            rotateEnabled
+            pitchEnabled
+            onMapReady={() => setIsNativeMapReady(true)}
+            onLongPress={handleMapLongPress}
+          >
+            {location ? (
+              <MarkerComponent coordinate={location} title="Your location" pinColor="#2563eb" />
+            ) : null}
+            {pinnedLocation ? (
+              <MarkerComponent
+                coordinate={pinnedLocation}
+                title="Pinned location"
+                pinColor="#dc2626"
+                draggable
+                onDragEnd={handlePinnedDragEnd}
+              />
+            ) : null}
+            {sortedCenters.map((center) => (
+              <MarkerComponent
+                key={center.id}
+                coordinate={{ latitude: center.latitude, longitude: center.longitude }}
+                title={center.name}
+                description={center.address}
+                pinColor={center.is_open ? "#16a34a" : "#f59e0b"}
+              />
+            ))}
+            {routes.map((route) => {
+              const coordinates = Array.isArray((route.route_geojson as { coordinates?: unknown[] }).coordinates)
+                ? ((route.route_geojson as { coordinates: [number, number][] }).coordinates ?? []).map(
+                    ([longitude, latitude]) => ({
+                      latitude,
+                      longitude,
+                    }),
+                  )
+                : [];
 
+              if (!coordinates.length) {
+                return null;
+              }
+
+              return (
+                <PolylineComponent
+                  key={route.id}
+                  coordinates={coordinates}
+                  strokeColor={route.color_hex || "#1d4ed8"}
+                  strokeWidth={4}
+                />
+              );
+            })}
+          </MapViewComponent>
+
+          <View
+            pointerEvents="box-none"
+            className="absolute right-4 gap-3"
+            style={{ top: insets.top + 12 }}
+          >
+            <FloatingIconButton
+              icon="locate"
+              onPress={handlePinMyLocation}
+              disabled={!location || setPinnedLocationMutation.isPending || clearPinnedLocationMutation.isPending}
+            />
+            {pinnedLocation ? (
+              <FloatingIconButton
+                icon="close"
+                onPress={() => {
+                  void handleClearPin();
+                }}
+                disabled={setPinnedLocationMutation.isPending || clearPinnedLocationMutation.isPending}
+              />
+            ) : null}
+          </View>
+        </View>
+      ) : (
+        <Image source={{ uri: staticMapPreviewUrl }} className="h-full w-full" resizeMode="cover" />
+      )}
     </View>
+  );
+}
+
+function FloatingIconButton({
+  icon,
+  onPress,
+  disabled,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      className={`h-14 w-14 items-center justify-center rounded-full bg-white/92 shadow-lg ${
+        disabled ? "opacity-50" : ""
+      }`}
+    >
+      <Ionicons name={icon} size={22} color="#0f172a" />
+    </Pressable>
   );
 }
