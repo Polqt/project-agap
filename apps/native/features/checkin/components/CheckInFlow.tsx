@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useTranslation } from "react-i18next";
+
 import { createQueuedAction } from "@/services/offlineQueueActions";
 import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -19,6 +21,7 @@ type Mode = "qr" | "manual";
 
 export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { profile } = useAuth();
   const { isOnline, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
@@ -198,16 +201,16 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                 <Ionicons name="checkmark-circle" size={22} color="#059669" />
               </View>
               <View className="flex-1">
-                <Text className="text-[18px] font-bold text-slate-900">Check-In</Text>
-                <Text className="text-[13px] text-slate-500">After check-in \u2014 add household members</Text>
+                <Text className="text-[18px] font-bold text-slate-900">{t("checkin.title")}</Text>
+                <Text className="text-[13px] text-slate-500">{t("checkin.checkInSuccess")}</Text>
               </View>
             </View>
 
             <Text className="mt-5 text-[13px] font-semibold uppercase tracking-wider text-slate-400">
-              Proxy check-in
+              {t("checkin.proxyCheckIn")}
             </Text>
             <Text className="mt-1 text-[13px] text-slate-500">
-              Tick members who are physically present.
+              {t("checkin.selectMembers")}
             </Text>
 
             <View className="mt-4 gap-2">
@@ -248,7 +251,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
               onPress={resetFlow}
               className="mt-6 items-center rounded-xl bg-slate-900 py-3.5"
             >
-              <Text className="text-[14px] font-semibold text-white">Done</Text>
+              <Text className="text-[14px] font-semibold text-white">{t("common.done")}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -263,13 +266,13 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
         <View className="h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
           <Ionicons name="checkmark-circle" size={36} color="#059669" />
         </View>
-        <Text className="mt-4 text-[18px] font-bold text-slate-900">Check-in recorded</Text>
+        <Text className="mt-4 text-[18px] font-bold text-slate-900">{t("checkin.checkInSuccess")}</Text>
         <Text className="mt-1 text-center text-[14px] text-slate-500">{feedback}</Text>
         <Pressable
           onPress={resetFlow}
           className="mt-6 rounded-xl bg-slate-900 px-8 py-3.5"
         >
-          <Text className="text-[14px] font-semibold text-white">Done</Text>
+          <Text className="text-[14px] font-semibold text-white">{t("common.done")}</Text>
         </Pressable>
       </View>
     );
@@ -285,7 +288,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
       >
         {/* Header */}
         <View className="px-5">
-          <Text className="text-[22px] font-bold text-slate-900">Check-In</Text>
+          <Text className="text-[22px] font-bold text-slate-900">{t("checkin.title")}</Text>
         </View>
 
         {/* Segmented control */}
@@ -309,7 +312,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                     mode === m ? "text-slate-900" : "text-slate-500"
                   }`}
                 >
-                  {m === "qr" ? "Scan QR" : "Manual"}
+                  {m === "qr" ? t("checkin.scanQr") : t("checkin.manualCheckIn")}
                 </Text>
               </View>
             </Pressable>
@@ -323,16 +326,16 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
               <View className="items-center rounded-2xl border border-slate-200 bg-slate-50 px-6 py-10">
                 <Ionicons name="camera-outline" size={40} color="#94a3b8" />
                 <Text className="mt-3 text-center text-[14px] font-medium text-slate-700">
-                  Camera permission required
+                  {t("auth.locationPermission")}
                 </Text>
                 <Text className="mt-1 text-center text-[13px] text-slate-500">
-                  Point at the evacuation center QR code
+                  {t("checkin.scanQr")}
                 </Text>
                 <Pressable
                   onPress={() => void handleRequestPermission()}
                   className="mt-4 rounded-xl bg-slate-900 px-6 py-3"
                 >
-                  <Text className="text-[14px] font-semibold text-white">Allow camera</Text>
+                  <Text className="text-[14px] font-semibold text-white">{t("auth.allowLocation")}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -364,7 +367,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
         {mode === "manual" ? (
           <View className="mt-4 px-5">
             <Text className="text-[13px] font-semibold uppercase tracking-wider text-slate-400">
-              Choose your evacuation center
+              {t("checkin.selectCenter")}
             </Text>
             <View className="mt-3 gap-2">
               {sortedCenters.map((center) => {
@@ -434,7 +437,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
                           center.is_open ? "text-emerald-700" : "text-rose-700"
                         }`}
                       >
-                        {center.is_open ? "Open" : "Closed"}
+                        {center.is_open ? t("map.openNow") : t("map.closed")}
                       </Text>
                     </View>
                   </Pressable>
@@ -459,7 +462,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
               }`}
             >
               <Text className="text-[14px] font-semibold text-white">
-                {manualMutation.isPending ? "Submitting..." : "Check in here"}
+                {manualMutation.isPending ? t("common.loading") : t("map.checkIn")}
               </Text>
             </Pressable>
           </View>

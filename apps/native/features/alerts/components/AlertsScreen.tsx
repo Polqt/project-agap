@@ -24,6 +24,14 @@ import {
   isAlertStale,
 } from "../utils";
 import type { AlertLanguage } from "../types";
+import {
+  fetchPhilippineEarthquakes,
+  fetchGdacsAlerts,
+  fetchPagasaBulletin,
+  type UsgsEarthquake,
+  type GdacsAlert,
+  type PagasaBulletin,
+} from "../services/hazardFeeds";
 
 const LANG_STORAGE_KEY = "agap-alert-language";
 
@@ -78,6 +86,28 @@ export function AlertsScreen() {
     queryFn: async () => listBroadcastsForBarangay(profile!.barangay_id!),
   });
 
+  // ── Live hazard feeds (no API key needed) ──────────────────────────────────
+  const earthquakesQuery = useQuery<UsgsEarthquake[]>({
+    queryKey: ["usgs-earthquakes"],
+    queryFn: fetchPhilippineEarthquakes,
+    refetchInterval: 2 * 60_000,
+    staleTime: 90_000,
+  });
+
+  const gdacsQuery = useQuery<GdacsAlert[]>({
+    queryKey: ["gdacs-alerts"],
+    queryFn: fetchGdacsAlerts,
+    refetchInterval: 5 * 60_000,
+    staleTime: 3 * 60_000,
+  });
+
+  const bulletinQuery = useQuery<PagasaBulletin | null>({
+    queryKey: ["pagasa-bulletin"],
+    queryFn: fetchPagasaBulletin,
+    refetchInterval: 10 * 60_000,
+    staleTime: 5 * 60_000,
+  });
+
   const missingPersonsQuery = useQuery(
     trpc.missingPersons.list.queryOptions(
       { statusFilter: "missing" },
@@ -106,10 +136,15 @@ export function AlertsScreen() {
   const alerts = alertsQuery.data ?? [];
   const broadcasts = broadcastsQuery.data ?? [];
   const missingPersons = missingPersonsQuery.data ?? [];
+  const earthquakes = earthquakesQuery.data ?? [];
+  const gdacsAlerts = gdacsQuery.data ?? [];
+  const bulletin = bulletinQuery.data ?? null;
   const isRefreshing =
     (alertsQuery.isFetching && !alertsQuery.isLoading) ||
     (broadcastsQuery.isFetching && !broadcastsQuery.isLoading) ||
-    (missingPersonsQuery.isFetching && !missingPersonsQuery.isLoading);
+    (missingPersonsQuery.isFetching && !missingPersonsQuery.isLoading) ||
+    earthquakesQuery.isFetching ||
+    gdacsQuery.isFetching;
 
   // Find highest active signal
   const activeSignal = alerts.reduce<string | null>((best, alert) => {
@@ -129,6 +164,9 @@ export function AlertsScreen() {
       alertsQuery.refetch(),
       broadcastsQuery.refetch(),
       missingPersonsQuery.refetch(),
+      earthquakesQuery.refetch(),
+      gdacsQuery.refetch(),
+      bulletinQuery.refetch(),
     ]);
   }
 
@@ -221,15 +259,94 @@ export function AlertsScreen() {
                   <Text className="text-[14px] font-semibold text-rose-100">
                     PAGASA {activeSignal}
                   </Text>
-                  <Text className="text-[12px] text-rose-200">Active typhoon signal</Text>
+                  <Text className="text-[12px] text-rose-200">{t("alerts.activeSignal")}</Text>
                 </View>
               </View>
             ) : null}
 
-            {/* Bilingual toggle */}
+            {/* PAGASA Bulletin Banner */}
+            {bulletin?.title ? (
+              <View className="mx-5 mb-3 flex-row items-start gap-3 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
+                <Ionicons name="partly-sunny-outline" size={18} color="#d97706" />
+                <View className="flex-1">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-amber-600">PAGASA Bulletin</Text>
+                  <Text className="mt-0.5 text-[13px] font-semibold text-slate-800" numberOfLines={2}>{bulletin.title}</Text>
+                  {bulletin.effectivity ? (
+                    <Text className="mt-0.5 text-[11px] text-amber-700">{bulletin.effectivity}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {/* GDACS International Alerts */}
+            {gdacsAlerts.length > 0 ? (
+              <View className="mx-5 mb-3">
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  GDACS International Alerts
+                </Text>
+                {gdacsAlerts.slice(0, 3).map((alert, i) => {
+                  const levelColor =
+                    alert.alertLevel === "Red"
+                      ? { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700", dot: "#e11d48" }
+                      : alert.alertLevel === "Orange"
+                        ? { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", dot: "#d97706" }
+                        : { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", dot: "#059669" };
+                  return (
+                    <View key={`gdacs-${i}`} className={`mb-2 flex-row items-start gap-3 rounded-2xl border px-4 py-3 ${levelColor.bg} ${levelColor.border}`}>
+                      <View className="mt-1 h-2 w-2 rounded-full" style={{ backgroundColor: levelColor.dot }} />
+                      <View className="flex-1">
+                        <Text className={`text-[11px] font-bold uppercase tracking-wider ${levelColor.text}`}>
+                          {alert.eventType} · {alert.alertLevel}
+                        </Text>
+                        <Text className="mt-0.5 text-[13px] font-semibold text-slate-800" numberOfLines={2}>{alert.title}</Text>
+                        <Text className="mt-0.5 text-[11px] text-slate-500" numberOfLines={1}>{alert.description}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {/* USGS Earthquakes */}
+            {earthquakes.length > 0 ? (
+              <View className="mx-5 mb-3">
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  USGS — Recent Earthquakes
+                </Text>
+                {earthquakes.slice(0, 5).map((eq) => {
+                  const isMajor = eq.magnitude >= 5.0;
+                  const isModerate = eq.magnitude >= 4.0;
+                  const bgColor = isMajor ? "bg-rose-50 border-rose-200" : isModerate ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200";
+                  const magColor = isMajor ? "text-rose-700" : isModerate ? "text-amber-700" : "text-slate-600";
+                  const date = new Date(eq.time);
+                  const timeStr = date.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
+                  const dateStr = date.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+                  return (
+                    <View key={eq.id} className={`mb-2 flex-row items-center gap-3 rounded-2xl border px-4 py-3 ${bgColor}`}>
+                      <View className="items-center w-10">
+                        <Text className={`text-[20px] font-black ${magColor}`}>{eq.magnitude.toFixed(1)}</Text>
+                        <Text className="text-[9px] font-semibold text-slate-400">MAG</Text>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-[13px] font-semibold text-slate-900" numberOfLines={1}>{eq.place}</Text>
+                        <View className="mt-0.5 flex-row items-center gap-2">
+                          <Text className="text-[11px] text-slate-500">{dateStr} {timeStr}</Text>
+                          <Text className="text-[11px] text-slate-400">· {eq.depth.toFixed(0)} km deep</Text>
+                          {eq.tsunami === 1 ? (
+                            <Text className="text-[10px] font-bold text-rose-600">⚠ TSUNAMI</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {/* Barangay / PAGASA alerts header */}
             <View className="mx-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-                {alerts.length} alert{alerts.length !== 1 ? "s" : ""}
+              <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Barangay Alerts ({alerts.length})
               </Text>
               <View className="flex-row rounded-full bg-slate-100 p-0.5">
                 {(["filipino", "english"] as const).map((lang) => (
