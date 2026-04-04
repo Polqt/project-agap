@@ -280,24 +280,40 @@ export function wxCodeEmoji(code: number | null): string {
 
 // ─── Philippine News RSS ──────────────────────────────────────────────────────
 
+export type NewsCategory = "national" | "business" | "regional";
+
 export type PhNewsArticle = {
   title: string;
   link: string;
   pubDate: string;
   source: string;
+  category: NewsCategory;
   thumbnail: string | null;
   description: string;
+  /** Dot color for the source badge */
+  color: string;
 };
 
 const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
 
-const NEWS_FEEDS = [
-  { source: "GMA News", url: "https://data.gmanetwork.com/gno/rss/news/feed.xml" },
-  { source: "Rappler", url: "https://www.rappler.com/feed/" },
-  { source: "Inquirer", url: "https://www.inquirer.net/feed/" },
+const NEWS_FEEDS: Array<{ source: string; url: string; category: NewsCategory; color: string }> = [
+  // National
+  { source: "Rappler",      url: "https://www.rappler.com/feed/",                              category: "national", color: "#0ea5e9" },
+  { source: "Inquirer",     url: "https://www.inquirer.net/feed/",                             category: "national", color: "#dc2626" },
+  { source: "GMA News",     url: "https://data.gmanetwork.com/gno/rss/news/feed.xml",          category: "national", color: "#d97706" },
+  { source: "ABS-CBN",      url: "https://news.abs-cbn.com/feed",                             category: "national", color: "#16a34a" },
+  { source: "PhilStar",     url: "https://www.philstar.com/rss/headlines",                    category: "national", color: "#16a34a" },
+  { source: "Manila Times", url: "https://www.manilatimes.net/news/feed/",                    category: "national", color: "#7c3aed" },
+  // Business
+  { source: "BWorldOnline", url: "https://www.bworldonline.com/feed/",                        category: "business", color: "#d97706" },
+  { source: "BizMirror",    url: "https://businessmirror.com.ph/feed/",                       category: "business", color: "#0ea5e9" },
+  // Regional
+  { source: "SunStar",      url: "https://www.sunstar.com.ph/feed",                           category: "regional", color: "#dc2626" },
+  { source: "Panay News",   url: "https://www.panaynews.net/feed/",                           category: "regional", color: "#ea580c" },
+  { source: "Visayan Star", url: "https://visayandailystar.com/feed/",                        category: "regional", color: "#db2777" },
 ];
 
-async function fetchFeed(feed: { source: string; url: string }): Promise<PhNewsArticle[]> {
+async function fetchFeed(feed: (typeof NEWS_FEEDS)[number]): Promise<PhNewsArticle[]> {
   try {
     const res = await fetch(`${RSS2JSON}${encodeURIComponent(feed.url)}&count=5`);
     if (!res.ok) return [];
@@ -324,6 +340,8 @@ async function fetchFeed(feed: { source: string; url: string }): Promise<PhNewsA
         link: item.link ?? "",
         pubDate: item.pubDate ?? "",
         source: feed.source,
+        category: feed.category,
+        color: feed.color,
         thumbnail: item.thumbnail ?? item.enclosure?.link ?? null,
         description: item.description?.replace(/<[^>]+>/g, "").trim().slice(0, 200) ?? "",
       }));
