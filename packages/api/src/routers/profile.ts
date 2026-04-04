@@ -2,8 +2,14 @@ import { z } from "zod";
 
 import { getFoundOrThrow, getSupabaseDataOrThrow } from "../router-helpers";
 import { protectedProcedure, router } from "../index";
+import { ApiError } from "../errors";
 import { uuidSchema } from "../schemas";
 import type { Profile } from "../supabase";
+
+const pinnedLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
 
 const updateProfileSchema = z
   .object({
@@ -72,6 +78,100 @@ export const profileRouter = router({
 
       return profile;
     }),
+
+  getPinnedLocation: protectedProcedure.query(async ({ ctx }) => {
+    const profile = getFoundOrThrow<{
+      pinned_latitude: number | null;
+      pinned_longitude: number | null;
+      pinned_at: string | null;
+    } | null>(
+      getSupabaseDataOrThrow<{
+        pinned_latitude: number | null;
+        pinned_longitude: number | null;
+        pinned_at: string | null;
+      } | null>(
+        await ctx.supabase
+          .from("profiles")
+          .select("pinned_latitude, pinned_longitude, pinned_at")
+          .eq("id", ctx.session.id)
+          .maybeSingle(),
+        "Failed to load pinned location.",
+      ),
+      "Profile not found.",
+    );
+
+    if (profile.pinned_latitude === null || profile.pinned_longitude === null) {
+      return null;
+    }
+
+    return {
+      latitude: profile.pinned_latitude,
+      longitude: profile.pinned_longitude,
+      pinnedAt: profile.pinned_at,
+    };
+  }),
+
+  setPinnedLocation: protectedProcedure
+    .input(pinnedLocationSchema)
+    .mutation(async ({ ctx, input }) => {
+      const profile = getFoundOrThrow<{
+        pinned_latitude: number | null;
+        pinned_longitude: number | null;
+        pinned_at: string | null;
+      } | null>(
+        getSupabaseDataOrThrow<{
+          pinned_latitude: number | null;
+          pinned_longitude: number | null;
+          pinned_at: string | null;
+        } | null>(
+          await ctx.supabase
+            .from("profiles")
+            .update({
+              pinned_latitude: input.latitude,
+              pinned_longitude: input.longitude,
+              pinned_at: new Date().toISOString(),
+            })
+            .eq("id", ctx.session.id)
+            .select("pinned_latitude, pinned_longitude, pinned_at")
+            .maybeSingle(),
+          "Failed to save pinned location.",
+        ),
+        "Profile not found.",
+      );
+
+      if (profile.pinned_latitude === null || profile.pinned_longitude === null) {
+        throw ApiError.internal("Pinned location did not save correctly.");
+      }
+
+      return {
+        latitude: profile.pinned_latitude,
+        longitude: profile.pinned_longitude,
+        pinnedAt: profile.pinned_at,
+      };
+    }),
+
+  clearPinnedLocation: protectedProcedure.mutation(async ({ ctx }) => {
+    getFoundOrThrow<{ id: string } | null>(
+      getSupabaseDataOrThrow<{ id: string } | null>(
+        await ctx.supabase
+          .from("profiles")
+          .update({
+            pinned_latitude: null,
+            pinned_longitude: null,
+            pinned_at: null,
+          })
+          .eq("id", ctx.session.id)
+          .select("id")
+          .maybeSingle(),
+        "Failed to clear pinned location.",
+      ),
+      "Profile not found.",
+    );
+
+    return {
+      success: true,
+    };
+  }),
 
   upsertPushToken: protectedProcedure
     .input(
