@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { listBroadcastsForBarangay } from "@/features/broadcast/services/broadcasts";
@@ -32,6 +33,7 @@ export function AlertsScreen() {
   const { profile } = useAuth();
   const { isOnline } = useOfflineQueue();
 
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"alerto" | "mensahe" | "nawawala">("alerto");
   const [language, setLanguage] = useState<AlertLanguage>("filipino");
@@ -147,7 +149,7 @@ export function AlertsScreen() {
       >
         {/* Header */}
         <View className="flex-row items-center justify-between px-5">
-          <Text className="text-[22px] font-bold text-slate-900">Mga Alerto</Text>
+          <Text className="text-[22px] font-bold text-slate-900">{t("alerts.title")}</Text>
           <Pressable
             onPress={() => void refresh()}
             className="h-9 w-9 items-center justify-center rounded-full bg-slate-100"
@@ -165,39 +167,43 @@ export function AlertsScreen() {
           <View className="mx-5 mt-3 flex-row items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2">
             <View className="h-2 w-2 rounded-full bg-amber-500" />
             <Text className="flex-1 text-[12px] font-medium text-amber-700">
-              Offline \u2014 showing cached data
+              {t("common.offline")}
             </Text>
           </View>
         ) : null}
 
         {/* Segmented control: Alerto | Mensahe | Nawawala */}
         <View className="mx-5 mt-4 flex-row rounded-xl bg-slate-100 p-1">
-          {(["alerto", "mensahe", "nawawala"] as const).map((t) => (
+          {(["alerto", "mensahe", "nawawala"] as const).map((tabKey) => (
             <Pressable
-              key={t}
-              onPress={() => setTab(t)}
+              key={tabKey}
+              onPress={() => setTab(tabKey)}
               className={`flex-1 items-center rounded-lg py-2.5 ${
-                tab === t ? "bg-white shadow-sm" : ""
+                tab === tabKey ? "bg-white shadow-sm" : ""
               }`}
             >
               <View className="flex-row items-center gap-1.5">
                 <Ionicons
                   name={
-                    t === "alerto"
+                    tabKey === "alerto"
                       ? "warning-outline"
-                      : t === "mensahe"
+                      : tabKey === "mensahe"
                         ? "chatbox-outline"
                         : "search-outline"
                   }
                   size={14}
-                  color={tab === t ? "#0f172a" : "#64748b"}
+                  color={tab === tabKey ? "#0f172a" : "#64748b"}
                 />
                 <Text
                   className={`text-[12px] font-semibold ${
-                    tab === t ? "text-slate-900" : "text-slate-500"
+                    tab === tabKey ? "text-slate-900" : "text-slate-500"
                   }`}
                 >
-                  {t === "alerto" ? "Alerto" : t === "mensahe" ? "Mensahe" : "Nawawala"}
+                  {tabKey === "alerto"
+                    ? t("alerts.tabAlerts")
+                    : tabKey === "mensahe"
+                      ? t("alerts.tabMessages")
+                      : t("alerts.tabMissing")}
                 </Text>
               </View>
             </Pressable>
@@ -251,10 +257,10 @@ export function AlertsScreen() {
               <View className="mx-5 items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8">
                 <Ionicons name="shield-checkmark-outline" size={32} color="#94a3b8" />
                 <Text className="mt-2 text-[14px] font-semibold text-slate-600">
-                  No active hazard alerts
+                  {t("alerts.noAlerts")}
                 </Text>
                 <Text className="mt-1 text-center text-[13px] text-slate-400">
-                  PAGASA, PHIVOLCS, or your barangay will post here.
+                  {t("alerts.noAlertsBody")}
                 </Text>
               </View>
             ) : null}
@@ -320,20 +326,14 @@ export function AlertsScreen() {
         {/* MENSAHE TAB */}
         {tab === "mensahe" ? (
           <View className="mt-4">
-            <View className="mx-5 mb-3">
-              <Text className="text-[13px] text-slate-500">
-                Mga mensahe mula sa inyong Barangay Official
-              </Text>
-            </View>
-
             {broadcasts.length === 0 ? (
               <View className="mx-5 items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8">
                 <Ionicons name="chatbox-outline" size={32} color="#94a3b8" />
                 <Text className="mt-2 text-[14px] font-semibold text-slate-600">
-                  Walang mensahe
+                  {t("alerts.noMessages")}
                 </Text>
                 <Text className="mt-1 text-center text-[13px] text-slate-400">
-                  Official broadcasts will appear here.
+                  {t("alerts.noMessagesBody")}
                 </Text>
               </View>
             ) : null}
@@ -381,14 +381,14 @@ export function AlertsScreen() {
           <View className="mt-4">
             <View className="mx-5 mb-3 flex-row items-center justify-between">
               <Text className="text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-                {missingPersons.length} nawawala
+                {missingPersons.length} {t("alerts.tabMissing").toLowerCase()}
               </Text>
               <Pressable
                 onPress={() => setShowReportModal(true)}
                 className="flex-row items-center gap-1 rounded-full bg-rose-600 px-3.5 py-1.5"
               >
                 <Ionicons name="add" size={14} color="#fff" />
-                <Text className="text-[12px] font-semibold text-white">I-report</Text>
+                <Text className="text-[12px] font-semibold text-white">{t("alerts.reportMissing")}</Text>
               </Pressable>
             </View>
 
@@ -396,10 +396,10 @@ export function AlertsScreen() {
               <View className="mx-5 items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-8">
                 <Ionicons name="search-outline" size={32} color="#94a3b8" />
                 <Text className="mt-2 text-[14px] font-semibold text-slate-600">
-                  Walang nawawala
+                  {t("alerts.noMissing")}
                 </Text>
                 <Text className="mt-1 text-center text-[13px] text-slate-400">
-                  I-report kung may nakita kang nawawalang tao sa inyong lugar.
+                  {t("alerts.noMissingBody")}
                 </Text>
               </View>
             ) : null}
@@ -422,7 +422,7 @@ export function AlertsScreen() {
                     ) : null}
                   </View>
                   <Text className="rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
-                    NAWAWALA
+                    {t("alerts.missingStatus")}
                   </Text>
                 </View>
 
@@ -430,7 +430,7 @@ export function AlertsScreen() {
                   <View className="mt-2.5 flex-row items-start gap-1.5">
                     <Ionicons name="location-outline" size={13} color="#94a3b8" />
                     <Text className="flex-1 text-[12px] text-slate-500">
-                      Huling nakita: {person.last_seen_location}
+                      {t("alerts.lastSeen")}: {person.last_seen_location}
                     </Text>
                   </View>
                 ) : null}
@@ -448,12 +448,12 @@ export function AlertsScreen() {
                   <Pressable
                     onPress={() => {
                       Alert.alert(
-                        "Nahanap na?",
-                        `Markahan si ${person.full_name} bilang nahanap na?`,
+                        t("alerts.markFound"),
+                        t("alerts.markFoundConfirm", { name: person.full_name }),
                         [
-                          { text: "Hindi", style: "cancel" },
+                          { text: t("common.cancel"), style: "cancel" },
                           {
-                            text: "Oo, Nahanap Na",
+                            text: t("alerts.markFoundYes"),
                             onPress: () => markFoundMutation.mutate({ id: person.id }),
                           },
                         ],
@@ -461,7 +461,7 @@ export function AlertsScreen() {
                     }}
                     className="rounded-full bg-emerald-100 px-3 py-1.5"
                   >
-                    <Text className="text-[12px] font-semibold text-emerald-700">Nahanap Na ✓</Text>
+                    <Text className="text-[12px] font-semibold text-emerald-700">{t("alerts.markFound")}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -479,7 +479,7 @@ export function AlertsScreen() {
       >
         <View className="flex-1 bg-white">
           <View className="flex-row items-center justify-between border-b border-slate-100 px-5 py-4">
-            <Text className="text-[17px] font-bold text-slate-900">I-report ang Nawawala</Text>
+            <Text className="text-[17px] font-bold text-slate-900">{t("alerts.reportMissingTitle")}</Text>
             <Pressable onPress={() => setShowReportModal(false)}>
               <Ionicons name="close" size={22} color="#64748b" />
             </Pressable>
@@ -489,12 +489,12 @@ export function AlertsScreen() {
             <View className="py-4 gap-4">
               <View>
                 <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
-                  Buong Pangalan *
+                  {t("alerts.fullName")}
                 </Text>
                 <TextInput
                   value={reportForm.fullName}
                   onChangeText={(v) => setReportForm((f) => ({ ...f, fullName: v }))}
-                  placeholder="Juan Dela Cruz"
+                  placeholder={t("alerts.namePlaceholder")}
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
                   placeholderTextColor="#94a3b8"
                 />
@@ -502,12 +502,12 @@ export function AlertsScreen() {
 
               <View>
                 <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
-                  Edad (opsyonal)
+                  {t("alerts.age")}
                 </Text>
                 <TextInput
                   value={reportForm.age}
                   onChangeText={(v) => setReportForm((f) => ({ ...f, age: v }))}
-                  placeholder="35"
+                  placeholder={t("alerts.agePlaceholder")}
                   keyboardType="numeric"
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
                   placeholderTextColor="#94a3b8"
@@ -516,12 +516,12 @@ export function AlertsScreen() {
 
               <View>
                 <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
-                  Huling Nakita (opsyonal)
+                  {t("alerts.lastSeenLocation")}
                 </Text>
                 <TextInput
                   value={reportForm.lastSeenLocation}
                   onChangeText={(v) => setReportForm((f) => ({ ...f, lastSeenLocation: v }))}
-                  placeholder="Purok 3, malapit sa eskwelahan"
+                  placeholder={t("alerts.locationPlaceholder")}
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
                   placeholderTextColor="#94a3b8"
                 />
@@ -529,12 +529,12 @@ export function AlertsScreen() {
 
               <View>
                 <Text className="mb-1.5 text-[13px] font-semibold text-slate-700">
-                  Paglalarawan (opsyonal)
+                  {t("alerts.description")}
                 </Text>
                 <TextInput
                   value={reportForm.description}
                   onChangeText={(v) => setReportForm((f) => ({ ...f, description: v }))}
-                  placeholder="Suot ang pulang t-shirt, mahabang buhok..."
+                  placeholder={t("alerts.descriptionPlaceholder")}
                   multiline
                   numberOfLines={3}
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-900"
@@ -546,7 +546,7 @@ export function AlertsScreen() {
               <Pressable
                 onPress={() => {
                   if (!reportForm.fullName.trim()) {
-                    Alert.alert("Kinakailangan", "Ilagay ang buong pangalan.");
+                    Alert.alert(t("common.error"), t("alerts.nameRequired"));
                     return;
                   }
                   reportMutation.mutate({
@@ -562,7 +562,7 @@ export function AlertsScreen() {
                 }`}
               >
                 <Text className={`text-[15px] font-bold ${reportMutation.isPending ? "text-slate-400" : "text-white"}`}>
-                  {reportMutation.isPending ? "Nagpapadala..." : "I-submit ang Report"}
+                  {reportMutation.isPending ? t("alerts.submitting") : t("alerts.submitReport")}
                 </Text>
               </Pressable>
             </View>

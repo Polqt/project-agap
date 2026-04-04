@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useTranslation } from "react-i18next";
+
 import { haptics } from "@/services/haptics";
 import { createQueuedAction } from "@/services/offlineQueueActions";
 import { queryClient, trpc } from "@/services/trpc";
@@ -19,6 +21,7 @@ import { ProxyPingSection } from "./ProxyPingSection";
 
 export function StatusScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { profile } = useAuth();
   const { isOnline, pendingActions, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
@@ -50,7 +53,7 @@ export function StatusScreen() {
           createdAt: Date.parse(result.pinged_at),
           source: "server",
         });
-        setFeedback("Status sent.");
+        setFeedback(t("status.statusSent"));
         setMessage("");
       },
     }),
@@ -76,7 +79,7 @@ export function StatusScreen() {
     if (!isOnline) {
       await queueAction(createQueuedAction("status-ping.submit", payload));
       setLastStatusPing({ status, createdAt: Date.now(), source: "queue" });
-      setFeedback("Queued \u2014 will sync on reconnect.");
+      setFeedback(t("common.queued"));
       setMessage("");
       return;
     }
@@ -100,9 +103,9 @@ export function StatusScreen() {
 
   const lastStatusLabel =
     latestPing?.status === "safe"
-      ? "Ligtas Ako"
+      ? t("status.iAmSafe")
       : latestPing?.status === "need_help"
-        ? "Kailangan ng Tulong"
+        ? t("status.iNeedHelp")
         : null;
 
   const lastStatusTone =
@@ -134,7 +137,7 @@ export function StatusScreen() {
           <View className="mx-5 mt-3 flex-row items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2">
             <Ionicons name="cloud-offline-outline" size={14} color="#d97706" />
             <Text className="flex-1 text-[12px] font-medium text-amber-700">
-              Offline {queuedCount > 0 ? `\u00b7 ${queuedCount} ping${queuedCount > 1 ? "s" : ""} queued` : ""} \u2014 will sync on reconnect
+              {t("common.offline")}{queuedCount > 0 ? ` · ${queuedCount} ping${queuedCount > 1 ? "s" : ""} queued` : ""}
             </Text>
           </View>
         ) : null}
@@ -143,7 +146,7 @@ export function StatusScreen() {
         {latestPing ? (
           <View className="mx-5 mt-4">
             <Text className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-              Last status
+              {t("status.lastPing")}
             </Text>
             <View
               className={`flex-row items-center gap-3 rounded-2xl border px-4 py-3 ${
@@ -166,7 +169,7 @@ export function StatusScreen() {
               <View className="flex-1">
                 <Text className="text-[15px] font-semibold text-slate-900">{lastStatusLabel}</Text>
                 <Text className="text-[12px] text-slate-500">
-                  Sent {formatRelativeTime(latestPing.pinged_at)} \u00b7 synced
+                  {formatRelativeTime(latestPing.pinged_at)} · synced
                 </Text>
               </View>
             </View>
@@ -174,7 +177,7 @@ export function StatusScreen() {
         ) : lastPingPreview ? (
           <View className="mx-5 mt-4">
             <Text className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-slate-400">
-              Last status
+              {t("status.lastPing")}
             </Text>
             <View className="flex-row items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
               <View className="h-8 w-8 items-center justify-center rounded-full bg-amber-200">
@@ -182,10 +185,10 @@ export function StatusScreen() {
               </View>
               <View className="flex-1">
                 <Text className="text-[15px] font-semibold text-slate-900">
-                  {lastPingPreview.status === "safe" ? "Ligtas Ako" : "Kailangan ng Tulong"}
+                  {lastPingPreview.status === "safe" ? t("status.iAmSafe") : t("status.iNeedHelp")}
                 </Text>
                 <Text className="text-[12px] text-amber-700">
-                  {formatRelativeTime(lastPingPreview.createdAt)} \u00b7 queued
+                  {formatRelativeTime(lastPingPreview.createdAt)} · queued
                 </Text>
               </View>
             </View>
@@ -206,8 +209,8 @@ export function StatusScreen() {
                 <Ionicons name="shield-checkmark" size={24} color="#059669" />
               </View>
               <View className="flex-1">
-                <Text className="text-[22px] font-bold text-slate-900">Ligtas Ako</Text>
-                <Text className="text-[13px] text-slate-500">I am safe</Text>
+                <Text className="text-[22px] font-bold text-slate-900">{t("status.iAmSafe")}</Text>
+                <Text className="text-[13px] text-slate-500">{t("status.safeDescription")}</Text>
               </View>
             </View>
           </Pressable>
@@ -224,8 +227,8 @@ export function StatusScreen() {
                 <Ionicons name="alert-circle" size={24} color="#e11d48" />
               </View>
               <View className="flex-1">
-                <Text className="text-[22px] font-bold text-slate-900">Kailangan ng Tulong</Text>
-                <Text className="text-[13px] text-slate-500">I need help</Text>
+                <Text className="text-[22px] font-bold text-slate-900">{t("status.iNeedHelp")}</Text>
+                <Text className="text-[13px] text-slate-500">{t("status.needHelpDescription")}</Text>
               </View>
             </View>
           </Pressable>

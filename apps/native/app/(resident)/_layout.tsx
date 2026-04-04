@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useStore } from "@tanstack/react-store";
+import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
 import { appShellStore } from "@/stores/app-shell-store";
@@ -14,6 +15,8 @@ function AlertBadge() {
 }
 
 export default function ResidentLayout() {
+  const { t } = useTranslation();
+
   return (
     <Tabs
       screenOptions={{
@@ -32,7 +35,7 @@ export default function ResidentLayout() {
       <Tabs.Screen
         name="status"
         options={{
-          title: "Status",
+          title: t("status.title"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons color={color} name="shield-checkmark-outline" size={size} />
           ),
@@ -41,14 +44,14 @@ export default function ResidentLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: "Mapa",
+          title: t("map.title"),
           tabBarIcon: ({ color, size }) => <Ionicons color={color} name="map-outline" size={size} />,
         }}
       />
       <Tabs.Screen
         name="checkin"
         options={{
-          title: "Check-In",
+          title: t("checkin.title"),
           tabBarIcon: ({ color, size }) => (
             <Ionicons color={color} name="qr-code-outline" size={size} />
           ),
@@ -57,7 +60,7 @@ export default function ResidentLayout() {
       <Tabs.Screen
         name="alerts"
         options={{
-          title: "Alerto",
+          title: t("alerts.title"),
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons color={color} name="notifications-outline" size={size} />
