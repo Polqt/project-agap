@@ -32,6 +32,9 @@ export type ProfilesRow = TimestampedUpdated & {
   barangay_id: string | null;
   purok: string | null;
   is_sms_only: boolean;
+  pinned_latitude: number | null;
+  pinned_longitude: number | null;
+  pinned_at: string | null;
 };
 export type ProfilesInsert = ReadonlyMutationShape<ProfilesRow, "updated_at", "id">;
 export type ProfilesUpdate = ReadonlyMutationShape<ProfilesRow, "created_at" | "updated_at">;

@@ -3,7 +3,12 @@ import { z } from "zod";
 import { getAuthorizedBarangayId, getSupabaseDataOrThrow } from "../router-helpers";
 import { officialProcedure, router } from "../index";
 import { barangayIdSchema, uuidSchema } from "../schemas";
-import type { DashboardSummary, SmsFollowupItem } from "../supabase";
+import type { DashboardSummary, SmsFollowupItem, TableRow } from "../supabase";
+
+type ResidentHeatmapProfile = Pick<
+  TableRow<"profiles">,
+  "id" | "pinned_latitude" | "pinned_longitude"
+>;
 
 export const dashboardRouter = router({
   summary: officialProcedure
@@ -26,6 +31,38 @@ export const dashboardRouter = router({
         vulnerable_unaccounted: 0,
         sms_replied_count: 0,
       };
+    }),
+
+  residentHeatmap: officialProcedure
+    .input(barangayIdSchema)
+    .query(async ({ ctx, input }) => {
+      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+
+      const profiles =
+        getSupabaseDataOrThrow<ResidentHeatmapProfile[]>(
+          await ctx.supabase
+            .from("profiles")
+            .select("id, pinned_latitude, pinned_longitude")
+            .eq("barangay_id", barangayId)
+            .eq("role", "resident")
+            .not("pinned_latitude", "is", null)
+            .not("pinned_longitude", "is", null),
+          "Failed to load resident heatmap points.",
+        ) ?? [];
+
+      return profiles.flatMap((profile) => {
+        if (profile.pinned_latitude === null || profile.pinned_longitude === null) {
+          return [];
+        }
+
+        return [
+          {
+            resident_id: profile.id,
+            latitude: profile.pinned_latitude,
+            longitude: profile.pinned_longitude,
+          },
+        ];
+      });
     }),
 
   smsFollowup: officialProcedure

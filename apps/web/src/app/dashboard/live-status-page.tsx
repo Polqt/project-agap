@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import {
   Activity,
@@ -21,6 +22,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { trpc } from "@/utils/trpc";
+
+const ResidentHeatmap = dynamic(
+  () => import("./resident-heatmap").then((mod) => mod.ResidentHeatmap),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-80 w-full" />,
+  },
+);
 
 type VulnerabilityFlag =
   | "elderly"
@@ -151,6 +160,11 @@ export function LiveStatusPage() {
     refetchInterval: 15000,
   });
 
+  const { data: heatmapPoints } = useQuery({
+    ...trpc.dashboard.residentHeatmap.queryOptions({}),
+    refetchInterval: 30000,
+  });
+
   const updateStatus = useMutation({
     ...trpc.households.updateStatus.mutationOptions(),
     onSuccess: () => {
@@ -197,6 +211,7 @@ export function LiveStatusPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const mappedResidents = heatmapPoints?.length ?? 0;
 
   const resetPage = () => setPage(1);
 
@@ -238,6 +253,19 @@ export function LiveStatusPage() {
             />
           </>
         )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Resident Location Heatmap</h2>
+            <p className="text-xs text-muted-foreground">
+              OpenStreetMap base view is always shown. Heat overlay appears automatically when pinned coordinates exist ({mappedResidents} mapped).
+            </p>
+          </div>
+        </div>
+
+        <ResidentHeatmap points={heatmapPoints ?? []} />
       </div>
 
       {/* ── Resident Table ── */}
