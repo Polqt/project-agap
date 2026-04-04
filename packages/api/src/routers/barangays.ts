@@ -207,12 +207,12 @@ async function loadResidentAccess(
 }
 
 async function updateResidentAccess(
-  ctx: Pick<Context, "supabase" | "profile">,
+  ctx: Pick<Context, "supabase" | "supabaseAdmin" | "profile">,
   input: z.infer<typeof residentAccessSchema>,
 ): Promise<ResidentAccessPayload> {
   const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
-  const result = await ctx.supabase
+  const result = await ctx.supabaseAdmin
     .from("barangays")
     .update({
       resident_ping_enabled: input.pingEnabled,
@@ -229,7 +229,7 @@ async function updateResidentAccess(
     const currentLegacy = await loadResidentAccess(ctx.supabase, barangayId);
     const nextAlertText = injectResidentAccessMetadata(currentLegacy.activeAlertText, input);
 
-    const legacyResult = await ctx.supabase
+    const legacyResult = await ctx.supabaseAdmin
       .from("barangays")
       .update({
         emergency_mode_enabled: input.pingEnabled || input.checkInEnabled,
@@ -240,7 +240,7 @@ async function updateResidentAccess(
       .maybeSingle();
 
     if (isMissingEmergencyModeColumn(legacyResult.error)) {
-      const noEmergencyResult = await ctx.supabase
+      const noEmergencyResult = await ctx.supabaseAdmin
         .from("barangays")
         .update({
           active_alert_text: nextAlertText,
@@ -309,15 +309,16 @@ async function updateResidentAccess(
 }
 
 function isMissingResidentAccessColumns(error: PostgrestError | null) {
-  const message = `${error?.message ?? ""} ${error?.details ?? ""}`.toLowerCase();
-  return error?.code === "42703" && (
-    message.includes("resident_ping_enabled") || message.includes("resident_checkin_enabled")
+  const message = `${error?.code ?? ""} ${error?.message ?? ""} ${error?.details ?? ""} ${error?.hint ?? ""}`.toLowerCase();
+  return (
+    message.includes("column") &&
+    (message.includes("resident_ping_enabled") || message.includes("resident_checkin_enabled"))
   );
 }
 
 function isMissingEmergencyModeColumn(error: PostgrestError | null) {
-  const message = `${error?.message ?? ""} ${error?.details ?? ""}`.toLowerCase();
-  return error?.code === "42703" && message.includes("emergency_mode_enabled");
+  const message = `${error?.code ?? ""} ${error?.message ?? ""} ${error?.details ?? ""} ${error?.hint ?? ""}`.toLowerCase();
+  return message.includes("column") && message.includes("emergency_mode_enabled");
 }
 
 function parseResidentAccessMetadata(activeAlertText: string | null) {
