@@ -7,9 +7,11 @@ import {
   REALTIME_TABLES,
   getRealtimeAlertNotification,
   getRealtimeBroadcastNotification,
+  getRealtimeStatusPingNotification,
   matchesRealtimeBarangayScope,
   shouldNotifyResidentAlert,
   shouldNotifyResidentBroadcast,
+  shouldNotifyResidentStatusPing,
 } from "@/services/realtime";
 import { supabase } from "@/services/supabase";
 import { queryClient } from "@/services/trpc";
@@ -17,6 +19,9 @@ import { queryClient } from "@/services/trpc";
 type RealtimeRow = {
   id?: string;
   barangay_id?: string | null;
+  resident_id?: string | null;
+  status?: string | null;
+  channel?: string | null;
   title?: string | null;
   body?: string | null;
   message?: string | null;
@@ -28,6 +33,7 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
   const { profile, isAuthenticated } = useAuth();
   const lastAlertIdRef = useRef<string | null>(null);
   const lastBroadcastIdRef = useRef<string | null>(null);
+  const lastStatusPingIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !profile?.barangay_id) {
@@ -97,6 +103,25 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
             lastBroadcastIdRef.current = nextBroadcastId;
 
             void scheduleAlertNotificationAsync(getRealtimeBroadcastNotification(payload));
+          }
+
+          if (
+            profile.role === "resident" &&
+            table === "status_pings" &&
+            shouldNotifyResidentStatusPing(payload, profile.id)
+          ) {
+            const nextStatusPingId =
+              payload.new && "id" in payload.new && typeof payload.new.id === "string"
+                ? payload.new.id
+                : null;
+
+            if (nextStatusPingId && nextStatusPingId === lastStatusPingIdRef.current) {
+              return;
+            }
+
+            lastStatusPingIdRef.current = nextStatusPingId;
+
+            void scheduleAlertNotificationAsync(getRealtimeStatusPingNotification(payload));
           }
         },
       );

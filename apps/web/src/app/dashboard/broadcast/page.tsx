@@ -105,6 +105,8 @@ export default function BroadcastPage() {
   const queryClient = useQueryClient();
 
   const [selectedType, setSelectedType] = useState<Exclude<BroadcastType, "custom"> | null>(null);
+  const [audienceMode, setAudienceMode] = useState<"all" | "person">("all");
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>("");
   const [customNote, setCustomNote] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [successState, setSuccessState] = useState<{ sentAt: string } | null>(null);
@@ -113,6 +115,9 @@ export default function BroadcastPage() {
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const broadcastList = useQuery(trpc.broadcasts.list.queryOptions({}));
+  const audienceHouseholdsQuery = useQuery(
+    trpc.households.list.queryOptions({ page: 1, pageSize: 100 }),
+  );
   const createBroadcast = useMutation({
     ...trpc.broadcasts.create.mutationOptions(),
     onSuccess: () => {
@@ -165,17 +170,37 @@ export default function BroadcastPage() {
 
   const handleSend = useCallback(() => {
     if (!selectedType) return;
+
+    if (audienceMode === "person" && !selectedHouseholdId) {
+      return;
+    }
+
     createBroadcast.mutate({
       broadcastType: selectedType,
       message: finalMessage,
+      targetHouseholdId: audienceMode === "person" ? selectedHouseholdId : undefined,
     });
-  }, [selectedType, finalMessage, createBroadcast]);
+  }, [selectedType, finalMessage, createBroadcast, audienceMode, selectedHouseholdId]);
 
   const resetForm = useCallback(() => {
     setSelectedType(null);
+    setAudienceMode("all");
+    setSelectedHouseholdId("");
     setCustomNote("");
     setSuccessState(null);
   }, []);
+
+  const audienceHouseholds = ((audienceHouseholdsQuery.data?.items ?? []) as Array<{
+    id: string;
+    household_head: string;
+    purok: string;
+    phone_number: string | null;
+  }>).filter((h) => !!h.phone_number);
+
+  const selectedAudienceHousehold =
+    audienceMode === "person"
+      ? audienceHouseholds.find((h) => h.id === selectedHouseholdId) ?? null
+      : null;
 
   const history: Broadcast[] = (broadcastList.data ?? []).slice(0, 10);
   const selectedTone = selectedTemplate
@@ -280,6 +305,57 @@ export default function BroadcastPage() {
         </CardContent>
       </Card>
 
+      <Card className="border-border/70">
+        <CardHeader className="border-b border-border/70 pb-3">
+          <CardTitle className="text-base">Audience</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={audienceMode === "all" ? "default" : "outline"}
+              size="default"
+              className="h-9 rounded-md px-3 text-sm"
+              onClick={() => {
+                setAudienceMode("all");
+                setSelectedHouseholdId("");
+              }}
+            >
+              All residents
+            </Button>
+            <Button
+              type="button"
+              variant={audienceMode === "person" ? "default" : "outline"}
+              size="default"
+              className="h-9 rounded-md px-3 text-sm"
+              onClick={() => setAudienceMode("person")}
+            >
+              Specific person only
+            </Button>
+          </div>
+
+          {audienceMode === "person" ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Choose one recipient household with a registered phone number.
+              </p>
+              <select
+                value={selectedHouseholdId}
+                onChange={(e) => setSelectedHouseholdId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              >
+                <option value="">Select person</option>
+                {audienceHouseholds.map((household) => (
+                  <option key={household.id} value={household.id}>
+                    {household.household_head} • {household.purok} • {household.phone_number}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       {selectedType && (
         <div className="space-y-4">
           <Card className="border-border/70">
@@ -333,12 +409,19 @@ export default function BroadcastPage() {
       <Card className="border-border/70 bg-muted/20">
         <CardContent className="space-y-3 py-4">
           <p className="text-sm text-muted-foreground">
-            Confirm details before dispatching to all registered residents.
+            {audienceMode === "person"
+              ? "Confirm details before dispatching to the selected recipient."
+              : "Confirm details before dispatching to all registered residents."}
           </p>
           <Button
             size="lg"
             className="h-11 w-full rounded-md text-base"
-            disabled={!selectedType || cooldown > 0 || createBroadcast.isPending}
+            disabled={
+              !selectedType ||
+              cooldown > 0 ||
+              createBroadcast.isPending ||
+              (audienceMode === "person" && !selectedHouseholdId)
+            }
             onClick={() => setConfirmOpen(true)}
           >
             <Send data-icon="inline-start" className="h-4 w-4" />
@@ -346,7 +429,9 @@ export default function BroadcastPage() {
               ? `Wait ${cooldown}s before sending again`
               : createBroadcast.isPending
                 ? "Sending..."
-                : "Send to All Residents"}
+                : audienceMode === "person"
+                  ? "Send to Selected Person"
+                  : "Send to All Residents"}
           </Button>
         </CardContent>
       </Card>
@@ -355,6 +440,13 @@ export default function BroadcastPage() {
       {confirmOpen && selectedTemplate && (
         <ConfirmModal
           template={selectedTemplate}
+          audienceLabel={
+            audienceMode === "person"
+              ? selectedAudienceHousehold
+                ? `${selectedAudienceHousehold.household_head} (${selectedAudienceHousehold.phone_number})`
+                : "Selected person"
+              : "All registered residents"
+          }
           customNote={customNote}
           finalMessage={finalMessage}
           finalMessageFil={finalMessageFil}
@@ -443,6 +535,7 @@ export default function BroadcastPage() {
 
 function ConfirmModal({
   template,
+  audienceLabel,
   customNote,
   finalMessage,
   finalMessageFil,
@@ -451,6 +544,7 @@ function ConfirmModal({
   onCancel,
 }: {
   template: (typeof TEMPLATES)[number];
+  audienceLabel: string;
   customNote: string;
   finalMessage: string;
   finalMessageFil: string;
@@ -487,6 +581,12 @@ function ConfirmModal({
           <div className="space-y-3 p-4">
             <div>
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Audience
+              </p>
+              <p className="text-sm leading-relaxed">{audienceLabel}</p>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Filipino
               </p>
               <p className="whitespace-pre-wrap text-sm leading-relaxed">
@@ -502,7 +602,7 @@ function ConfirmModal({
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              This will be sent to all registered residents via push notification and SMS.
+              This will be sent through the configured broadcast channels.
             </p>
           </div>
 

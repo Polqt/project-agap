@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
+  AlertTriangle,
   Bell,
   ChevronDown,
   ClipboardList,
@@ -53,6 +54,13 @@ const NAV_ITEMS = [
     href: "/dashboard/live-status",
     label: "Live Status",
     icon: Activity,
+    section: "operations",
+    statusKey: "live" as const,
+  },
+  {
+    href: "/dashboard/need-help",
+    label: "Need Help Pings",
+    icon: AlertTriangle,
     section: "operations",
     statusKey: "live" as const,
   },
@@ -211,7 +219,7 @@ export function DashboardShell({
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Topbar */}
           <header className="flex shrink-0 border-b border-border bg-background">
-            <div className="flex items-center justify-between gap-4 px-5 py-3">
+            <div className="flex w-full items-center justify-between gap-4 px-5 py-3">
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -227,9 +235,9 @@ export function DashboardShell({
                   size="default"
                   className="h-9 rounded-md px-3 text-sm"
                   nativeButton={false}
-                  render={<Link href="/dashboard/needs-report" />}
+                  render={<Link href="/dashboard/need-help" />}
                 >
-                  Needs Report
+                  Need Help Pings
                 </Button>
               </div>
 

@@ -9,7 +9,11 @@ export const REALTIME_TABLES = [
 ] as const;
 
 type RealtimeRecord = {
+  id?: string | null;
   barangay_id?: string | null;
+  resident_id?: string | null;
+  status?: string | null;
+  channel?: string | null;
   title?: string | null;
   body?: string | null;
   message?: string | null;
@@ -60,5 +64,22 @@ export function getRealtimeBroadcastNotification(payload: RealtimePayloadLike) {
   return {
     title: typeLabel,
     body: payload.new.message || "Open Agap to read the latest barangay broadcast.",
+  };
+}
+
+export function shouldNotifyResidentStatusPing(payload: RealtimePayloadLike, residentId: string) {
+  if (payload.eventType !== "INSERT") {
+    return false;
+  }
+
+  return payload.new.channel === "app" && payload.new.resident_id === residentId;
+}
+
+export function getRealtimeStatusPingNotification(payload: RealtimePayloadLike) {
+  const statusLabel = payload.new.status === "safe" ? "Safe" : "Need Help";
+
+  return {
+    title: `Status Update: ${statusLabel}`,
+    body: payload.new.message || "Your household status was updated by your barangay response team.",
   };
 }
