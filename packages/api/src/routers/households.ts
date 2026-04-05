@@ -16,6 +16,7 @@ import {
   uuidSchema,
   vulnerabilityFlagSchema,
 } from "../schemas";
+import { sendSms } from "../textbee";
 import type {
   Household,
   HouseholdMember,
@@ -113,6 +114,81 @@ function appendRedispatchNote(existing: string | null) {
   }
   const base = existing?.trim() ? `${existing.trim()}\n` : "";
   return `${base}${tag}`;
+}
+
+const STATUS_UPDATE_TEMPLATES = {
+  help_acknowledged: {
+    label: "Need help acknowledged",
+    filipino:
+      "Natanggap na ng Barangay Response Team ang inyong NEED HELP status at inaalam na ang pinakamabilis na responde.",
+    english:
+      "The Barangay Response Team has received your NEED HELP status and is coordinating the fastest response.",
+  },
+  team_dispatched: {
+    label: "Team dispatched",
+    filipino:
+      "May welfare/rescue team nang ipinadala sa inyong lokasyon. Manatili sa ligtas na lugar habang hinihintay ang team.",
+    english:
+      "A welfare/rescue team has been dispatched to your location. Please stay in a safe place while waiting for the team.",
+  },
+  safe_confirmed: {
+    label: "Safe confirmed",
+    filipino:
+      "Na-update na ang inyong household status bilang LIGTAS. Salamat sa mabilis na update.",
+    english:
+      "Your household status has been updated to SAFE. Thank you for the quick update.",
+  },
+} as const;
+
+type StatusUpdateTemplateKey = keyof typeof STATUS_UPDATE_TEMPLATES;
+
+function formatStatusLabel(status: EvacuationStatus) {
+  if (status === "safe") return "SAFE";
+  if (status === "need_help") return "NEED HELP";
+  if (status === "welfare_check_dispatched") return "WELFARE CHECK DISPATCHED";
+  if (status === "checked_in") return "CHECKED IN";
+  if (status === "evacuating") return "EVACUATING";
+  if (status === "not_home") return "NOT HOME";
+  if (status === "home") return "HOME";
+  return "UNACCOUNTED";
+}
+
+function mapEvacuationStatusToPingStatus(status: EvacuationStatus): "safe" | "need_help" {
+  if (status === "safe" || status === "checked_in") {
+    return "safe";
+  }
+
+  return "need_help";
+}
+
+function buildStatusUpdateMessage(input: {
+  householdHead: string;
+  evacuationStatus: EvacuationStatus;
+  templateKey: StatusUpdateTemplateKey;
+  note?: string | null;
+}) {
+  const template = STATUS_UPDATE_TEMPLATES[input.templateKey];
+  const note = input.note?.trim();
+  const noteLine = note ? `\n\nNote: ${note}` : "";
+
+  return (
+    `[Project AGAP] ${template.filipino}\n\n` +
+    `${template.english}\n\n` +
+    `Status: ${formatStatusLabel(input.evacuationStatus)}\n` +
+    `Recipient: ${input.householdHead}${noteLine}`
+  );
+}
+
+function getDefaultTemplateForStatus(status: EvacuationStatus): StatusUpdateTemplateKey {
+  if (status === "safe" || status === "checked_in") {
+    return "safe_confirmed";
+  }
+
+  if (status === "welfare_check_dispatched") {
+    return "team_dispatched";
+  }
+
+  return "help_acknowledged";
 }
 
 export const householdsRouter = router({
@@ -613,6 +689,10 @@ export const householdsRouter = router({
           "not_home",
           "welfare_check_dispatched",
         ]),
+        notifyBySms: z.boolean().default(true),
+        notifyInApp: z.boolean().default(true),
+        smsTemplate: z.enum(["help_acknowledged", "team_dispatched", "safe_confirmed"]).optional(),
+        note: z.string().trim().max(500).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -646,6 +726,87 @@ export const householdsRouter = router({
         "Household not found.",
       );
 
-      return household;
+      const templateKey =
+        input.smsTemplate ?? getDefaultTemplateForStatus(input.evacuationStatus as EvacuationStatus);
+
+      const statusMessage = buildStatusUpdateMessage({
+        householdHead: household.household_head,
+        evacuationStatus: input.evacuationStatus as EvacuationStatus,
+        templateKey,
+        note: input.note ?? null,
+      });
+
+      let smsSent = false;
+      let smsAttempted = false;
+      let smsError: string | null = null;
+      let appNotified = false;
+      let appError: string | null = null;
+
+      if (input.notifyBySms && household.phone_number) {
+        smsAttempted = true;
+        const smsResult = await sendSms(household.phone_number, statusMessage);
+        smsError = smsResult.success ? null : (smsResult.error ?? "SMS gateway returned an unknown error.");
+
+        const smsLogInsert: TableInsert<"sms_logs"> = {
+          barangay_id: barangayId,
+          household_id: household.id,
+          broadcast_id: null,
+          direction: "outbound",
+          phone_number: household.phone_number,
+          message: statusMessage,
+          delivery_status: smsResult.success ? "sent" : "failed",
+          gateway_message_id: smsResult.messageId ?? null,
+          error_message: smsResult.error ?? null,
+          sent_at: smsResult.success ? new Date().toISOString() : null,
+        };
+
+        const smsLogResult = await ctx.supabaseAdmin.from("sms_logs").insert(smsLogInsert);
+        if (smsLogResult.error) {
+          const message = `Failed to persist SMS log: ${smsLogResult.error.message}`;
+          console.error(message);
+          smsError = smsError ? `${smsError} | ${message}` : message;
+        }
+
+        smsSent = smsResult.success;
+      } else if (input.notifyBySms && !household.phone_number) {
+        smsError = "Household has no registered phone number.";
+      }
+
+      if (input.notifyInApp && household.registered_by) {
+        const appPingInsert: TableInsert<"status_pings"> = {
+          barangay_id: barangayId,
+          resident_id: household.registered_by,
+          household_id: household.id,
+          status: mapEvacuationStatusToPingStatus(input.evacuationStatus as EvacuationStatus),
+          channel: "app",
+          message: statusMessage,
+          is_resolved: true,
+          resolved_by: ctx.session.id,
+          resolved_at: now,
+        };
+
+        const appInsertResult = await ctx.supabaseAdmin.from("status_pings").insert(appPingInsert);
+        if (appInsertResult.error) {
+          appError = `Failed to create app notification ping: ${appInsertResult.error.message}`;
+          console.error(appError);
+        } else {
+          appNotified = true;
+        }
+      } else if (input.notifyInApp && !household.registered_by) {
+        appError = "Household has no linked resident profile for app notification.";
+      }
+
+      return {
+        ...household,
+        _statusComms: {
+          smsSent,
+          smsAttempted,
+          smsError,
+          appNotified,
+          appError,
+          template: templateKey,
+          note: input.note ?? null,
+        },
+      };
     }),
 });
