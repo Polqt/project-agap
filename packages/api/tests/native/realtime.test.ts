@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   getRealtimeAlertNotification,
+  getRealtimeStatusPingNotification,
   matchesRealtimeBarangayScope,
   shouldNotifyResidentAlert,
+  shouldNotifyResidentStatusPing,
 } from "../../../../apps/native/services/realtime";
 
 describe("realtime helpers", () => {
@@ -53,6 +55,46 @@ describe("realtime helpers", () => {
     ).toEqual({
       title: "Flood warning",
       body: "Move to higher ground.",
+    });
+  });
+
+  it("notifies only the intended resident for app status ping updates", () => {
+    expect(
+      shouldNotifyResidentStatusPing(
+        {
+          eventType: "INSERT",
+          new: { channel: "app", resident_id: "resident-1" },
+          old: {},
+        },
+        "resident-1",
+      ),
+    ).toBe(true);
+
+    expect(
+      shouldNotifyResidentStatusPing(
+        {
+          eventType: "INSERT",
+          new: { channel: "app", resident_id: "resident-2" },
+          old: {},
+        },
+        "resident-1",
+      ),
+    ).toBe(false);
+  });
+
+  it("builds a status ping notification payload", () => {
+    expect(
+      getRealtimeStatusPingNotification({
+        eventType: "INSERT",
+        new: {
+          status: "safe",
+          message: "Your household status has been updated to SAFE.",
+        },
+        old: {},
+      }),
+    ).toEqual({
+      title: "Status Update: Safe",
+      body: "Your household status has been updated to SAFE.",
     });
   });
 });

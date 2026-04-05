@@ -8,8 +8,10 @@ import {
   Activity,
   AlertTriangle,
   Bell,
+  ChevronDown,
   ClipboardList,
   FileText,
+  LayoutDashboard,
   LogOut,
   MessageSquare,
   UserIcon,
@@ -20,8 +22,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,8 +45,22 @@ type Barangay = {
 const NAV_ITEMS = [
   {
     href: "/dashboard",
+    label: "Overview",
+    icon: LayoutDashboard,
+    section: "operations",
+    statusKey: null,
+  },
+  {
+    href: "/dashboard/live-status",
     label: "Live Status",
     icon: Activity,
+    section: "operations",
+    statusKey: "live" as const,
+  },
+  {
+    href: "/dashboard/need-help",
+    label: "Need Help Pings",
+    icon: AlertTriangle,
     section: "operations",
     statusKey: "live" as const,
   },
@@ -112,41 +126,52 @@ export function DashboardShell({
     refetchInterval: 15000,
   });
 
-  const { data: activeAlerts } = useQuery({
-    ...trpc.alerts.listActive.queryOptions({ barangayId }),
-    refetchInterval: 60000,
-  });
-
   const handleSignOut = useCallback(async () => {
-    const { createClient } = await import("@/lib/supabase/client");
-    await createClient().auth.signOut();
-    queryClient.clear();
-    router.push("/login");
-    router.refresh();
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      await createClient().auth.signOut();
+    } catch (error) {
+      console.error("Failed to sign out cleanly:", error);
+    } finally {
+      queryClient.clear();
+      router.replace("/login");
+      router.refresh();
+    }
   }, [queryClient, router]);
 
   const hasLiveAlert = (summary?.need_help_count ?? 0) > 0;
   const hasSmsFollowup = (summary?.sms_replied_count ?? 0) > 0;
-
-  const topAlert = activeAlerts?.[0];
+  const unaccountedCount = summary?.unaccounted_count ?? 0;
+  const needHelpCount = summary?.need_help_count ?? 0;
 
   return (
-    <div className="flex h-svh flex-col bg-background">
+    <div className="flex h-svh flex-col bg-muted/20">
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
-          <div className="border-b border-sidebar-border p-4">
-            <h2 className="font-semibold text-sidebar-foreground">
+        <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+          <div className="border-b border-sidebar-border p-5">
+            <h2 className="text-lg font-semibold text-sidebar-foreground">
               Brgy. {barangay.name}
             </h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               {barangay.municipality}
               {barangay.province ? `, ${barangay.province}` : ""}
             </p>
           </div>
 
-          <nav className="flex-1 space-y-1 p-2">
-            <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+          <div className="grid grid-cols-2 gap-2 border-b border-sidebar-border p-3">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-left dark:border-red-900/40 dark:bg-red-900/20">
+              <p className="text-xs font-medium text-red-700 dark:text-red-300">Need Help</p>
+              <p className="text-xl font-semibold text-red-700 dark:text-red-300">{needHelpCount}</p>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left dark:border-amber-900/40 dark:bg-amber-900/20">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Unaccounted</p>
+              <p className="text-xl font-semibold text-amber-800 dark:text-amber-300">{unaccountedCount}</p>
+            </div>
+          </div>
+
+          <nav className="flex-1 space-y-2 p-3">
+            <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Operations
             </p>
             {NAV_ITEMS.filter((n) => n.section === "operations").map((item) => (
@@ -167,7 +192,7 @@ export function DashboardShell({
               />
             ))}
 
-            <p className="mt-4 px-2 py-1 text-xs font-medium text-muted-foreground">
+            <p className="mt-5 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Communication
             </p>
             {NAV_ITEMS.filter((n) => n.section === "communication").map((item) => (
@@ -193,58 +218,55 @@ export function DashboardShell({
         {/* Main content */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Topbar */}
-          <header className="flex shrink-0 flex-col border-b border-border bg-background">
-            {/* Alert banner */}
-            <div
-              className={
-                topAlert
-                  ? "flex items-center gap-2 border-b border-border bg-amber-50 px-4 py-2 dark:bg-amber-950/30"
-                  : "flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2"
-              }
-            >
-              <AlertTriangle
-                className={
-                  topAlert ? "h-4 w-4 text-amber-600" : "h-4 w-4 text-muted-foreground"
-                }
-              />
-              {topAlert ? (
-                <div className="flex-1 space-y-0.5">
-                  <p className="text-sm font-medium">
-                    {topAlert.source.toUpperCase()} — {topAlert.signal_level ?? topAlert.severity}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {topAlert.title} · {formatTimestamp(new Date(topAlert.issued_at))}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No active alerts</p>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between gap-4 px-4 py-2">
+          <header className="flex shrink-0 border-b border-border bg-background">
+            <div className="flex w-full items-center justify-between gap-4 px-5 py-3">
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/dashboard/broadcast" />}>
+                <Button
+                  variant="outline"
+                  size="default"
+                  className="h-9 rounded-md px-3 text-sm"
+                  nativeButton={false}
+                  render={<Link href="/dashboard/broadcast" />}
+                >
                   Send Broadcast
                 </Button>
-                <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/dashboard/needs-report" />}>
-                  Needs Report
+                <Button
+                  variant="outline"
+                  size="default"
+                  className="h-9 rounded-md px-3 text-sm"
+                  nativeButton={false}
+                  render={<Link href="/dashboard/need-help" />}
+                >
+                  Need Help Pings
                 </Button>
               </div>
 
               <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="gap-2" />}>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Open account menu"
+                      className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-1"
+                    />
+                  }
+                >
                   <UserIcon className="h-4 w-4" />
-                  <span className="max-w-32 truncate">
+                  <span className="max-w-36 truncate">
                     {profile.full_name || user.email}
                   </span>
-                  <span className="rounded bg-primary/20 px-1.5 py-0.5 text-xs">
+                  <span className="rounded-md bg-primary/20 px-2 py-0.5 text-xs font-semibold">
                     Official
                   </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel>Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem
+                    className="py-2 text-sm"
+                    onSelect={() => {
+                      void handleSignOut();
+                    }}
+                  >
                     <LogOut className="h-4 w-4" />
                     Sign out
                   </DropdownMenuItem>
@@ -254,10 +276,10 @@ export function DashboardShell({
           </header>
 
           {/* Page content */}
-          <main className="flex-1 overflow-auto p-4">{children}</main>
+          <main className="flex-1 overflow-auto p-6">{children}</main>
 
           {/* Footer strip */}
-          <footer className="shrink-0 border-t border-border bg-muted/30 px-4 py-1.5">
+          <footer className="shrink-0 border-t border-border bg-muted/30 px-5 py-2">
             <LastSynced />
           </footer>
         </div>
@@ -282,18 +304,18 @@ function NavLink({
   return (
     <Link
       href={href as any}
-      className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors ${
+      className={`flex min-h-12 items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors ${
         isActive
-          ? "border-l-2 border-primary bg-sidebar-accent text-sidebar-accent-foreground"
-          : "hover:bg-sidebar-accent/50"
+          ? "bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-border"
+          : "text-sidebar-foreground/90 hover:bg-sidebar-accent/60"
       }`}
     >
       {dotColor ? (
-        <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotColor}`} />
       ) : (
-        <span className="h-2 w-2 shrink-0" />
+        <span className="h-2.5 w-2.5 shrink-0" />
       )}
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-5 w-5 shrink-0" />
       {label}
     </Link>
   );
@@ -310,7 +332,7 @@ function LastSynced() {
     : new Date();
 
   return (
-    <p className="text-xs text-muted-foreground" role="status">
+    <p className="text-sm text-muted-foreground" role="status">
       Last synced: {formatTimestamp(lastSync)}
     </p>
   );

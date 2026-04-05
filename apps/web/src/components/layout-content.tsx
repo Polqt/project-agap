@@ -34,7 +34,9 @@ export default function LayoutContent({
   return (
     <div className="grid grid-rows-[auto_1fr] h-svh">
       <Header />
-      {children}
+      <div className="min-h-0 overflow-y-auto">
+        {children}
+      </div>
     </div>
   );
 }

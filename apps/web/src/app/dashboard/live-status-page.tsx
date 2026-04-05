@@ -100,6 +100,9 @@ const ALL_VULNERABILITY_FLAGS: VulnerabilityFlag[] = [
   "chronic_illness",
 ];
 
+const FILTER_SELECT_CLASS =
+  "h-10 rounded-md border border-input bg-background px-3 text-sm font-medium outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20";
+
 function formatTimestamp(dateStr: string) {
   return new Date(dateStr).toLocaleString("en-PH", {
     timeZone: "Asia/Manila",
@@ -205,19 +208,24 @@ export function LiveStatusPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="flex items-center gap-2 text-xl font-semibold">
-        <Activity className="h-5 w-5" />
-        Live Status
-      </h1>
+    <div className="space-y-7">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <Activity className="h-6 w-6" />
+          Live Status
+        </h1>
+        <p className="text-base text-muted-foreground">
+          Priority households are shown first for faster response.
+        </p>
+      </div>
 
       {/* ── Stat Cards ── */}
       <div className="grid gap-4 sm:grid-cols-3">
         {summaryLoading ? (
           <>
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
           </>
         ) : (
           <>
@@ -241,11 +249,11 @@ export function LiveStatusPage() {
       </div>
 
       {/* ── Resident Table ── */}
-      <div className="rounded-lg border border-border bg-card">
+      <div className="rounded-xl border border-border bg-card">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
-          <div className="relative min-w-[200px] flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search by name…"
               value={search}
@@ -253,7 +261,7 @@ export function LiveStatusPage() {
                 setSearch(e.target.value);
                 resetPage();
               }}
-              className="pl-8"
+              className="h-10 rounded-md bg-background pl-9 text-sm"
             />
           </div>
 
@@ -263,7 +271,7 @@ export function LiveStatusPage() {
               setPurokFilter(e.target.value);
               resetPage();
             }}
-            className="h-8 rounded-none border border-input bg-transparent px-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/50"
+            className={FILTER_SELECT_CLASS}
           >
             <option value="all">All Puroks</option>
             {puroks.map((p) => (
@@ -279,7 +287,7 @@ export function LiveStatusPage() {
               setStatusFilter(e.target.value);
               resetPage();
             }}
-            className="h-8 rounded-none border border-input bg-transparent px-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/50"
+            className={FILTER_SELECT_CLASS}
           >
             <option value="all">All Statuses</option>
             <option value="safe">Safe</option>
@@ -295,7 +303,7 @@ export function LiveStatusPage() {
               setVulnFilter(e.target.value);
               resetPage();
             }}
-            className="h-8 rounded-none border border-input bg-transparent px-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/50"
+            className={FILTER_SELECT_CLASS}
           >
             <option value="all">All Vulnerabilities</option>
             {ALL_VULNERABILITY_FLAGS.map((flag) => (
@@ -308,17 +316,17 @@ export function LiveStatusPage() {
 
         {/* Table Body */}
         {householdsLoading ? (
-          <div className="space-y-2 p-4">
+          <div className="space-y-3 p-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-full" />
+              <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
         ) : households.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <Users className="h-10 w-10 text-muted-foreground/50" />
             <div>
-              <p className="font-medium">No households registered</p>
-              <p className="text-muted-foreground">
+              <p className="text-lg font-medium">No households registered</p>
+              <p className="text-base text-muted-foreground">
                 Households will appear here once they are added to the registry.
               </p>
             </div>
@@ -327,26 +335,26 @@ export function LiveStatusPage() {
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <Search className="h-10 w-10 text-muted-foreground/50" />
             <div>
-              <p className="font-medium">No matching households</p>
-              <p className="text-muted-foreground">Try adjusting your search or filters.</p>
+              <p className="text-lg font-medium">No matching households</p>
+              <p className="text-base text-muted-foreground">Try adjusting your search or filters.</p>
             </div>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full min-w-[980px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Name</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Purok</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium text-center">
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Name</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Purok</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-center text-sm font-semibold">
                       Members
                     </th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Status</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Vulnerability</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Channel</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Updated</th>
-                    <th className="whitespace-nowrap px-4 py-2.5 font-medium">Override</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Status</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Vulnerability</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Channel</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Updated</th>
+                    <th className="whitespace-nowrap px-4 py-3 text-sm font-semibold">Override</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -364,43 +372,43 @@ export function LiveStatusPage() {
                     return (
                       <tr
                         key={h.id}
-                        className={`border-b border-border transition-colors hover:bg-muted/50 ${rowBg}`}
+                        className={`border-b border-border transition-colors hover:bg-muted/40 ${rowBg}`}
                       >
-                        <td className="whitespace-nowrap px-4 py-2.5 font-medium">
+                        <td className="whitespace-nowrap px-4 py-3 font-medium">
                           {h.household_head}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                           {h.purok}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-center">
+                        <td className="whitespace-nowrap px-4 py-3 text-center font-medium">
                           {h.total_members}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5">
+                        <td className="whitespace-nowrap px-4 py-3">
                           <span
-                            className={`inline-block rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[h.evacuation_status].className}`}
+                            className={`inline-block rounded-md px-2 py-1 text-xs font-semibold ${STATUS_BADGE[h.evacuation_status].className}`}
                           >
                             {STATUS_BADGE[h.evacuation_status].label}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex flex-wrap gap-1">
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1.5">
                             {h.vulnerability_flags.map((flag) => (
                               <span
                                 key={flag}
-                                className="inline-block rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                                className="inline-block rounded-md bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"
                               >
                                 {VULNERABILITY_LABELS[flag]}
                               </span>
                             ))}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                           {getChannel(h)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                           {formatTimestamp(h.updated_at ?? h.created_at)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5">
+                        <td className="whitespace-nowrap px-4 py-3">
                           <StatusOverride
                             householdId={h.id}
                             currentStatus={h.evacuation_status}
@@ -416,30 +424,32 @@ export function LiveStatusPage() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted-foreground">
               <span>
                 Showing {(safePage - 1) * PAGE_SIZE + 1}–
                 {Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
-                  size="icon-xs"
+                  size="icon-sm"
+                  className="rounded-md"
                   disabled={safePage <= 1}
                   onClick={() => setPage((p) => p - 1)}
                 >
-                  <ChevronLeft className="h-3 w-3" />
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="px-2">
+                <span className="px-2 font-medium text-foreground">
                   {safePage} / {totalPages}
                 </span>
                 <Button
                   variant="outline"
-                  size="icon-xs"
+                  size="icon-sm"
+                  className="rounded-md"
                   disabled={safePage >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -469,9 +479,9 @@ function StatCard({
         : "border-l-muted-foreground";
 
   return (
-    <div className={`rounded-lg border border-l-4 border-border bg-card p-4 ${accent}`}>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="text-2xl font-semibold">{value}</p>
+    <div className={`rounded-xl border border-l-4 border-border bg-card p-5 ${accent}`}>
+      <p className="text-base text-muted-foreground">{label}</p>
+      <p className="text-3xl font-semibold leading-tight">{value}</p>
     </div>
   );
 }
@@ -491,12 +501,22 @@ function StatusOverride({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="xs" disabled={isPending} />}>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-md px-2.5 text-sm"
+            disabled={isPending}
+          />
+        }
+      >
         Set status
-        <ChevronDown className="h-3 w-3" />
+        <ChevronDown className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
+          className="py-2 text-sm"
           disabled={currentStatus === "safe"}
           onClick={() => onOverride(householdId, "safe")}
         >
@@ -504,6 +524,7 @@ function StatusOverride({
           Safe
         </DropdownMenuItem>
         <DropdownMenuItem
+          className="py-2 text-sm"
           disabled={currentStatus === "need_help"}
           onClick={() => onOverride(householdId, "need_help")}
         >

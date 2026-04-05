@@ -36,6 +36,20 @@ export interface PagasaAlert {
     area: string;
     severity: string;
     urgency: string;
+    status?: string;
+    messageType?: string;
+    responseType?: string;
+    certainty?: string;
+    sender?: string;
+    sent?: string;
+    expires?: string;
+    floodAdvisory?: string;
+    rainfallForecast?: string;
+    watercourseStatus?: string;
+    areasAffected?: string[];
+    regions?: string[];
+    references?: string;
+    instruction?: string;
   };
 }
 
@@ -47,6 +61,7 @@ export function usePagasaAlerts() {
       if (!response.ok) throw new Error("Failed to fetch PAGASA alerts");
       return response.json();
     },
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: 5 * 60 * 1000, // 5 minutes
   });
 }
