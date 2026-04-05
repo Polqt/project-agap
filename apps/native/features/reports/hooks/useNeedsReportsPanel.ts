@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import * as Clipboard from "expo-clipboard";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
 
@@ -14,10 +15,14 @@ import {
 } from "@/shared/utils/errors";
 import { needsReportSchema, type NeedsReportFormValues } from "@/types/forms";
 
+import { getNeedsSummaryText } from "../services/needsReportExport";
+import type { IncidentReportLanguage } from "../types";
+
 export function useNeedsReportsPanel() {
   const { profile } = useAuth();
   const { isOnline, queueAction } = useOfflineQueue();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [exportLanguage, setExportLanguage] = useState<IncidentReportLanguage>("english");
 
   const form = useForm<NeedsReportFormValues>({
     resolver: zodResolver(needsReportSchema),
@@ -46,10 +51,18 @@ export function useNeedsReportsPanel() {
     }),
   );
 
+  const summaryQuery = useQuery(
+    trpc.needsReports.getSummary.queryOptions(
+      { barangayId: profile?.barangay_id ?? undefined },
+      { enabled: Boolean(profile?.barangay_id) },
+    ),
+  );
+
   const submitMutation = useMutation(
     trpc.needsReports.submit.mutationOptions({
       onSuccess: () => {
         void reportsQuery.refetch();
+        void summaryQuery.refetch();
         form.reset({
           centerId: "",
           totalEvacuees: "0",
@@ -121,13 +134,29 @@ export function useNeedsReportsPanel() {
     }
   });
 
+  async function copyNeedsSummary(language: IncidentReportLanguage) {
+    const summary = summaryQuery.data;
+    if (!summary) {
+      setFeedback("No pending needs reports to export.");
+      return;
+    }
+
+    await Clipboard.setStringAsync(getNeedsSummaryText(summary, language));
+    setFeedback(language === "filipino" ? "Filipino report copied for LGU." : "English report copied for LGU.");
+  }
+
   return {
     form,
     feedback,
     centers: centersQuery.data ?? [],
     reports: reportsQuery.data ?? [],
+    needsSummary: summaryQuery.data ?? null,
+    isLoadingSummary: summaryQuery.isLoading,
+    exportLanguage,
+    setExportLanguage,
     isOnline,
     submitMutation,
     handleSubmit,
+    copyNeedsSummary,
   };
 }

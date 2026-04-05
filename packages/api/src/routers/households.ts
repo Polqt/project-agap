@@ -470,10 +470,10 @@ export const householdsRouter = router({
       const assigneeId = input.assigneeProfileId ?? ctx.session.id;
 
       const assignee = getFoundOrThrow(
-        getSupabaseDataOrThrow<{ id: string; role: string; barangay_id: string | null } | null>(
+        getSupabaseDataOrThrow<{ id: string; barangay_id: string | null } | null>(
           await ctx.supabase
             .from("profiles")
-            .select("id, role, barangay_id")
+            .select("id, barangay_id")
             .eq("id", assigneeId)
             .maybeSingle(),
           "Failed to validate assignee.",
@@ -481,8 +481,8 @@ export const householdsRouter = router({
         "Assignee not found.",
       );
 
-      if (assignee.role !== "official" || assignee.barangay_id !== barangayId) {
-        throw ApiError.forbidden("Assignee must be an official in this barangay.");
+      if (assignee.barangay_id !== barangayId) {
+        throw ApiError.forbidden("Assignee must belong to this barangay.");
       }
 
       const now = new Date().toISOString();
@@ -807,6 +807,59 @@ export const householdsRouter = router({
           template: templateKey,
           note: input.note ?? null,
         },
+      };
+    }),
+
+  markLocated: protectedProcedure
+    .input(
+      z.object({
+        householdId: uuidSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Look up the household — any authenticated user may mark it as located (family reunion flow)
+      const household = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .select(householdBaseSelect)
+            .eq("id", input.householdId)
+            .maybeSingle(),
+          "Failed to load household.",
+        ),
+        "Household not found.",
+      );
+
+      // Update to checked_in (located at evacuation center)
+      const updated = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .update({ evacuation_status: "checked_in" as EvacuationStatus })
+            .eq("id", input.householdId)
+            .select(householdBaseSelect)
+            .maybeSingle(),
+          "Failed to mark household as located.",
+        ),
+        "Household not found.",
+      );
+
+      // Notify the household's phone via SMS if available
+      if (household.phone_number) {
+        try {
+          const { sendSms } = await import("../textbee");
+          await sendSms(
+            household.phone_number,
+            `AGAP: ${household.household_head} ay natagpuan na sa evacuation center. Ang inyong pamilya ay ligtas. / Your household has been located at an evacuation center.`,
+          );
+        } catch {
+          // SMS notification failure should never block the mark-located response.
+        }
+      }
+
+      return {
+        household: updated,
+        smsNotified: Boolean(household.phone_number),
       };
     }),
 });

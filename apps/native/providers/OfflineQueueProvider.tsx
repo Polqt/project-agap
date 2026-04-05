@@ -1,10 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
 import { OfflineQueueContext } from "@/shared/hooks/useOfflineQueue";
 import {
-  clearQueuedActions,
   deleteQueuedAction,
   insertQueuedAction,
   listQueuedActions,
@@ -19,8 +17,6 @@ import {
 } from "@/services/offlineQueueActions";
 import { appShellStore, setSyncStatus } from "@/stores/app-shell-store";
 import type { QueuedAction } from "@/types/offline";
-
-const ONE_TIME_QUEUE_RESET_KEY = "agap-offline-queue-reset-2026-04-02";
 
 export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const [pendingActions, setPendingActions] = useState<QueuedAction[]>([]);
@@ -102,13 +98,6 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     async function bootstrapQueueState() {
-      const hasReset = await AsyncStorage.getItem(ONE_TIME_QUEUE_RESET_KEY);
-
-      if (!hasReset) {
-        await clearQueuedActions();
-        await AsyncStorage.setItem(ONE_TIME_QUEUE_RESET_KEY, "1");
-      }
-
       await refreshPendingActions();
     }
 

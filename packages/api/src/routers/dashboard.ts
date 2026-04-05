@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { getAuthorizedBarangayId, getSupabaseDataOrThrow } from "../router-helpers";
-import { officialProcedure, router } from "../index";
+import { getAuthorizedBarangayId, getProfileBarangayIdOrThrow, getSupabaseDataOrThrow } from "../router-helpers";
+import { officialProcedure, protectedProcedure, router } from "../index";
 import { barangayIdSchema, uuidSchema } from "../schemas";
 import type { DashboardSummary, SmsFollowupItem, TableRow } from "../supabase";
 
@@ -33,36 +33,53 @@ export const dashboardRouter = router({
       };
     }),
 
-  residentHeatmap: officialProcedure
+  heatmapData: protectedProcedure
     .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
-      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+      const barangayId = input.barangayId ?? getProfileBarangayIdOrThrow(ctx.profile);
 
-      const profiles =
-        getSupabaseDataOrThrow<ResidentHeatmapProfile[]>(
-          await ctx.supabase
-            .from("profiles")
-            .select("id, pinned_latitude, pinned_longitude")
-            .eq("barangay_id", barangayId)
-            .eq("role", "resident")
-            .not("pinned_latitude", "is", null)
-            .not("pinned_longitude", "is", null),
-          "Failed to load resident heatmap points.",
-        ) ?? [];
+      // Count unresolved need_help pings, joined to household purok
+      const { data: pings } = await ctx.supabase
+        .from("status_pings")
+        .select("household_id, households!inner(purok, latitude, longitude)")
+        .eq("barangay_id", barangayId)
+        .eq("status", "need_help")
+        .eq("is_resolved", false);
 
-      return profiles.flatMap((profile) => {
-        if (profile.pinned_latitude === null || profile.pinned_longitude === null) {
-          return [];
-        }
+      type PurokStat = {
+        purok: string;
+        count: number;
+        // Approximate centroid: average of households in that purok
+        latitude: number;
+        longitude: number;
+      };
 
-        return [
-          {
-            resident_id: profile.id,
-            latitude: profile.pinned_latitude,
-            longitude: profile.pinned_longitude,
-          },
-        ];
-      });
+      const purokMap = new Map<string, { count: number; lat: number; lng: number; points: number }>();
+
+      for (const ping of pings ?? []) {
+        const hh = (ping as unknown as { households: { purok: string; latitude: number; longitude: number } }).households;
+        if (!hh?.purok) continue;
+        const existing = purokMap.get(hh.purok) ?? { count: 0, lat: 0, lng: 0, points: 0 };
+        purokMap.set(hh.purok, {
+          count: existing.count + 1,
+          lat: existing.lat + hh.latitude,
+          lng: existing.lng + hh.longitude,
+          points: existing.points + 1,
+        });
+      }
+
+      const result: PurokStat[] = [];
+      for (const [purok, stats] of purokMap.entries()) {
+        if (stats.points === 0) continue;
+        result.push({
+          purok,
+          count: stats.count,
+          latitude: stats.lat / stats.points,
+          longitude: stats.lng / stats.points,
+        });
+      }
+
+      return result;
     }),
 
   smsFollowup: officialProcedure

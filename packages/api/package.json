@@ -9,16 +9,22 @@
       "default": "./src/*.ts"
     }
   },
-  "scripts": {},
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "node node_modules/vitest/vitest.mjs run --config vitest.config.ts"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@project-agap/db": "workspace:*",
     "@project-agap/env": "workspace:*",
     "@supabase/supabase-js": "^2.99.1",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
+    "@types/xml2js": "^0.4.14",
     "dotenv": "catalog:",
     "effect": "catalog:",
     "next": "catalog:",
+    "xml2js": "^0.6.2",
     "zod": "catalog:"
   },
   "devDependencies": {

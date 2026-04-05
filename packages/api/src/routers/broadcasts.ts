@@ -10,6 +10,7 @@ import {
 import { officialProcedure, router } from "../index";
 import { barangayIdSchema } from "../schemas";
 import type { Broadcast, TableInsert } from "../supabase";
+import { sendExpoPush, type ExpoPushMessage } from "../expo-push";
 import { sendSms } from "../textbee";
 
 const broadcastColumns =
@@ -218,20 +219,76 @@ export const broadcastsRouter = router({
         }),
       );
 
-      if (smsSentCount > 0) {
+      // ── Push notification fanout ──────────────────────────────
+      let pushTokenQuery = ctx.supabaseAdmin
+        .from("push_tokens")
+        .select("token")
+        .eq("barangay_id", barangayId)
+        .eq("is_active", true);
+
+      if (input.targetPurok) {
+        // Only send push to residents in the targeted purok
+        const { data: purokProfiles } = await ctx.supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("barangay_id", barangayId)
+          .eq("purok", input.targetPurok);
+
+        const profileIds = (purokProfiles ?? []).map((p) => p.id);
+        if (profileIds.length > 0) {
+          pushTokenQuery = pushTokenQuery.in("resident_id", profileIds);
+        }
+      }
+
+      const { data: tokens } = await pushTokenQuery;
+      const pushTokens = (tokens ?? []).map((t) => t.token).filter(Boolean);
+
+      let pushSentCount = 0;
+      if (pushTokens.length > 0) {
+        const pushMessages: ExpoPushMessage[] = pushTokens.map((token) => ({
+          to: token,
+          title: input.broadcastType === "evacuate_now"
+            ? "EVACUATION ORDER"
+            : input.broadcastType === "stay_alert"
+              ? "STAY ALERT"
+              : input.broadcastType === "all_clear"
+                ? "ALL CLEAR"
+                : "Barangay Broadcast",
+          body: input.message,
+          data: { type: "broadcast", broadcastId: broadcast.id },
+          sound: "default",
+          channelId: "agap-alerts",
+          priority: input.broadcastType === "evacuate_now" ? "high" : "default",
+        }));
+
+        const pushResult = await sendExpoPush(pushMessages);
+        pushSentCount = pushResult.totalSent;
+      }
+
+      const updatePayload: Record<string, number> = {};
+      if (smsSentCount > 0) updatePayload.sms_sent_count = smsSentCount;
+      if (pushSentCount > 0) updatePayload.push_sent_count = pushSentCount;
+
+      if (Object.keys(updatePayload).length > 0) {
         await ctx.supabaseAdmin
           .from("broadcasts")
-          .update({ sms_sent_count: smsSentCount })
+          .update(updatePayload)
           .eq("id", broadcast.id);
       }
 
       return {
         ...broadcast,
         sms_sent_count: smsSentCount,
+        push_sent_count: pushSentCount,
         _smsResults: {
           total: recipients.length,
           sent: smsSentCount,
           failed: recipients.length - smsSentCount,
+        },
+        _pushResults: {
+          total: pushTokens.length,
+          sent: pushSentCount,
+          failed: pushTokens.length - pushSentCount,
         },
       };
     }),

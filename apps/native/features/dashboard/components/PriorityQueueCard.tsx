@@ -37,10 +37,16 @@ export function PriorityQueueCard({
                   {formatRelativeTime(ping.pinged_at)}
                 </Text>
               </View>
-              <Pill
-                label={ping.channel.toUpperCase()}
-                tone={ping.status === "need_help" ? "danger" : "success"}
-              />
+              <View className="gap-1.5 items-end">
+                <Pill
+                  label={ping.status === "need_help" ? "TULONG" : "LIGTAS"}
+                  tone={ping.status === "need_help" ? "danger" : "success"}
+                />
+                <Pill
+                  label={ping.channel === "sms" ? "SMS" : "APP"}
+                  tone={ping.channel === "sms" ? "warning" : "info"}
+                />
+              </View>
             </View>
             <View className="mt-4">
               <AppButton

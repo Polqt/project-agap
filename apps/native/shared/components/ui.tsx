@@ -1,4 +1,5 @@
-import { forwardRef } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { forwardRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,15 +8,21 @@ import {
   type TextInputProps,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 type PillTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-blue-700",
-  secondary: "bg-slate-900",
-  danger: "bg-rose-700",
-  ghost: "border border-slate-300 bg-transparent",
+  primary: "bg-slate-900",
+  secondary: "bg-slate-700",
+  danger: "bg-rose-600",
+  ghost: "border border-slate-200 bg-transparent",
 };
 
 const pillVariants: Record<PillTone, string> = {
@@ -67,7 +74,7 @@ export function SectionCard({
   right?: React.ReactNode;
 }) {
   return (
-    <View className="mx-5 mt-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <View className="mx-6 mt-4 rounded-2xl border border-slate-200 bg-white p-4">
       {title || subtitle || right ? (
         <View className="mb-4 flex-row items-start justify-between gap-4">
           <View className="flex-1 gap-1">
@@ -100,9 +107,9 @@ export function AppButton({
 }) {
   const muted = disabled || loading;
   const sizeClasses =
-    size === "kiosk" ? "min-h-[72px] rounded-3xl px-6" : "min-h-14 rounded-2xl px-4";
+    size === "kiosk" ? "min-h-[72px] rounded-2xl px-6" : "min-h-[48px] rounded-xl px-4";
   const textClasses =
-    size === "kiosk" ? "text-xl font-bold" : "text-base font-semibold";
+    size === "kiosk" ? "text-xl font-bold" : "text-[14px] font-semibold";
 
   return (
     <Pressable
@@ -160,7 +167,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         keyboardType={keyboardType}
         multiline={multiline}
         textAlignVertical={multiline ? "top" : "center"}
-        className={`rounded-2xl border px-4 py-3 text-base text-slate-950 ${multiline ? "min-h-28" : "min-h-14"} ${error ? "border-rose-400 bg-rose-50" : "border-slate-200 bg-slate-50"}`}
+        className={`rounded-xl border px-4 py-3 text-[15px] text-slate-900 ${multiline ? "min-h-28" : "min-h-11"} ${error ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-slate-50"}`}
         placeholderTextColor="#94a3b8"
         {...textInputProps}
       />
@@ -172,7 +179,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 
 export function Pill({ label, tone = "neutral" }: { label: string; tone?: PillTone }) {
   return (
-    <Text className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${pillVariants[tone]}`}>
+    <Text className={`self-start rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${pillVariants[tone]}`}>
       {label}
     </Text>
   );
@@ -190,7 +197,7 @@ export function StatCard({
   tone?: PillTone;
 }) {
   return (
-    <View className="min-w-[46%] flex-1 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+    <View className="min-w-[46%] flex-1 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <Pill label={label} tone={tone} />
       <Text className="mt-4 text-3xl font-bold text-slate-950">{value}</Text>
       {caption ? <Text className="mt-2 text-sm text-slate-500">{caption}</Text> : null}
@@ -206,9 +213,9 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <View className="items-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8">
-      <Text className="text-lg font-semibold text-slate-900">{title}</Text>
-      <Text className="mt-2 text-center text-sm leading-6 text-slate-500">{description}</Text>
+    <View className="items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-5 py-6">
+      <Text className="text-[14px] font-semibold text-slate-600">{title}</Text>
+      <Text className="mt-1.5 text-center text-[13px] leading-5 text-slate-400">{description}</Text>
     </View>
   );
 }
@@ -224,6 +231,86 @@ export function InfoRow({
     <View className="flex-row items-start justify-between gap-4 py-2">
       <Text className="flex-1 text-sm text-slate-500">{label}</Text>
       <Text className="flex-1 text-right text-sm font-medium text-slate-900">{value}</Text>
+    </View>
+  );
+}
+
+export type SpeedDialAction = {
+  id: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  onPress: () => void;
+};
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+export function SpeedDialFab({ actions }: { actions: SpeedDialAction[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const rotation = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  function toggle() {
+    setIsOpen((prev) => {
+      const next = !prev;
+      rotation.value = withSpring(next ? 45 : 0, { damping: 15 });
+      opacity.value = withTiming(next ? 1 : 0, { duration: 150 });
+      return next;
+    });
+  }
+
+  function handleAction(action: SpeedDialAction) {
+    setIsOpen(false);
+    rotation.value = withSpring(0, { damping: 15 });
+    opacity.value = withTiming(0, { duration: 100 });
+    action.onPress();
+  }
+
+  const mainButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  const menuStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    pointerEvents: opacity.value > 0.5 ? "auto" : "none",
+  }));
+
+  return (
+    <View className="items-end px-5">
+      {isOpen ? (
+        <Pressable
+          onPress={toggle}
+          className="absolute -top-150 -left-100 h-200 w-125"
+        />
+      ) : null}
+
+      <Animated.View style={menuStyle} className="mb-3 items-end gap-3">
+        {actions.map((action) => (
+          <Pressable
+            key={action.id}
+            onPress={() => handleAction(action)}
+            className="flex-row items-center gap-3"
+          >
+            <View className="rounded-lg bg-slate-800 px-3 py-2">
+              <Text className="text-sm font-medium text-white">{action.label}</Text>
+            </View>
+            <View
+              className="h-12 w-12 items-center justify-center rounded-full shadow-sm"
+              style={{ backgroundColor: action.color }}
+            >
+              <Ionicons name={action.icon} size={22} color="white" />
+            </View>
+          </Pressable>
+        ))}
+      </Animated.View>
+
+      <AnimatedPressable
+        onPress={toggle}
+        style={mainButtonStyle}
+        className="h-14 w-14 items-center justify-center rounded-full bg-blue-700 shadow-lg"
+      >
+        <Ionicons name="add" size={28} color="white" />
+      </AnimatedPressable>
     </View>
   );
 }

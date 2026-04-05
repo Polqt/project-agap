@@ -10,6 +10,9 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
+    "test": "turbo test",
+    "validate": "pnpm check-types && pnpm build && pnpm test:native",
+    "lint": "turbo lint",
     "test:native": "node packages/api/node_modules/vitest/vitest.mjs run --config packages/api/vitest.config.ts",
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
@@ -17,10 +20,10 @@
     "db:studio": "turbo -F @project-agap/db db:studio",
     "db:generate": "turbo -F @project-agap/db db:generate",
     "db:migrate": "turbo -F @project-agap/db db:migrate",
-    "supabase:start": "supabase start --workdir packages/db",
-    "supabase:stop": "supabase stop --workdir packages/db",
-    "supabase:status": "supabase status --workdir packages/db",
-    "supabase:migration:new": "supabase migration new --workdir packages/db"
+    "supabase:start": "pnpm dlx supabase start --workdir packages/db",
+    "supabase:stop": "pnpm dlx supabase stop --workdir packages/db",
+    "supabase:status": "pnpm dlx supabase status --workdir packages/db",
+    "supabase:migration:new": "pnpm dlx supabase migration new --workdir packages/db"
   },  
   "dependencies": {
     "@project-agap/env": "workspace:*",

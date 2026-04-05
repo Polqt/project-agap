@@ -10,10 +10,11 @@
     }
   },
   "scripts": {
-    "db:push": "supabase db push --workdir .",
+    "check-types": "tsc --noEmit",
+    "db:push": "pnpm dlx supabase db push --workdir .",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "supabase studio --workdir .",
-    "db:migrate": "supabase migration up --workdir ."
+    "db:studio": "pnpm dlx supabase studio --workdir .",
+    "db:migrate": "pnpm dlx supabase migration up --workdir ."
   },
   "dependencies": {
     "@project-agap/env": "workspace:*",

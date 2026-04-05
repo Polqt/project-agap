@@ -28,7 +28,7 @@ export function RegistryPanel() {
   return (
     <ScreenShell
       title="Registry"
-      description="Search first, expand inline, act fast."
+      description="Search, expand, act."
       feedback={feedback}
       topContent={
         <RegistrySearchCard
@@ -39,14 +39,15 @@ export function RegistryPanel() {
         />
       }
     >
-      <View className="mx-5 mt-5 rounded-[28px] bg-[#eef2ff] px-4 py-4">
-        <Text className="text-sm font-semibold text-slate-950">
-          {households.length} household{households.length === 1 ? "" : "s"} in view
+      {/* Summary strip */}
+      <View className="mx-6 mt-4 flex-row items-center justify-between">
+        <Text className="text-[13px] font-medium text-slate-400">
+          {households.length} household{households.length === 1 ? "" : "s"}
+          {filter !== "all" ? ` \u00B7 ${filter.replaceAll("_", " ")}` : ""}
         </Text>
-        <Text className="mt-1 text-sm leading-6 text-slate-600">
-          Sorted vulnerability-first, then unknown status so the riskiest households stay near the top.
-        </Text>
-        {isRefreshing ? <Text className="mt-2 text-xs font-semibold text-slate-500">Refreshing registry...</Text> : null}
+        {isRefreshing ? (
+          <Text className="text-[11px] font-semibold text-slate-300">Refreshing...</Text>
+        ) : null}
       </View>
 
       <RegistryListCard

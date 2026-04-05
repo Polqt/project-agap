@@ -43,6 +43,10 @@ export const residentSignUpSchema = z
     phoneNumber: z.string().trim().max(40).optional().or(z.literal("")),
     barangayId: z.string().uuid("Pick a barangay."),
     purok: z.string().trim().min(1, "Enter your purok."),
+    address: z.string().trim().max(240).optional().or(z.literal("")),
+    totalMembers: z.number().int().min(1).max(30),
+    vulnerabilityFlags: z.array(z.enum(vulnerabilityFlagOptions)).max(6),
+    isSmsOnly: z.boolean(),
   })
   .refine((value) => value.password === value.confirmPassword, {
     message: "Passwords do not match.",

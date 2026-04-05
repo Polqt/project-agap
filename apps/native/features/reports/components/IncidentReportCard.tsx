@@ -91,9 +91,8 @@ export function IncidentReportCard({
 
         {report ? (
           <View className="rounded-2xl border border-slate-200 bg-white p-3">
-            <Text className="text-xs text-slate-500">
-              Quick copy preview:
-              {"\n\n"}
+            <Text className="text-xs font-medium text-slate-600 mb-2">Quick copy preview:</Text>
+            <Text className="text-xs text-slate-500 leading-5">
               {getIncidentReportText(report, language)}
             </Text>
           </View>

@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { AppButton, InfoRow, Pill, SectionCard } from "@/shared/components/ui";
+import { AppButton, InfoRow, Pill } from "@/shared/components/ui";
 
 type Props = {
   email?: string | null;
@@ -18,11 +18,7 @@ export function ProfileAccountCard({
   onSignOut,
 }: Props) {
   return (
-    <SectionCard
-      title="Account actions"
-      subtitle="Manage sign-in recovery for this device and end the current session when needed."
-    >
-      <View className="gap-4">
+    <View className="gap-4">
         <View className="gap-2">
           <Pill label="SECURED BY EMAIL" tone="info" />
           <InfoRow label="Reset email" value={email ?? "No email available"} />
@@ -42,7 +38,6 @@ export function ProfileAccountCard({
           disabled={!email}
         />
         <AppButton label="Sign out" onPress={onSignOut} variant="secondary" />
-      </View>
-    </SectionCard>
+    </View>
   );
 }

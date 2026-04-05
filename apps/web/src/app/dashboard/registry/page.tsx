@@ -50,7 +50,16 @@ type Household = {
   total_members: number;
   vulnerability_flags: VulnerabilityFlag[];
   is_sms_only: boolean;
-  evacuation_status: string | null;
+  evacuation_status:
+    | "home"
+    | "evacuating"
+    | "checked_in"
+    | "safe"
+    | "need_help"
+    | "unknown"
+    | "not_home"
+    | "welfare_check_dispatched"
+    | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -85,12 +94,19 @@ function flagColor(flag: VulnerabilityFlag) {
 
 function statusBadge(status: string | null) {
   switch (status) {
-    case "evacuated":
+    case "unknown":
+      return "bg-muted text-muted-foreground";
+    case "safe":
       return "bg-green-500/15 text-green-700 dark:text-green-400";
-    case "in_place":
+    case "home":
+    case "evacuating":
+    case "checked_in":
+    case "not_home":
       return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
-    case "needs_rescue":
+    case "need_help":
       return "bg-red-500/15 text-red-700 dark:text-red-400";
+    case "welfare_check_dispatched":
+      return "bg-blue-500/15 text-blue-700 dark:text-blue-400";
     default:
       return "bg-muted text-muted-foreground";
   }
