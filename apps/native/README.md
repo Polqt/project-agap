@@ -18,6 +18,32 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 
 Use [apps/native/.env.example](/c:/Users/poyhi/project-agap/apps/native/.env.example) as the template.
 
+## APK Build Readiness
+
+The repo now includes [eas.json](/c:/Users/poyhi/project-agap/apps/native/eas.json) so you have a repeatable Android build profile for judging.
+
+Important:
+
+- `apps/native/app.json` now includes an Android package ID: `com.projectagap.mobile`
+- change that package name only if you already own or use another application ID
+- after changing any public env vars, rebuild the APK
+
+Fastest EAS build commands:
+
+```bash
+cd apps/native
+pnpm dlx eas login
+pnpm dlx eas build --platform android --profile judge
+```
+
+If you need a local Android build instead of EAS:
+
+```bash
+cd apps/native
+pnpm expo prebuild
+pnpm expo run:android --variant release
+```
+
 ## Important Reality Check
 
 - Offline works only after the device has synced data at least once
@@ -96,3 +122,5 @@ The critical requirement is not the build provider. The critical requirement is:
 - Offline queue works on a real phone
 - Reconnect sync works on a real phone
 - No screen still depends on your laptop IP
+- APK was rebuilt after setting the production server URL
+- You have a backup phone or backup screen recording

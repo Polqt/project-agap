@@ -15,7 +15,7 @@ const ResidentHeatmap = dynamic(
   () => import("../resident-heatmap").then((mod) => mod.ResidentHeatmap),
   {
     ssr: false,
-    loading: () => <Skeleton className="h-[24rem] w-full" />,
+    loading: () => <Skeleton className="h-96 w-full" />,
   },
 );
 
@@ -101,7 +101,7 @@ export default function NeedHelpPage() {
   });
 
   const heatmapQuery = useQuery({
-    ...trpc.dashboard.residentHeatmap.queryOptions({}),
+    ...trpc.dashboard.heatmapData.queryOptions({}),
     refetchInterval: 30000,
   });
 

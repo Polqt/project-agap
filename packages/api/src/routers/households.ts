@@ -746,6 +746,10 @@ export const householdsRouter = router({
           "not_home",
           "welfare_check_dispatched",
         ]),
+        notifyBySms: z.boolean().default(false),
+        notifyInApp: z.boolean().default(false),
+        smsTemplate: z.enum(["help_acknowledged", "team_dispatched", "safe_confirmed"]).optional(),
+        note: z.string().trim().max(300).nullish(),
         expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )

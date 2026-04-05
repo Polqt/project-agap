@@ -8,9 +8,11 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet.heat";
 
 export type ResidentHeatmapPoint = {
-  resident_id: string;
   latitude: number;
   longitude: number;
+  resident_id?: string;
+  purok?: string;
+  count?: number;
 };
 
 export type NeedHelpPingPoint = {
@@ -42,7 +44,11 @@ function HeatLayer({ points }: { points: ResidentHeatmapPoint[] }) {
   const map = useMap();
 
   const weightedPoints = useMemo(
-    () => points.map((point) => [point.latitude, point.longitude, 0.4] as [number, number, number]),
+    () =>
+      points.map((point) => {
+        const weight = typeof point.count === "number" ? Math.max(0.4, Math.min(point.count, 1.5)) : 0.4;
+        return [point.latitude, point.longitude, weight] as [number, number, number];
+      }),
     [points],
   );
 

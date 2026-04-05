@@ -6,13 +6,13 @@ For tomorrow's remote judging, this is the most important deployment target.
 
 ## Recommended Host
 
-Use `Railway` for the deadline.
+Use `Vercel` for the deadline.
 
 Why:
 
-- simple Next.js deployment
+- first-class Next.js deployment
 - public HTTPS URL
-- easier remote testing than laptop tunnel
+- fast setup for remote judging
 
 ## Required Environment Variables
 
@@ -29,6 +29,14 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SMS_WEBHOOK_SECRET=your-webhook-secret-min-16-chars
 ```
 
+For GitLab CI to deploy to Vercel, also set these GitLab CI/CD variables:
+
+```bash
+VERCEL_TOKEN=your-vercel-token
+VERCEL_ORG_ID=your-vercel-org-id
+VERCEL_PROJECT_ID=your-vercel-project-id
+```
+
 Optional for SMS features:
 
 ```bash
@@ -38,12 +46,14 @@ TEXTBEE_DEVICE_ID=your-textbee-device-id
 
 ## Deploy Steps
 
-1. Push the latest code to GitHub
-2. Create a new Railway project from the repo
-3. Set the root directory to `apps/web` if Railway asks
-4. Add the environment variables above
-5. Deploy
-6. Open the deployed URL and verify the app loads
+1. Push the latest code to GitHub or GitLab.
+2. Create a new Vercel project from the repo.
+3. Set the project root directory to `apps/web`.
+4. Add the environment variables above.
+5. Deploy.
+6. Open the deployed URL and verify the app loads.
+
+If Vercel asks for custom commands, use the repo config in [vercel.json](/c:/Users/poyhi/project-agap/apps/web/vercel.json).
 
 ## Backend Verification
 
@@ -78,3 +88,13 @@ For tomorrow, this deployment is good enough for judging if:
 - migrations are applied
 - the deployed URL is stable
 - the mobile app is rebuilt or restarted with the new server URL
+- Vercel completed a clean workspace install from the monorepo root
+
+## Common Vercel Failure
+
+If the build fails with `Can't resolve 'leaflet'` or `Can't resolve 'react-leaflet'`, the install step did not complete correctly for the web workspace. Run a clean root install before retrying:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter web build
+```
