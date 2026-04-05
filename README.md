@@ -1,69 +1,87 @@
 # Project Agap
 
-Offline-first disaster response platform built with:
+Project Agap is an offline-first disaster risk reduction and response platform designed for barangays, responders, and residents. It helps communities report safety status, locate evacuation centers, coordinate welfare checks, monitor alerts, and keep critical information usable even under weak connectivity or no signal.
 
-- `apps/native`: Expo + React Native mobile app for residents and barangay officials
-- `apps/web`: Next.js app that hosts the `/api/trpc` backend used by the mobile app
-- `packages/api`: shared tRPC routers and backend logic
-- `packages/db`: Supabase SQL migrations and schema
+The system has two main parts:
 
-## What To Deploy For Tomorrow
+- `Mobile app`: used by residents and barangay officials in the field
+- `Web/API app`: serves the backend, tRPC API, and operational services connected to the mobile app
 
-For the judges' remote testing, deploy these two things:
+## What The App Does
 
-1. A hosted `web` app so `/api/trpc` is reachable from anywhere
-2. A mobile build that points `EXPO_PUBLIC_SERVER_URL` to that hosted URL
+Project Agap is built for emergency situations where normal communication becomes unreliable. The goal is to make disaster coordination faster, clearer, and more resilient.
 
-Recommended path for the deadline:
+With the app, a barangay can:
 
-- Deploy `apps/web` to `Railway`
-- Keep Supabase as the database + auth provider
-- Build the native app as an Android release build or preview build
+- track household accountability
+- receive resident safety and help pings
+- coordinate evacuation center operations
+- submit and review needs reports
+- assign and record welfare checks
+- send emergency broadcasts
+- continue core operations using cached data and queued actions while offline
 
-## Fast Deployment Checklist
+## Key Features
 
-1. Apply the latest Supabase migrations
+### Resident Features
 
-```bash
-pnpm run db:push
+- send `I Am Safe` and `I Need Help` status pings
+- view evacuation centers and route guidance
+- check in to evacuation centers
+- read hazard alerts and barangay broadcasts
+- use locally cached data during connectivity loss
+
+### Official Features
+
+- monitor dashboard summaries and unresolved help pings
+- manage registry and household evacuation status
+- assign and complete welfare checks
+- send emergency broadcasts
+- manage evacuation center availability and supplies
+- control resident access to status ping and check-in flows
+
+### Offline-First Features
+
+- SQLite-backed local data cache on the device
+- queued mutation replay after reconnect
+- local-first reads for critical mobile flows
+- cached map guidance and seeded route fallback
+- stale-data indicators and last-synced timestamps
+- conflict protection for overlapping official edits on key datasets
+
+## Why This App Matters
+
+During disasters, connectivity is often degraded before information needs are reduced. Project Agap is designed around that reality. Instead of assuming strong internet is always available, it prioritizes:
+
+- graceful offline behavior
+- fast local access to critical data
+- clear sync recovery when the connection returns
+- safer coordination between residents and responders
+
+## Tech Stack
+
+- `Expo` + `React Native`
+- `Next.js`
+- `tRPC`
+- `Supabase Auth` + `Postgres`
+- `Drizzle`
+- `TanStack Query`
+- `expo-sqlite`
+
+## Project Structure
+
+```text
+project-agap/
+├── apps/
+│   ├── native/      # Mobile app
+│   └── web/         # Next.js app hosting the API route
+├── packages/
+│   ├── api/         # Shared tRPC routers and business logic
+│   ├── auth/        # Auth-related code
+│   └── db/          # Database schema and Supabase migrations
 ```
 
-2. Deploy `apps/web` with the environment variables from [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
-
-3. Change `apps/native/.env` so `EXPO_PUBLIC_SERVER_URL` points to the deployed backend
-
-Example:
-
-```bash
-EXPO_PUBLIC_SERVER_URL=https://your-app.up.railway.app
-EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-EXPO_PUBLIC_APP_ENV=production
-EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
-```
-
-4. Build the native app for the judges
-
-5. Test the full remote flow on a real phone:
-
-- sign in while online
-- reopen the app offline
-- send a resident status ping offline
-- create an official broadcast offline
-- reconnect and verify queued actions sync
-
-## Recommended Demo Strategy
-
-Because the judges will test remotely and the deadline is tomorrow, use this order:
-
-1. Get the hosted backend working first
-2. Verify mobile login and data sync against the hosted backend
-3. Prepare one Android build for judging
-4. Do one final physical-device offline test after install
-
-If you skip step 1 and only use local `--tunnel`, you can still demo, but it is riskier and easier to break during remote judging.
-
-## Local Development
+## Quick Start
 
 Install dependencies:
 
@@ -71,7 +89,7 @@ Install dependencies:
 pnpm install
 ```
 
-Start local Supabase:
+Start local Supabase and apply migrations:
 
 ```bash
 pnpm run supabase:start
@@ -84,41 +102,73 @@ Start the backend:
 pnpm run dev:web
 ```
 
-Start Expo:
+Start the mobile app:
 
 ```bash
 pnpm run dev:native
 ```
 
-For physical-device local testing, set `EXPO_PUBLIC_SERVER_URL` to your laptop LAN IP, not `localhost`.
+## Mobile Setup
 
-Example:
+For physical-device development, the mobile app must point to a reachable backend.
+
+In `apps/native/.env`:
 
 ```bash
-EXPO_PUBLIC_SERVER_URL=http://192.168.1.47:3001
+EXPO_PUBLIC_SERVER_URL=http://YOUR-LAPTOP-LAN-IP:3001
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_APP_ENV=development
 ```
 
-## Validation Before Shipping
+Do not use `localhost` on a real device.
+
+## Remote Deployment
+
+For remote demos or judging, deploy the backend first, then point the mobile app to that hosted URL.
+
+Recommended:
+
+- host `apps/web` on Vercel
+- keep Supabase as the managed database/auth provider
+- install a mobile build that uses the hosted backend URL
+
+See:
+
+- Native deployment guide: [apps/native/README.md](/c:/Users/poyhi/project-agap/apps/native/README.md)
+- Web/API deployment guide: [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
+- Remote judging checklist: [JUDGE-CHECKLIST.md](/c:/Users/poyhi/project-agap/JUDGE-CHECKLIST.md)
+
+## Validation
+
+Before shipping:
 
 ```bash
 pnpm run check-types
 pnpm run test:native
 ```
 
-## Repo Structure
+For the web deployment path, also verify:
 
-```text
-project-agap/
-├── apps/
-│   ├── native/
-│   └── web/
-├── packages/
-│   ├── api/
-│   ├── auth/
-│   └── db/
+```bash
+pnpm --filter web build
 ```
 
-## More Docs
+## Current Offline Model
 
-- Native deployment and judge checklist: [apps/native/README.md](/c:/Users/poyhi/project-agap/apps/native/README.md)
-- Web/API deployment guide: [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
+The mobile app is built around an offline-first architecture, but the most important rule is this:
+
+- core flows work best offline after the device has synced once while online
+
+That means:
+
+- resident status reporting can queue offline
+- official workflows can continue using cached local data
+- queued actions sync after reconnect
+- live external feeds still depend on network freshness
+
+## Documentation
+
+- Native app guide: [apps/native/README.md](/c:/Users/poyhi/project-agap/apps/native/README.md)
+- Web/API guide: [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
+- Judge checklist: [JUDGE-CHECKLIST.md](/c:/Users/poyhi/project-agap/JUDGE-CHECKLIST.md)

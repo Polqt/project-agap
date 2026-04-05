@@ -1,5 +1,6 @@
 {
   "expo": {
+    "version": "1.0.0",
     "scheme": "project-agap",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
@@ -37,6 +38,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.projectagap.mobile",
+      "versionCode": 1,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",

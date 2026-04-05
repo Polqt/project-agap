@@ -61,12 +61,20 @@ project-agap/
 - `pnpm test` - Run tests
 - `pnpm db:push` - Push database schema
 - `pnpm db:studio` - Open database UI
+- `pnpm --filter web build` - Build the Vercel deployment target
+- `pnpm test:native` - Run the mobile offline/idempotency regression tests
 
 ## Local Mobile Connectivity
 
 - The native app reaches the backend through the Next.js tRPC route in `apps/web/src/app/api/trpc/[trpc]/route.ts`
 - For physical-device testing, `apps/native/.env` must set `EXPO_PUBLIC_SERVER_URL` to the laptop's LAN IP, not `localhost`
 - Mobile testing requires both the web server and Expo dev server to be running
+
+## Deployment Notes
+
+- `apps/native/eas.json` defines Android build profiles for `judge`, `preview`, and `production`
+- `apps/web/vercel.json` provides the monorepo-oriented Vercel install/build commands
+- `.gitlab-ci.yml` validates native types, offline tests, and the web build before a manual Vercel deploy
 
 ## Maintenance
 
