@@ -8,7 +8,12 @@ import {
 } from "../router-helpers";
 import { officialProcedure, protectedProcedure, router } from "../index";
 import { barangayIdSchema, uuidSchema } from "../schemas";
-import type { DashboardSummary, SmsFollowupItem } from "../supabase";
+import type { DashboardSummary, SmsFollowupItem, TableRow } from "../supabase";
+
+type ResidentHeatmapProfile = Pick<
+  TableRow<"profiles">,
+  "id" | "pinned_latitude" | "pinned_longitude"
+>;
 
 export const dashboardRouter = router({
   summary: officialProcedure

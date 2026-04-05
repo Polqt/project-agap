@@ -87,6 +87,7 @@ export const broadcastsRouter = router({
         message: z.string().trim().min(1).max(2000),
         messageFilipino: z.string().trim().max(2000).nullish(),
         targetPurok: z.string().trim().max(120).nullish(),
+        targetHouseholdId: z.string().uuid().nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -191,10 +192,20 @@ export const broadcastsRouter = router({
         householdQuery = householdQuery.eq("purok", input.targetPurok);
       }
 
+      if (input.targetHouseholdId) {
+        householdQuery = householdQuery.eq("id", input.targetHouseholdId);
+      }
+
       const { data: households } = await householdQuery;
       const recipients = (households ?? []).filter(
         (h): h is typeof h & { phone_number: string } => !!h.phone_number,
       );
+
+      if (input.targetHouseholdId && recipients.length === 0) {
+        throw ApiError.badRequest(
+          "Selected recipient cannot receive SMS broadcast (missing phone or not in your barangay).",
+        );
+      }
 
       const smsMessage = input.messageFilipino
         ? `${input.message}\n\n${input.messageFilipino}`
