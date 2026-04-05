@@ -8,14 +8,26 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import { haptics } from "@/services/haptics";
+import {
+  getOfflineHousehold,
+  getOfflineLatestStatusPing,
+  getOfflineResidentAccess,
+  getOfflineScope,
+  saveOfflineLatestStatusPing,
+  syncOfflineDatasets,
+} from "@/services/offlineData";
+import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
 import { createQueuedAction } from "@/services/offlineQueueActions";
-import { queryClient, trpc } from "@/services/trpc";
+import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { formatRelativeTime } from "@/shared/utils/date";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
+import { getLatestSyncedTimestamp } from "@/shared/utils/offline-freshness";
+import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { appShellStore, setLastStatusPing } from "@/stores/app-shell-store";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import { ProxyPingSection } from "./ProxyPingSection";
 
@@ -24,41 +36,68 @@ export function StatusScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { isOnline, pendingActions, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const lastPingPreview = useStore(appShellStore, (s) => s.lastStatusPing);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const offlineScope = getOfflineScope(profile);
 
-  const householdQuery = useQuery(
-    trpc.households.getMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const householdQuery = useQuery({
+    queryKey: ["offline", "status-household", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineHousehold(offlineScope!.scopeId),
+  });
 
-  const residentAccessQuery = useQuery(
-    trpc.barangays.getMyResidentAccess.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const residentAccessQuery = useQuery({
+    queryKey: ["offline", "resident-access", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineResidentAccess(offlineScope!.scopeId),
+  });
 
-  const latestPingQuery = useQuery(
-    trpc.statusPings.getLatestMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-      refetchInterval: 60_000,
-    }),
-  );
-  const latestPingQueryKey = trpc.statusPings.getLatestMine.queryKey();
+  const latestPingQuery = useQuery({
+    queryKey: ["offline", "latest-status-ping", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineLatestStatusPing(offlineScope!.scopeId),
+  });
+
+  const syncTimestampQuery = useQuery({
+    queryKey: ["offline", "sync-timestamp-status", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => {
+      if (!offlineScope) return null;
+      // Get latest sync from any of the status-related datasets
+      const timestamps = await Promise.all([
+        readOfflineSyncTimestamp(offlineScope.scopeId, "latest-status-ping"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "household"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "resident-access"),
+      ]);
+      return getLatestSyncedTimestamp(...timestamps);
+    },
+  });
+
+  async function syncStatusDatasets() {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, ["latestStatusPing", "household", "residentAccess"]);
+    bumpOfflineDataGeneration();
+  }
 
   const submitMutation = useMutation(
     trpc.statusPings.submit.mutationOptions({
-      onSuccess: (result) => {
-        queryClient.setQueryData(latestPingQueryKey, result);
-        latestPingQuery.refetch();
+      onSuccess: async (result) => {
+        if (offlineScope) {
+          await saveOfflineLatestStatusPing(offlineScope.scopeId, result);
+          bumpOfflineDataGeneration();
+        }
         setLastStatusPing({
           status: result.status,
           createdAt: Date.parse(result.pinged_at),
           source: "server",
         });
+        await syncStatusDatasets();
         setFeedback(t("status.statusSent"));
       },
     }),
@@ -81,7 +120,25 @@ export function StatusScreen() {
     };
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload));
+      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+      if (offlineScope) {
+        await saveOfflineLatestStatusPing(offlineScope.scopeId, {
+          id: `offline-status-${Date.now()}`,
+          barangay_id: offlineScope.barangayId,
+          resident_id: offlineScope.profileId,
+          household_id: payload.householdId ?? null,
+          status,
+          channel: "app",
+          latitude: payload.latitude ?? null,
+          longitude: payload.longitude ?? null,
+          message: null,
+          is_resolved: false,
+          resolved_by: null,
+          resolved_at: null,
+          pinged_at: new Date().toISOString(),
+        });
+        bumpOfflineDataGeneration();
+      }
       setLastStatusPing({ status, createdAt: Date.now(), source: "queue" });
       setFeedback(t("common.queued"));
       return;
@@ -91,7 +148,25 @@ export function StatusScreen() {
       await submitMutation.mutateAsync(payload);
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload));
+        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+        if (offlineScope) {
+          await saveOfflineLatestStatusPing(offlineScope.scopeId, {
+            id: `offline-status-${Date.now()}`,
+            barangay_id: offlineScope.barangayId,
+            resident_id: offlineScope.profileId,
+            household_id: payload.householdId ?? null,
+            status,
+            channel: "app",
+            latitude: payload.latitude ?? null,
+            longitude: payload.longitude ?? null,
+            message: null,
+            is_resolved: false,
+            resolved_by: null,
+            resolved_at: null,
+            pinged_at: new Date().toISOString(),
+          });
+          bumpOfflineDataGeneration();
+        }
         setLastStatusPing({ status, createdAt: Date.now(), source: "queue" });
         setFeedback(t("common.queued"));
         return;
@@ -151,6 +226,11 @@ export function StatusScreen() {
             <View className="mt-1.5 flex-row items-center gap-1.5">
               <Ionicons name="location-outline" size={13} color="#94a3b8" />
               <Text className="text-[13px] text-slate-400">{profile.purok}</Text>
+            </View>
+          ) : null}
+          {syncTimestampQuery.data ? (
+            <View className="mt-2">
+              <LastSyncedBadge lastSyncedAt={syncTimestampQuery.data} freshnessThresholdMinutes={15} staleTresholdMinutes={30} />
             </View>
           ) : null}
         </View>

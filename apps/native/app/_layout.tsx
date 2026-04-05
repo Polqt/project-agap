@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AppThemeProvider } from "@/contexts/app-theme-context";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { OfflineDataProvider } from "@/providers/OfflineDataProvider";
 import { OfflineQueueProvider } from "@/providers/OfflineQueueProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { RealtimeSyncProvider } from "@/providers/RealtimeSyncProvider";
@@ -62,24 +63,26 @@ export default function RootLayout() {
             <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
               <AuthProvider>
                 <OfflineQueueProvider>
-                  <RealtimeSyncProvider>
-                    <OfflineBanner />
-                    <Stack key={langKey} screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="index" />
-                      <Stack.Screen name="onboarding" />
-                      <Stack.Screen name="welcome" />
-                      <Stack.Screen name="modal" />
-                      <Stack.Screen name="(auth)" />
-                      <Stack.Screen name="(resident)" />
-                      <Stack.Screen name="(official)" />
-                      {/*
-                       * Register the whole (shared) group here.
-                       * Individual screen options (modal, title) live inside
-                       * app/(shared)/_layout.tsx so expo-router can resolve them.
-                       */}
-                      <Stack.Screen name="(shared)" options={{ headerShown: false }} />
-                    </Stack>
-                  </RealtimeSyncProvider>
+                  <OfflineDataProvider>
+                    <RealtimeSyncProvider>
+                      <OfflineBanner />
+                      <Stack key={langKey} screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="index" />
+                        <Stack.Screen name="onboarding" />
+                        <Stack.Screen name="welcome" />
+                        <Stack.Screen name="modal" />
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(resident)" />
+                        <Stack.Screen name="(official)" />
+                        {/*
+                         * Register the whole (shared) group here.
+                         * Individual screen options (modal, title) live inside
+                         * app/(shared)/_layout.tsx so expo-router can resolve them.
+                         */}
+                        <Stack.Screen name="(shared)" options={{ headerShown: false }} />
+                      </Stack>
+                    </RealtimeSyncProvider>
+                  </OfflineDataProvider>
                 </OfflineQueueProvider>
               </AuthProvider>
             </HeroUINativeProvider>

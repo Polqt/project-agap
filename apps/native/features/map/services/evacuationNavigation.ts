@@ -3,6 +3,8 @@ import { env } from "@project-agap/env/native";
 import type { Alert, EvacuationRoute, NearbyCenter } from "@project-agap/api/supabase";
 
 import { trpcClient } from "@/services/trpc";
+import { listOfflineAlerts, listOfflineEvacuationCenters } from "@/services/offlineData";
+import { shouldUseStaleCachedRoute } from "@/shared/utils/offline-freshness";
 import { haversineDistanceKm } from "@/shared/utils/geo";
 import type { LocationPoint } from "@/types/map";
 
@@ -16,6 +18,7 @@ import type {
 } from "../types";
 
 const ROUTE_CACHE_TTL_MS = 60_000;
+const STALE_ROUTE_CACHE_TTL_MS = 24 * 60 * 60_000;
 const ROUTE_CACHE_PREFIX = "agap-evacuation-route:";
 const DEFAULT_RADIUS_KM = 10;
 const MAX_CENTER_CANDIDATES = 3;
@@ -78,16 +81,22 @@ type CachedRouteEnvelope = {
   route: RankedEvacuationRoute;
 };
 
+type CachedRouteReadResult = {
+  route: RankedEvacuationRoute;
+  isStale: boolean;
+};
+
 export async function buildEvacuationNavigation(params: {
   barangayId: string;
+  offlineScopeId?: string | null;
   origin: LocationPoint;
   profilePurok?: string | null;
   fallbackRoutes: EvacuationRoute[];
 }) {
-  const { barangayId, origin, profilePurok, fallbackRoutes } = params;
+  const { barangayId, offlineScopeId, origin, profilePurok, fallbackRoutes } = params;
   const [candidateCenters, activeAlerts] = await Promise.all([
-    loadCandidateCenters({ barangayId, origin }),
-    loadActiveAlerts(barangayId),
+    loadCandidateCenters({ barangayId, origin, offlineScopeId }),
+    loadActiveAlerts(barangayId, offlineScopeId),
   ]);
 
   const rankedRoutes = await Promise.all(
@@ -122,9 +131,10 @@ export async function buildEvacuationNavigation(params: {
 
 async function loadCandidateCenters(params: {
   barangayId: string;
+  offlineScopeId?: string | null;
   origin: LocationPoint;
 }) {
-  const { barangayId, origin } = params;
+  const { barangayId, offlineScopeId, origin } = params;
 
   try {
     const nearbyCenters = await trpcClient.evacuationCenters.getNearby.query({
@@ -141,7 +151,9 @@ async function loadCandidateCenters(params: {
     // Fall back to listing the barangay centers and sorting locally.
   }
 
-  const centers = await trpcClient.evacuationCenters.listByBarangay.query({ barangayId });
+  let centers = await trpcClient.evacuationCenters.listByBarangay
+    .query({ barangayId })
+    .catch(async () => (offlineScopeId ? await listOfflineEvacuationCenters(offlineScopeId) : []));
 
   return centers
     .filter((center) => center.is_open)
@@ -166,11 +178,11 @@ async function loadCandidateCenters(params: {
     .sort((left, right) => left.straightLineDistanceKm - right.straightLineDistanceKm);
 }
 
-async function loadActiveAlerts(barangayId: string) {
+async function loadActiveAlerts(barangayId: string, offlineScopeId?: string | null) {
   try {
     return await trpcClient.alerts.listActive.query({ barangayId });
   } catch {
-    return [];
+    return offlineScopeId ? await listOfflineAlerts(offlineScopeId) : [];
   }
 }
 
@@ -186,11 +198,16 @@ async function buildRankedRoute(params: {
 
   if (cachedRoute) {
     return {
-      ...cachedRoute,
+      ...cachedRoute.route,
       center,
       safetyScore: computeSafetyScore(center, activeAlerts),
     } satisfies RankedEvacuationRoute;
   }
+
+  const staleCachedRoute = await readCachedRoute(
+    { centerId: center.id, origin },
+    { allowStale: true },
+  );
 
   const roadRoute =
     (await buildTrafficAwareGoogleRoute({ center, origin })) ??
@@ -224,6 +241,21 @@ async function buildRankedRoute(params: {
     fallbackRoutes,
     activeAlerts,
   });
+
+  if (
+    shouldUseStaleCachedRoute({
+      hasStaleCachedRoute: Boolean(staleCachedRoute),
+      fallbackSource: fallbackRoute.source,
+    }) &&
+    staleCachedRoute
+  ) {
+    return {
+      ...staleCachedRoute.route,
+      center,
+      safetyScore: computeSafetyScore(center, activeAlerts),
+      notice: "Using cached road guidance from the last successful route calculation.",
+    } satisfies RankedEvacuationRoute;
+  }
 
   await writeCachedRoute({ centerId: center.id, origin, route: fallbackRoute });
   return fallbackRoute;
@@ -843,7 +875,7 @@ function decodePolyline(encoded: string) {
 async function readCachedRoute(params: {
   centerId: string;
   origin: LocationPoint;
-}) {
+}, options?: { allowStale?: boolean }) {
   const cachedRaw = await AsyncStorage.getItem(getRouteCacheKey(params.centerId, params.origin));
 
   if (!cachedRaw) {
@@ -852,12 +884,20 @@ async function readCachedRoute(params: {
 
   try {
     const cachedValue = JSON.parse(cachedRaw) as CachedRouteEnvelope;
+    const routeAgeMs = Date.now() - cachedValue.cachedAt;
 
-    if (Date.now() - cachedValue.cachedAt > ROUTE_CACHE_TTL_MS) {
+    if (routeAgeMs > STALE_ROUTE_CACHE_TTL_MS) {
       return null;
     }
 
-    return cachedValue.route;
+    if (routeAgeMs > ROUTE_CACHE_TTL_MS && !options?.allowStale) {
+      return null;
+    }
+
+    return {
+      route: cachedValue.route,
+      isStale: routeAgeMs > ROUTE_CACHE_TTL_MS,
+    } satisfies CachedRouteReadResult;
   } catch {
     return null;
   }

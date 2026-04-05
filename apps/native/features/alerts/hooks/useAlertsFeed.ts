@@ -1,30 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useRouter } from "expo-router";
 
-import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { getOfflineScope, listOfflineAlerts, listOfflineBroadcasts } from "@/services/offlineData";
 import { getErrorMessage } from "@/shared/utils/errors";
-
-import { listBroadcastsForBarangay } from "@/features/broadcast/services/broadcasts";
+import { offlineDataStore } from "@/stores/offline-data-store";
 
 export function useAlertsFeed() {
   const router = useRouter();
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const offlineScope = getOfflineScope(profile);
 
-  const alertsQuery = useQuery(
-    trpc.alerts.listActive.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      {
-        enabled: Boolean(profile?.barangay_id),
-        refetchInterval: 60_000,
-      },
-    ),
-  );
+  const alertsQuery = useQuery({
+    queryKey: ["offline", "alerts-feed", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineAlerts(offlineScope!.scopeId),
+  });
 
   const broadcastsQuery = useQuery({
-    queryKey: ["broadcasts", "resident", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    queryFn: async () => listBroadcastsForBarangay(profile!.barangay_id!),
+    queryKey: ["offline", "alerts-broadcasts", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineBroadcasts(offlineScope!.scopeId),
   });
 
   function openAlertDetail(alertId: string) {

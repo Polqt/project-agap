@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -7,8 +8,17 @@ import { useForm } from "react-hook-form";
 import { broadcastTemplates } from "@/features/broadcast/constants";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import {
+  getOfflineScope,
+  listOfflineAlerts,
+  listOfflineBroadcasts,
+  listOfflineRegistryHouseholds,
+  listOfflineSmsLogs,
+  syncOfflineDatasets,
+} from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
 import { trpcClient } from "@/services/trpc";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 import {
   getErrorMessage,
   getServerConnectionErrorMessage,
@@ -113,10 +123,11 @@ function queryStartsWithRoot(queryKey: readonly unknown[], root: string) {
 }
 
 export function useBroadcastPanel() {
-  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { isOnline, pendingActions, queueAction } = useOfflineQueue();
+  const offlineScope = getOfflineScope(profile);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<BroadcastTab>(getInitialTab(params.tab));
   const [deliveryLanguage, setDeliveryLanguage] = useState<DeliveryLanguage>("english");
@@ -133,30 +144,68 @@ export function useBroadcastPanel() {
   }, [params.tab]);
 
   const broadcastsQuery = useQuery({
-    queryKey: ["broadcasts", "official", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    queryFn: async () => listBroadcastsForBarangay(profile!.barangay_id!),
+    queryKey: ["offline", "broadcasts-panel-history", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineBroadcasts(offlineScope!.scopeId),
   });
 
   const alertsQuery = useQuery({
-    queryKey: ["alerts", "active", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    refetchInterval: 60_000,
-    queryFn: async () => listActiveAgencyAlerts(profile!.barangay_id!),
+    queryKey: ["offline", "broadcasts-panel-alerts", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineAlerts(offlineScope!.scopeId),
   });
 
   const smsLogsQuery = useQuery({
-    queryKey: ["smsLogs", "outbound", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    refetchInterval: 60_000,
-    queryFn: async () => listOutboundSmsLogsForBarangay(profile!.barangay_id!),
+    queryKey: ["offline", "broadcasts-panel-sms", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineSmsLogs(offlineScope!.scopeId),
   });
 
   const audienceQuery = useQuery({
-    queryKey: ["broadcasts", "audience", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    refetchInterval: 60_000,
-    queryFn: async () => getBroadcastAudienceOverview(profile!.barangay_id!),
+    queryKey: ["offline", "broadcasts-panel-audience", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => {
+      const households = await listOfflineRegistryHouseholds(offlineScope!.scopeId);
+      const purokMap = new Map<
+        string,
+        {
+          purok: string;
+          householdCount: number;
+          smsReachableCount: number;
+          appReachableCount: number;
+        }
+      >();
+
+      for (const household of households) {
+        const current = purokMap.get(household.purok) ?? {
+          purok: household.purok,
+          householdCount: 0,
+          smsReachableCount: 0,
+          appReachableCount: 0,
+        };
+
+        current.householdCount += 1;
+        if (household.phone_number) {
+          current.smsReachableCount += 1;
+        }
+        if (!household.is_sms_only) {
+          current.appReachableCount += 1;
+        }
+
+        purokMap.set(household.purok, current);
+      }
+
+      const puroks = Array.from(purokMap.values()).sort((left, right) =>
+        left.purok.localeCompare(right.purok, "en", { sensitivity: "base" }),
+      );
+
+      return {
+        householdCount: households.length,
+        smsReachableCount: households.filter((household) => household.phone_number).length,
+        appReachableCount: households.filter((household) => !household.is_sms_only).length,
+        puroks,
+      };
+    },
   });
 
   const broadcasts = useMemo(
@@ -215,10 +264,15 @@ export function useBroadcastPanel() {
 
   const queuedBroadcastCount = pendingActions.filter((action) => action.type === "broadcast.create").length;
 
-  function invalidateByRoot(root: string) {
-    return queryClient.invalidateQueries({
-      predicate: (queryState) => queryStartsWithRoot(queryState.queryKey, root),
-    });
+  async function refreshOfflineBroadcastDatasets(
+    datasets: Parameters<typeof syncOfflineDatasets>[1] = ["broadcasts", "alerts", "smsLogs", "registryHouseholds"],
+  ) {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, datasets);
+    bumpOfflineDataGeneration();
   }
 
   function changeDeliveryLanguage(nextLanguage: DeliveryLanguage) {
@@ -270,11 +324,11 @@ export function useBroadcastPanel() {
   }
 
   async function queueBroadcast(payload: ReturnType<typeof prepareBroadcastPayload>, message: string) {
-    await queueAction(createQueuedAction("broadcast.create", payload));
+    await queueAction(createQueuedAction("broadcast.create", payload, offlineScope));
     form.reset(defaultValues);
     setTargetMode("all");
     setFeedback(message);
-    void invalidateByRoot("broadcasts");
+    bumpOfflineDataGeneration();
   }
 
   const handleSubmit = form.handleSubmit(async (values) => {
@@ -311,7 +365,7 @@ export function useBroadcastPanel() {
         try {
           await publishBroadcastRecord(payload, profile);
           wasPublished = true;
-          void invalidateByRoot("broadcasts");
+          await refreshOfflineBroadcastDatasets(["broadcasts", "smsLogs", "alerts"]);
         } catch (publishError) {
           if (!isOfflineLikeError(publishError)) {
             form.setError("root", {
@@ -337,7 +391,7 @@ export function useBroadcastPanel() {
         form.reset(defaultValues);
         setTargetMode("all");
         setFeedback("Broadcast sent.");
-        void Promise.all([invalidateByRoot("broadcasts"), invalidateByRoot("smsLogs")]);
+        await refreshOfflineBroadcastDatasets(["broadcasts", "smsLogs", "alerts"]);
       } catch (finalizeError) {
         if (shouldQueueFinalize(finalizeError)) {
           await queueBroadcast(
@@ -392,5 +446,6 @@ export function useBroadcastPanel() {
     loadBroadcastIntoComposer,
     setActiveTab,
     setTargetMode,
+    refresh: refreshOfflineBroadcastDatasets,
   };
 }

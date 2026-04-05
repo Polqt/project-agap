@@ -1,11 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import { listBroadcastsForBarangay } from "@/features/broadcast/services/broadcasts";
-import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
+import {
+  getOfflineScope,
+  listOfflineAlerts,
+  listOfflineBroadcasts,
+  listOfflineMissingPersons,
+  patchOfflineMissingPerson,
+  syncOfflineDatasets,
+  upsertOfflineMissingPerson,
+} from "@/services/offlineData";
+import { trpc } from "@/services/trpc";
 import { getErrorMessage } from "@/shared/utils/errors";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import {
   fetchPhilippineEarthquakes,
@@ -25,18 +35,30 @@ export function useAlertsData(isBalitaTab: boolean) {
   const { profile } = useAuth();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const offlineScope = getOfflineScope(profile);
 
-  const alertsQuery = useQuery(
-    trpc.alerts.listActive.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id), refetchInterval: 60_000 },
-    ),
-  );
+  async function syncDatasets(
+    datasets: Parameters<typeof syncOfflineDatasets>[1],
+  ) {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, datasets);
+    bumpOfflineDataGeneration();
+  }
+
+  const alertsQuery = useQuery({
+    queryKey: ["offline", "alerts", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineAlerts(offlineScope!.scopeId),
+  });
 
   const broadcastsQuery = useQuery({
-    queryKey: ["broadcasts", "resident", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    queryFn: async () => listBroadcastsForBarangay(profile!.barangay_id!),
+    queryKey: ["offline", "broadcasts", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineBroadcasts(offlineScope!.scopeId),
   });
 
   const earthquakesQuery = useQuery<UsgsEarthquake[]>({
@@ -75,29 +97,78 @@ export function useAlertsData(isBalitaTab: boolean) {
     enabled: isBalitaTab,
   });
 
-  const missingPersonsQuery = useQuery(
-    trpc.missingPersons.list.queryOptions(
-      { statusFilter: "missing" },
-      { enabled: Boolean(profile?.barangay_id), refetchInterval: 30_000 },
-    ),
-  );
+  const missingPersonsQuery = useQuery({
+    queryKey: ["offline", "missing-persons", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineMissingPersons(offlineScope!.scopeId),
+  });
 
   const reportMutation = useMutation(
     trpc.missingPersons.report.mutationOptions({
-      // Invalidate list on success — modal handles its own close/reset
-      onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] }),
-      onError: (err) => Alert.alert(t("common.error"), getErrorMessage(err)),
+      onMutate: async (input) => {
+        if (!offlineScope) {
+          return;
+        }
+
+        await upsertOfflineMissingPerson(offlineScope.scopeId, {
+          id: `offline-missing-${Date.now()}`,
+          barangay_id: offlineScope.barangayId,
+          reported_by: offlineScope.profileId,
+          full_name: input.fullName,
+          age: input.age ?? null,
+          last_seen_location: input.lastSeenLocation ?? null,
+          description: input.description ?? null,
+          status: "missing",
+          found_at: null,
+          found_by: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        bumpOfflineDataGeneration();
+      },
+      onSuccess: async (person) => {
+        if (offlineScope) {
+          await upsertOfflineMissingPerson(offlineScope.scopeId, person);
+        }
+        await syncDatasets(["missingPersons"]);
+        void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] });
+      },
+      onError: (err) => {
+        void syncDatasets(["missingPersons"]);
+        Alert.alert(t("common.error"), getErrorMessage(err));
+      },
     }),
   );
 
   const markFoundMutation = useMutation(
     trpc.missingPersons.markFound.mutationOptions({
-      onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] }),
-      onError: (err) => Alert.alert("Error", getErrorMessage(err)),
+      onMutate: async ({ id }) => {
+        if (!offlineScope) {
+          return;
+        }
+
+        await patchOfflineMissingPerson(offlineScope.scopeId, id, {
+          status: "found",
+          found_at: new Date().toISOString(),
+          found_by: offlineScope.profileId,
+          updated_at: new Date().toISOString(),
+        });
+        bumpOfflineDataGeneration();
+      },
+      onSuccess: async (person) => {
+        if (offlineScope) {
+          await upsertOfflineMissingPerson(offlineScope.scopeId, person);
+        }
+        await syncDatasets(["missingPersons"]);
+        void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] });
+      },
+      onError: (err) => {
+        void syncDatasets(["missingPersons"]);
+        Alert.alert("Error", getErrorMessage(err));
+      },
     }),
   );
 
-  // Highest active typhoon signal across all alerts
   const activeSignal = (alertsQuery.data ?? []).reduce<string | null>((best, alert) => {
     const label = getAlertSignalLabel(alert.signal_level);
     if (!label) return best;

@@ -352,4 +352,20 @@ export type MissingPersonsInsert = Omit<MissingPersonsRow, "id" | "created_at" |
 };
 export type MissingPersonsUpdate = Partial<Omit<MissingPersonsRow, "id" | "barangay_id" | "reported_by" | "created_at">>;
 
-// appended
+export type MutationHistoryRow = {
+  client_mutation_id: string;
+  user_id: string;
+  mutation_type: string;
+  result_payload: string | null;
+  created_at: string;
+  processed_at: string;
+};
+export type MutationHistoryInsert = ReadonlyMutationShape<
+  MutationHistoryRow,
+  "created_at" | "processed_at",
+  "client_mutation_id" | "user_id" | "mutation_type"
+>;
+export type MutationHistoryUpdate = ReadonlyMutationShape<
+  MutationHistoryRow,
+  "client_mutation_id" | "created_at" | "processed_at"
+>;

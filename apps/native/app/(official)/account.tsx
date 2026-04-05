@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,19 +10,38 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { queryClient, trpc } from "@/services/trpc";
 import { useEffect, useState } from "react";
+import {
+  getOfflineResidentAccess,
+  getOfflineScope,
+  patchOfflineResidentAccess,
+  saveOfflineResidentAccess,
+  syncOfflineDatasets,
+} from "@/services/offlineData";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 export default function OfficialAccountScreen() {
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const insets = useSafeAreaInsets();
   const signOutToLogin = useSignOutRedirect("/(auth)/sign-in");
   const [accessFeedback, setAccessFeedback] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const offlineScope = getOfflineScope(profile);
   const residentAccessQueryKey = trpc.barangays.getMyResidentAccess.queryKey();
-  const residentAccessQuery = useQuery(
-    trpc.barangays.getMyResidentAccess.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const residentAccessQuery = useQuery({
+    queryKey: ["offline", "official-resident-access", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineResidentAccess(offlineScope!.scopeId),
+  });
+
+  async function syncResidentAccess() {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, ["residentAccess"]);
+    bumpOfflineDataGeneration();
+  }
 
   const residentAccessMutation = useMutation(
     trpc.barangays.setResidentAccess.mutationOptions({
@@ -40,10 +60,18 @@ export default function OfficialAccountScreen() {
             residentCheckInEnabled: variables.checkInEnabled,
           });
         }
+
+        if (offlineScope) {
+          await patchOfflineResidentAccess(offlineScope.scopeId, {
+            residentPingEnabled: variables.pingEnabled,
+            residentCheckInEnabled: variables.checkInEnabled,
+          });
+          bumpOfflineDataGeneration();
+        }
         
         return { previousAccess };
       },
-      onSuccess: (result) => {
+      onSuccess: async (result) => {
         setAccessFeedback("Resident access updated.");
         setShowToast(true);
         queryClient.setQueryData(residentAccessQueryKey, result);
@@ -52,7 +80,12 @@ export default function OfficialAccountScreen() {
           emergencyModeEnabled: result.residentPingEnabled || result.residentCheckInEnabled,
           alertLevel: result.alertLevel,
           activeAlertText: result.activeAlertText,
+          updatedAt: result.updatedAt,
         });
+        if (offlineScope) {
+          await saveOfflineResidentAccess(offlineScope.scopeId, result);
+        }
+        await syncResidentAccess();
       },
       onError: (error, _variables, context) => {
         setAccessFeedback(getErrorMessage(error, "Failed to update resident access."));
@@ -61,6 +94,7 @@ export default function OfficialAccountScreen() {
         if (context?.previousAccess) {
           queryClient.setQueryData(residentAccessQueryKey, context.previousAccess);
         }
+        void syncResidentAccess();
       },
     }),
   );
@@ -90,6 +124,7 @@ export default function OfficialAccountScreen() {
     residentAccessMutation.mutate({
       pingEnabled: next.pingEnabled !== undefined ? next.pingEnabled : currentPingEnabled,
       checkInEnabled: next.checkInEnabled !== undefined ? next.checkInEnabled : currentCheckInEnabled,
+      expectedUpdatedAt: residentAccessQuery.data?.updatedAt ?? null,
     });
   }
 

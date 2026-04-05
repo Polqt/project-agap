@@ -1,80 +1,96 @@
-# project-agap
+# Project Agap
 
-This project was created with [Better Fullstack](https://github.com/Marve10s/Better-Fullstack), a modern TypeScript stack that combines Next.js, Self, TRPC, and more.
+Offline-first disaster response platform built with:
 
-## Features
+- `apps/native`: Expo + React Native mobile app for residents and barangay officials
+- `apps/web`: Next.js app that hosts the `/api/trpc` backend used by the mobile app
+- `packages/api`: shared tRPC routers and backend logic
+- `packages/db`: Supabase SQL migrations and schema
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **React Native** - Build mobile apps using React
-- **Expo** - Tools for React Native development
-- **TailwindCSS** - CSS framework
-- **shadcn/ui** - UI components
-- **tRPC** - End-to-end type-safe APIs
-- **Drizzle** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Authentication** - Supabase Auth
-- **Turborepo** - Optimized monorepo build system
+## What To Deploy For Tomorrow
 
-## Getting Started
+For the judges' remote testing, deploy these two things:
 
-First, install the dependencies:
+1. A hosted `web` app so `/api/trpc` is reachable from anywhere
+2. A mobile build that points `EXPO_PUBLIC_SERVER_URL` to that hosted URL
 
-```bash
-pnpm install
-```
+Recommended path for the deadline:
 
-## Database Setup
+- Deploy `apps/web` to `Railway`
+- Keep Supabase as the database + auth provider
+- Build the native app as an Android release build or preview build
 
-This project uses **Supabase SQL migrations** under `packages/db/supabase/migrations`.
+## Fast Deployment Checklist
 
-1. Start local Supabase services:
-
-```bash
-pnpm run supabase:start
-```
-
-2. Apply pending migrations:
-
-```bash
-pnpm run db:migrate
-```
-
-3. Push local migration state (safe Supabase flow, not Drizzle push diff):
+1. Apply the latest Supabase migrations
 
 ```bash
 pnpm run db:push
 ```
 
-Then, run the development server:
+2. Deploy `apps/web` with the environment variables from [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
+
+3. Change `apps/native/.env` so `EXPO_PUBLIC_SERVER_URL` points to the deployed backend
+
+Example:
 
 ```bash
-pnpm run dev
+EXPO_PUBLIC_SERVER_URL=https://your-app.up.railway.app
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_APP_ENV=production
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the fullstack application.
-Use the Expo Go app to run the mobile application.
+4. Build the native app for the judges
 
-## Native Connectivity
+5. Test the full remote flow on a real phone:
 
-The React Native app calls the tRPC backend through the Next.js route at `/api/trpc`.
-That means mobile testing needs the web app running, not just Expo.
+- sign in while online
+- reopen the app offline
+- send a resident status ping offline
+- create an official broadcast offline
+- reconnect and verify queued actions sync
 
-For local development:
+## Recommended Demo Strategy
 
-1. Start the web/API server:
+Because the judges will test remotely and the deadline is tomorrow, use this order:
+
+1. Get the hosted backend working first
+2. Verify mobile login and data sync against the hosted backend
+3. Prepare one Android build for judging
+4. Do one final physical-device offline test after install
+
+If you skip step 1 and only use local `--tunnel`, you can still demo, but it is riskier and easier to break during remote judging.
+
+## Local Development
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Start local Supabase:
+
+```bash
+pnpm run supabase:start
+pnpm run db:push
+```
+
+Start the backend:
 
 ```bash
 pnpm run dev:web
 ```
 
-2. Start the Expo app:
+Start Expo:
 
 ```bash
 pnpm run dev:native
 ```
 
-3. In `apps/native/.env`, set `EXPO_PUBLIC_SERVER_URL` to your laptop's LAN IP on port `3001`, not `localhost`.
+For physical-device local testing, set `EXPO_PUBLIC_SERVER_URL` to your laptop LAN IP, not `localhost`.
 
 Example:
 
@@ -82,35 +98,27 @@ Example:
 EXPO_PUBLIC_SERVER_URL=http://192.168.1.47:3001
 ```
 
-4. Make sure your phone and laptop are on the same Wi-Fi network.
+## Validation Before Shipping
 
-5. Verify the backend from your phone browser:
+```bash
+pnpm run check-types
+pnpm run test:native
+```
+
+## Repo Structure
 
 ```text
-http://192.168.1.47:3001/api/trpc/healthCheck
-```
-
-If the mobile app uses `http://localhost:3001`, a physical phone will fail to reach the backend and screens like Alerts will show `Network request failed`.
-
-## Project Structure
-
-```
 project-agap/
 ├── apps/
-│   └── web/         # Fullstack application (Next.js)
-│   ├── native/      # Mobile application (React Native, Expo)
+│   ├── native/
+│   └── web/
 ├── packages/
-│   ├── api/         # API layer / business logic
-│   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
+│   ├── api/
+│   ├── auth/
+│   └── db/
 ```
 
-## Available Scripts
+## More Docs
 
-- `pnpm run dev`: Start all applications in development mode
-- `pnpm run build`: Build all applications
-- `pnpm run check-types`: Check TypeScript types across all apps
-- `pnpm run dev:native`: Start the React Native/Expo development server
-- `pnpm run db:migrate`: Apply pending Supabase migrations
-- `pnpm run db:push`: Push pending Supabase migrations
-- `pnpm run db:studio`: Open Supabase Studio UI
+- Native deployment and judge checklist: [apps/native/README.md](/c:/Users/poyhi/project-agap/apps/native/README.md)
+- Web/API deployment guide: [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)

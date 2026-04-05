@@ -8,7 +8,8 @@ export type RouteNotice =
   | "Using traffic-aware road routing for the fastest available evacuation path."
   | "Using OSRM road routing because Google traffic data is unavailable."
   | "Using seeded barangay route because live road routing is unavailable."
-  | "Showing straight-line guidance because live road routing is unavailable.";
+  | "Showing straight-line guidance because live road routing is unavailable."
+  | "Using cached road guidance from the last successful route calculation.";
 
 export type RouteStepManeuver =
   | "depart"

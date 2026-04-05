@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { PostgrestError } from "@supabase/supabase-js";
 
+import { assertNoUpdatedAtConflict } from "../conflicts";
 import {
   getFoundOrThrow,
   getProfileBarangayIdOrThrow,
@@ -19,6 +20,7 @@ const barangayIdSchema = z.object({
 const residentAccessSchema = z.object({
   pingEnabled: z.boolean(),
   checkInEnabled: z.boolean(),
+  expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
 });
 
 type ResidentAccessPayload = {
@@ -27,6 +29,7 @@ type ResidentAccessPayload = {
   residentCheckInEnabled: boolean;
   alertLevel: Barangay["alert_level"];
   activeAlertText: string | null;
+  updatedAt: string | null;
 };
 
 const ACCESS_MARKER_PREFIX = "[[AGAP_ACCESS:";
@@ -94,6 +97,7 @@ export const barangaysRouter = router({
       emergencyModeEnabled: access.residentPingEnabled || access.residentCheckInEnabled,
       alertLevel: access.alertLevel,
       activeAlertText: access.activeAlertText,
+      updatedAt: access.updatedAt,
     };
   }),
 
@@ -101,12 +105,14 @@ export const barangaysRouter = router({
     .input(
       z.object({
         enabled: z.boolean(),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const access = await updateResidentAccess(ctx, {
         pingEnabled: input.enabled,
         checkInEnabled: input.enabled,
+        expectedUpdatedAt: input.expectedUpdatedAt,
       });
 
       return {
@@ -114,6 +120,7 @@ export const barangaysRouter = router({
         emergencyModeEnabled: access.residentPingEnabled || access.residentCheckInEnabled,
         alertLevel: access.alertLevel,
         activeAlertText: access.activeAlertText,
+        updatedAt: access.updatedAt,
       };
     }),
 });
@@ -125,7 +132,7 @@ async function loadResidentAccess(
   const result = await supabase
     .from("barangays")
     .select(
-      "id, resident_ping_enabled, resident_checkin_enabled, emergency_mode_enabled, alert_level, active_alert_text",
+      "id, resident_ping_enabled, resident_checkin_enabled, emergency_mode_enabled, alert_level, active_alert_text, updated_at",
     )
     .eq("id", barangayId)
     .maybeSingle();
@@ -133,16 +140,16 @@ async function loadResidentAccess(
   if (isMissingResidentAccessColumns(result.error)) {
     const legacyResult = await supabase
       .from("barangays")
-      .select("id, emergency_mode_enabled, alert_level, active_alert_text")
+      .select("id, emergency_mode_enabled, alert_level, active_alert_text, updated_at")
       .eq("id", barangayId)
       .maybeSingle();
 
     if (isMissingEmergencyModeColumn(legacyResult.error)) {
-      const fallbackBarangay = getFoundOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text"> | null>(
-        getSupabaseDataOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text"> | null>(
+      const fallbackBarangay = getFoundOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text" | "updated_at"> | null>(
+        getSupabaseDataOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text" | "updated_at"> | null>(
           await supabase
             .from("barangays")
-            .select("id, alert_level, active_alert_text")
+            .select("id, alert_level, active_alert_text, updated_at")
             .eq("id", barangayId)
             .maybeSingle(),
           "Failed to load resident access fallback.",
@@ -158,14 +165,15 @@ async function loadResidentAccess(
         residentCheckInEnabled: metadata?.residentCheckInEnabled ?? false,
         alertLevel: fallbackBarangay.alert_level,
         activeAlertText: stripResidentAccessMetadata(fallbackBarangay.active_alert_text),
+        updatedAt: fallbackBarangay.updated_at ?? null,
       };
     }
 
     const legacyBarangay = getFoundOrThrow<
-      Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text"> | null
+      Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text" | "updated_at"> | null
     >(
       getSupabaseDataOrThrow<
-        Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text"> | null
+        Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text" | "updated_at"> | null
       >(legacyResult, "Failed to load resident access legacy fallback."),
       "Barangay not found.",
     );
@@ -179,19 +187,20 @@ async function loadResidentAccess(
       residentCheckInEnabled: metadata?.residentCheckInEnabled ?? fallbackEnabled,
       alertLevel: legacyBarangay.alert_level,
       activeAlertText: stripResidentAccessMetadata(legacyBarangay.active_alert_text),
+      updatedAt: legacyBarangay.updated_at ?? null,
     };
   }
 
   const barangay = getFoundOrThrow<
     Pick<
       Barangay,
-      "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text"
+      "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text" | "updated_at"
     > | null
   >(
     getSupabaseDataOrThrow<
       Pick<
         Barangay,
-        "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text"
+        "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text" | "updated_at"
       > | null
     >(result, "Failed to load resident access."),
     "Barangay not found.",
@@ -203,6 +212,7 @@ async function loadResidentAccess(
     residentCheckInEnabled: barangay.resident_checkin_enabled,
     alertLevel: barangay.alert_level,
     activeAlertText: stripResidentAccessMetadata(barangay.active_alert_text),
+    updatedAt: barangay.updated_at ?? null,
   };
 }
 
@@ -211,6 +221,14 @@ async function updateResidentAccess(
   input: z.infer<typeof residentAccessSchema>,
 ): Promise<ResidentAccessPayload> {
   const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
+  const currentAccess = await loadResidentAccess(ctx.supabase, barangayId);
+
+  assertNoUpdatedAtConflict({
+    currentUpdatedAt: currentAccess.updatedAt,
+    expectedUpdatedAt: input.expectedUpdatedAt,
+    conflictMessage:
+      "Resident access settings were changed by another official. Refresh this screen before updating them again.",
+  });
 
   const result = await ctx.supabaseAdmin
     .from("barangays")
@@ -221,7 +239,7 @@ async function updateResidentAccess(
     })
     .eq("id", barangayId)
     .select(
-      "id, resident_ping_enabled, resident_checkin_enabled, emergency_mode_enabled, alert_level, active_alert_text",
+      "id, resident_ping_enabled, resident_checkin_enabled, emergency_mode_enabled, alert_level, active_alert_text, updated_at",
     )
     .maybeSingle();
 
@@ -236,7 +254,7 @@ async function updateResidentAccess(
         active_alert_text: nextAlertText,
       })
       .eq("id", barangayId)
-      .select("id, emergency_mode_enabled, alert_level, active_alert_text")
+      .select("id, emergency_mode_enabled, alert_level, active_alert_text, updated_at")
       .maybeSingle();
 
     if (isMissingEmergencyModeColumn(legacyResult.error)) {
@@ -246,11 +264,11 @@ async function updateResidentAccess(
           active_alert_text: nextAlertText,
         })
         .eq("id", barangayId)
-        .select("id, alert_level, active_alert_text")
+        .select("id, alert_level, active_alert_text, updated_at")
         .maybeSingle();
 
-      const legacyBarangay = getFoundOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text"> | null>(
-        getSupabaseDataOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text"> | null>(
+      const legacyBarangay = getFoundOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text" | "updated_at"> | null>(
+        getSupabaseDataOrThrow<Pick<Barangay, "id" | "alert_level" | "active_alert_text" | "updated_at"> | null>(
           noEmergencyResult,
           "Failed to update resident access legacy fallback.",
         ),
@@ -263,14 +281,15 @@ async function updateResidentAccess(
         residentCheckInEnabled: input.checkInEnabled,
         alertLevel: legacyBarangay.alert_level,
         activeAlertText: stripResidentAccessMetadata(legacyBarangay.active_alert_text),
+        updatedAt: legacyBarangay.updated_at ?? null,
       };
     }
 
     const legacyBarangay = getFoundOrThrow<
-      Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text"> | null
+      Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text" | "updated_at"> | null
     >(
       getSupabaseDataOrThrow<
-        Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text"> | null
+        Pick<Barangay, "id" | "emergency_mode_enabled" | "alert_level" | "active_alert_text" | "updated_at"> | null
       >(legacyResult, "Failed to update resident access fallback."),
       "Barangay not found.",
     );
@@ -281,19 +300,20 @@ async function updateResidentAccess(
       residentCheckInEnabled: input.checkInEnabled,
       alertLevel: legacyBarangay.alert_level,
       activeAlertText: stripResidentAccessMetadata(legacyBarangay.active_alert_text),
+      updatedAt: legacyBarangay.updated_at ?? null,
     };
   }
 
   const barangay = getFoundOrThrow<
     Pick<
       Barangay,
-      "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text"
+      "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text" | "updated_at"
     > | null
   >(
     getSupabaseDataOrThrow<
       Pick<
         Barangay,
-        "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text"
+        "id" | "resident_ping_enabled" | "resident_checkin_enabled" | "alert_level" | "active_alert_text" | "updated_at"
       > | null
     >(result, "Failed to update resident access."),
     "Barangay not found.",
@@ -305,6 +325,7 @@ async function updateResidentAccess(
     residentCheckInEnabled: barangay.resident_checkin_enabled,
     alertLevel: barangay.alert_level,
     activeAlertText: stripResidentAccessMetadata(barangay.active_alert_text),
+    updatedAt: barangay.updated_at ?? null,
   };
 }
 

@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,9 +8,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { getOfflineScope, listOfflineEvacuationRoutes } from "@/services/offlineData";
+import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
 import { queryClient, trpc } from "@/services/trpc";
+import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { getErrorMessage } from "@/shared/utils/errors";
+import { getLatestSyncedTimestamp } from "@/shared/utils/offline-freshness";
 import type { LocationPoint } from "@/types/map";
+import { offlineDataStore } from "@/stores/offline-data-store";
 
 import { useEvacuationNavigation } from "../hooks/useEvacuationNavigation";
 import type { RankedEvacuationRoute } from "../types";
@@ -46,6 +53,8 @@ function getReactNativeMapsModule() {
 export function EvacuationMap() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
+  const { isOnline } = useOfflineQueue();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { location, error: locationError } = useCurrentLocation(Boolean(profile?.barangay_id));
   const [isNativeMapReady, setIsNativeMapReady] = useState(false);
   const [pinnedLocation, setPinnedLocation] = useState<LocationPoint | null>(null);
@@ -54,13 +63,30 @@ export function EvacuationMap() {
   const mapsModule = useMemo(() => getReactNativeMapsModule(), []);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const mapRef = useRef<any>(null);
+  const offlineScope = getOfflineScope(profile);
 
-  const routesQuery = useQuery(
-    trpc.evacuationRoutes.listByBarangay.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
-  );
+  const routesQuery = useQuery({
+    queryKey: ["offline", "map-routes", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineEvacuationRoutes(offlineScope!.scopeId),
+  });
+
+  const syncTimestampQuery = useQuery({
+    queryKey: ["offline", "map-sync-timestamp", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => {
+      if (!offlineScope) {
+        return null;
+      }
+
+      const timestamps = await Promise.all([
+        readOfflineSyncTimestamp(offlineScope.scopeId, "evacuation-centers"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "evacuation-routes"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "alerts"),
+      ]);
+      return getLatestSyncedTimestamp(...timestamps);
+    },
+  });
 
   const pinnedLocationQueryKey = trpc.profile.getPinnedLocation.queryKey();
   const pinnedLocationQuery = useQuery(
@@ -105,6 +131,7 @@ export function EvacuationMap() {
   const origin = pinnedLocation ?? location ?? null;
   const navigation = useEvacuationNavigation({
     barangayId: profile?.barangay_id,
+    offlineScopeId: offlineScope?.scopeId,
     origin,
     profilePurok: profile?.purok,
     fallbackRoutes: routesQuery.data ?? [],
@@ -182,6 +209,7 @@ export function EvacuationMap() {
     hasOrigin: Boolean(origin),
     hasRoute: Boolean(selectedRoute),
   });
+  const showRemotePreview = !isNativeMapReady && isOnline;
 
   const MapViewComponent = mapsModule?.default;
   const MarkerComponent = mapsModule?.Marker;
@@ -287,12 +315,14 @@ export function EvacuationMap() {
     <View className="flex-1 bg-slate-950">
       {MapViewComponent && MarkerComponent && PolylineComponent ? (
         <View className="flex-1">
-          {!isNativeMapReady ? (
+          {showRemotePreview ? (
             <Image
               source={{ uri: staticMapPreviewUrl }}
               className="absolute inset-0 h-full w-full"
               resizeMode="cover"
             />
+          ) : !isNativeMapReady ? (
+            <OfflineMapPlaceholder />
           ) : null}
 
           <MapViewComponent
@@ -387,6 +417,18 @@ export function EvacuationMap() {
           ) : null}
 
           <View
+            pointerEvents="none"
+            className="absolute left-4"
+            style={{ top: insets.top + (infoMessage ? 88 : 12) }}
+          >
+            <LastSyncedBadge
+              lastSyncedAt={syncTimestampQuery.data ?? null}
+              freshnessThresholdMinutes={15}
+              staleTresholdMinutes={45}
+            />
+          </View>
+
+          <View
             pointerEvents="box-none"
             className="absolute right-4 gap-3"
             style={{ top: insets.top + 14 }}
@@ -447,7 +489,11 @@ export function EvacuationMap() {
         </View>
       ) : (
         <View className="flex-1">
-          <Image source={{ uri: staticMapPreviewUrl }} className="h-full w-full" resizeMode="cover" />
+          {isOnline ? (
+            <Image source={{ uri: staticMapPreviewUrl }} className="h-full w-full" resizeMode="cover" />
+          ) : (
+            <OfflineMapPlaceholder />
+          )}
           {infoMessage ? (
             <View
               className="absolute left-4 right-20 rounded-3xl bg-white/95 px-4 py-4 shadow-lg"
@@ -456,8 +502,43 @@ export function EvacuationMap() {
               <Text className="text-sm font-medium text-slate-700">{infoMessage}</Text>
             </View>
           ) : null}
+          <View
+            pointerEvents="none"
+            className="absolute left-4"
+            style={{ top: insets.top + (infoMessage ? 88 : 12) }}
+          >
+            <LastSyncedBadge
+              lastSyncedAt={syncTimestampQuery.data ?? null}
+              freshnessThresholdMinutes={15}
+              staleTresholdMinutes={45}
+            />
+          </View>
         </View>
       )}
+    </View>
+  );
+}
+
+function OfflineMapPlaceholder() {
+  return (
+    <View className="absolute inset-0 bg-slate-900">
+      <View className="absolute inset-0 opacity-20">
+        <View className="flex-1 flex-row">
+          <View className="flex-1 border-r border-white/10" />
+          <View className="flex-1 border-r border-white/10" />
+          <View className="flex-1" />
+        </View>
+        <View className="absolute inset-x-0 top-1/3 border-t border-white/10" />
+        <View className="absolute inset-x-0 top-2/3 border-t border-white/10" />
+      </View>
+      <View className="flex-1 items-center justify-center px-8">
+        <View className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
+          <Text className="text-center text-[18px] font-bold text-white">Offline map mode</Text>
+          <Text className="mt-2 text-center text-[13px] leading-5 text-slate-300">
+            Using your locally saved evacuation centers, seeded routes, and cached guidance while the network is unavailable.
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }

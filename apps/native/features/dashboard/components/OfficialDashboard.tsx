@@ -1,4 +1,5 @@
 import { ScreenShell } from "@/shared/components/screen-shell";
+import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { useRouter } from "expo-router";
 import { AppButton, SpeedDialFab, type SpeedDialAction } from "@/shared/components/ui";
 
@@ -21,8 +22,10 @@ export function OfficialDashboard() {
     centers,
     unaccountedHouseholds,
     welfareDispatch,
+    lastSyncedAt,
     resolveMutation,
     toggleCenterMutation,
+    toggleCenter,
     rotateQrMutation,
     copyCenterToken,
     shareCenterToken,
@@ -62,6 +65,13 @@ export function OfficialDashboard() {
       title="Command"
       description="Live command surface for your barangay."
       action={<AppButton label="Sign out" onPress={() => void handleSignOut()} variant="ghost" />}
+      topContent={
+        <LastSyncedBadge
+          lastSyncedAt={lastSyncedAt}
+          freshnessThresholdMinutes={15}
+          staleTresholdMinutes={45}
+        />
+      }
       feedback={feedback}
       isLoading={isLoading}
       loadingLabel="Refreshing dashboard data..."
@@ -80,10 +90,8 @@ export function OfficialDashboard() {
       <UnaccountedHouseholdsCard households={unaccountedHouseholds} />
       <CenterStatusCard
         centers={centers}
-        isUpdating={toggleCenterMutation.isPending}
-        updatingCenterId={toggleCenterMutation.variables?.centerId}
         onToggle={(centerId, isOpen) => {
-          void toggleCenterMutation.mutateAsync({ centerId, isOpen });
+          void toggleCenter(centerId, isOpen);
         }}
       />
       <CenterQrCard

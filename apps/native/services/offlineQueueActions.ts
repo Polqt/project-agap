@@ -18,11 +18,21 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
 export function createQueuedAction<TType extends QueuedAction["type"]>(
   type: TType,
   payload: QueuedAction<TType>["payload"],
+  meta?: QueuedAction<TType>["meta"],
 ): QueuedAction<TType> {
+  const actionId = `${type}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+
   return {
-    id: `${type}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
+    id: actionId,
     type,
-    payload,
+    payload: {
+      ...payload,
+      clientMutationId:
+        "clientMutationId" in payload && typeof payload.clientMutationId === "string"
+          ? payload.clientMutationId
+          : actionId,
+    } as QueuedAction<TType>["payload"],
+    meta: meta ?? null,
     createdAt: Date.now(),
     retries: 0,
     failedAt: null,

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,7 +15,17 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { formatDistanceKm, haversineDistanceKm } from "@/shared/utils/geo";
+import { getLatestSyncedTimestamp } from "@/shared/utils/offline-freshness";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
+import {
+  getOfflineHousehold,
+  getOfflineResidentAccess,
+  getOfflineScope,
+  listOfflineEvacuationCenters,
+} from "@/services/offlineData";
+import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
+import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
+import { offlineDataStore } from "@/stores/offline-data-store";
 
 type Mode = "qr" | "manual";
 
@@ -23,8 +34,10 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   const router = useRouter();
   const { t } = useTranslation();
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { isOnline, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
+  const offlineScope = getOfflineScope(profile);
 
   const [mode, setMode] = useState<Mode>("qr");
   const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null);
@@ -34,24 +47,40 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
   const [checkInSuccess, setCheckInSuccess] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
-  const householdQuery = useQuery(
-    trpc.households.getMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const householdQuery = useQuery({
+    queryKey: ["offline", "checkin-flow-household", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineHousehold(offlineScope!.scopeId),
+  });
 
-  const residentAccessQuery = useQuery(
-    trpc.barangays.getMyResidentAccess.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const residentAccessQuery = useQuery({
+    queryKey: ["offline", "checkin-flow-access", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineResidentAccess(offlineScope!.scopeId),
+  });
 
-  const centersQuery = useQuery(
-    trpc.evacuationCenters.listByBarangay.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
-  );
+  const centersQuery = useQuery({
+    queryKey: ["offline", "checkin-flow-centers", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineEvacuationCenters(offlineScope!.scopeId),
+  });
+
+  const syncTimestampQuery = useQuery({
+    queryKey: ["offline", "checkin-flow-sync-timestamp", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => {
+      if (!offlineScope) {
+        return null;
+      }
+
+      const timestamps = await Promise.all([
+        readOfflineSyncTimestamp(offlineScope.scopeId, "household"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "resident-access"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "evacuation-centers"),
+      ]);
+      return getLatestSyncedTimestamp(...timestamps);
+    },
+  });
 
   const allCenters = centersQuery.data ?? [];
   const residentCheckInEnabled = residentAccessQuery.data?.residentCheckInEnabled ?? true;
@@ -110,7 +139,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
 
     setFeedback(null);
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.qr", payload));
+      await queueAction(createQueuedAction("check-in.qr", payload, offlineScope));
       setFeedback("Queued offline.");
       setCheckInSuccess(true);
       return;
@@ -122,7 +151,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
       setCheckInSuccess(true);
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.qr", payload));
+        await queueAction(createQueuedAction("check-in.qr", payload, offlineScope));
         setFeedback("Connection dropped. Queued.");
         setCheckInSuccess(true);
         return;
@@ -147,7 +176,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
 
     setFeedback(null);
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.manual", payload));
+      await queueAction(createQueuedAction("check-in.manual", payload, offlineScope));
       setFeedback("Queued offline.");
       setCheckInSuccess(true);
       return;
@@ -159,7 +188,7 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
       setCheckInSuccess(true);
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.manual", payload));
+        await queueAction(createQueuedAction("check-in.manual", payload, offlineScope));
         setFeedback("Connection dropped. Queued.");
         setCheckInSuccess(true);
         return;
@@ -301,6 +330,13 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
       >
         <View className="px-5">
           <Text className="text-[22px] font-bold text-slate-900">{t("checkin.title")}</Text>
+          <View className="mt-2">
+            <LastSyncedBadge
+              lastSyncedAt={syncTimestampQuery.data ?? null}
+              freshnessThresholdMinutes={15}
+              staleTresholdMinutes={45}
+            />
+          </View>
         </View>
 
         <View className="mx-5 mt-4 flex-row rounded-xl bg-slate-100 p-1">

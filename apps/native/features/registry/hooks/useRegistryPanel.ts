@@ -1,11 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useMemo, useState } from "react";
 
-import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
+import {
+  getOfflineRegistryHousehold,
+  getOfflineScope,
+  listOfflineRegistryHouseholds,
+  patchOfflineRegistryHousehold,
+  syncOfflineDatasets,
+  upsertOfflineRegistryHousehold,
+} from "@/services/offlineData";
+import { trpc } from "@/services/trpc";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import type { EvacuationStatus, Household } from "@project-agap/api/supabase";
-import { getRegistryHouseholdDetail, listRegistryHouseholds } from "../services/registry";
 
 type RegistryFilter = "all" | "vulnerable" | "unknown" | "sms_only";
 
@@ -66,23 +75,25 @@ function matchesQuery(household: Household, query: string) {
 export function useRegistryPanel() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [filter, setFilter] = useState<RegistryFilter>("all");
   const [expandedHouseholdId, setExpandedHouseholdId] = useState<string | null>(null);
+  const offlineScope = getOfflineScope(profile);
 
   const trimmedQuery = query.trim();
 
   const listQuery = useQuery({
-    queryKey: ["households", "registry", profile?.barangay_id],
-    enabled: Boolean(profile?.barangay_id),
-    queryFn: async () => listRegistryHouseholds(profile!.barangay_id!),
+    queryKey: ["offline", "registry-households", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineRegistryHouseholds(offlineScope!.scopeId),
   });
 
   const expandedHouseholdQuery = useQuery({
-    queryKey: ["households", "detail", expandedHouseholdId],
-    enabled: Boolean(profile?.barangay_id && expandedHouseholdId),
-    queryFn: async () => getRegistryHouseholdDetail(expandedHouseholdId!, profile!.barangay_id!),
+    queryKey: ["offline", "registry-household", offlineScope?.scopeId, expandedHouseholdId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId && expandedHouseholdId),
+    queryFn: async () => getOfflineRegistryHousehold(offlineScope!.scopeId, expandedHouseholdId!),
   });
 
   const households = useMemo(() => {
@@ -94,31 +105,75 @@ export function useRegistryPanel() {
     return filterHouseholds(source, filter);
   }, [filter, listQuery.data, trimmedQuery]);
 
-  async function invalidateRegistry() {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        predicate: (queryState) => shouldInvalidate(queryState.queryKey, "households"),
-      }),
-      queryClient.invalidateQueries({
-        predicate: (queryState) => shouldInvalidate(queryState.queryKey, "dashboard"),
-      }),
-    ]);
+  async function syncDatasets(
+    datasets: Parameters<typeof syncOfflineDatasets>[1],
+  ) {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, datasets);
+    bumpOfflineDataGeneration();
   }
 
   const updateStatusMutation = useMutation(
     trpc.households.updateStatus.mutationOptions({
-      onSuccess: async (_, variables) => {
-        await invalidateRegistry();
+      onMutate: async ({ householdId, evacuationStatus }) => {
+        if (!offlineScope) {
+          return;
+        }
+
+        await patchOfflineRegistryHousehold(offlineScope.scopeId, householdId, {
+          evacuation_status: evacuationStatus,
+          welfare_assigned_at: null,
+          welfare_assigned_profile_id: null,
+        });
+        bumpOfflineDataGeneration();
+      },
+      onSuccess: async (household, variables) => {
+        if (offlineScope) {
+          await upsertOfflineRegistryHousehold(offlineScope.scopeId, household);
+        }
+        await syncDatasets(["registryHouseholds", "dashboardSummary", "unaccountedHouseholds"]);
         setFeedback(`Status updated to ${variables.evacuationStatus.replaceAll("_", " ")}.`);
+      },
+      onError: () => {
+        void syncDatasets(["registryHouseholds", "dashboardSummary", "unaccountedHouseholds"]);
+        setFeedback("Registry status changed elsewhere. Data refreshed.");
       },
     }),
   );
 
   const assignWelfareMutation = useMutation(
     trpc.households.assignWelfareVisit.mutationOptions({
-      onSuccess: async () => {
-        await invalidateRegistry();
+      onMutate: async ({ householdId }) => {
+        if (!offlineScope || !profile) {
+          return;
+        }
+
+        await patchOfflineRegistryHousehold(offlineScope.scopeId, householdId, {
+          evacuation_status: "welfare_check_dispatched",
+          welfare_assigned_profile_id: profile.id,
+          welfare_assigned_at: new Date().toISOString(),
+        });
+        bumpOfflineDataGeneration();
+      },
+      onSuccess: async (household) => {
+        if (offlineScope) {
+          await upsertOfflineRegistryHousehold(offlineScope.scopeId, household);
+        }
+        await syncDatasets([
+          "registryHouseholds",
+          "welfareAssignments",
+          "welfareDispatch",
+          "dashboardSummary",
+          "unaccountedHouseholds",
+        ]);
         setFeedback("Welfare visit assigned.");
+      },
+      onError: () => {
+        void syncDatasets(["registryHouseholds", "welfareAssignments", "welfareDispatch"]);
+        setFeedback("Welfare assignment changed elsewhere. Data refreshed.");
       },
     }),
   );
@@ -142,8 +197,18 @@ export function useRegistryPanel() {
     setQuery,
     toggleExpandedHousehold,
     updateStatusMutation,
-    assignWelfare: (householdId: string) => assignWelfareMutation.mutateAsync({ householdId }),
+    assignWelfare: (householdId: string) =>
+      assignWelfareMutation.mutateAsync({
+        householdId,
+        expectedUpdatedAt:
+          households.find((household) => household.id === householdId)?.updated_at ?? null,
+      }),
     updateStatus: (householdId: string, evacuationStatus: EvacuationStatus) =>
-      updateStatusMutation.mutateAsync({ householdId, evacuationStatus }),
+      updateStatusMutation.mutateAsync({
+        householdId,
+        evacuationStatus,
+        expectedUpdatedAt:
+          households.find((household) => household.id === householdId)?.updated_at ?? null,
+      }),
   };
 }

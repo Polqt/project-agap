@@ -1,9 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import {
+  getOfflineBarangay,
+  getOfflineHousehold,
+  getOfflineScope,
+  saveOfflineHousehold,
+  syncOfflineDataForProfile,
+} from "@/services/offlineData";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
 import {
@@ -14,13 +22,16 @@ import {
   type ProfileFormValues,
 } from "@/types/forms";
 import { getErrorMessage } from "@/shared/utils/errors";
+import { offlineDataStore, bumpOfflineDataGeneration } from "@/stores/offline-data-store";
 
 export function useProfilePanel() {
   const { profile, session, signOut, refreshProfile, resetPassword } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
   const [householdFeedback, setHouseholdFeedback] = useState<string | null>(null);
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const offlineScope = getOfflineScope(profile);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -47,16 +58,19 @@ export function useProfilePanel() {
   });
 
   const barangayQuery = useQuery(
-    trpc.barangays.getById.queryOptions(
-      { id: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
+    {
+      queryKey: ["offline", "barangay", offlineScope?.scopeId, offlineGeneration],
+      enabled: Boolean(offlineScope?.scopeId),
+      queryFn: async () => getOfflineBarangay(offlineScope!.scopeId),
+    },
   );
 
   const householdQuery = useQuery(
-    trpc.households.getMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
+    {
+      queryKey: ["offline", "household", offlineScope?.scopeId, offlineGeneration],
+      enabled: Boolean(offlineScope?.scopeId),
+      queryFn: async () => getOfflineHousehold(offlineScope!.scopeId),
+    },
   );
 
   useEffect(() => {
@@ -105,6 +119,10 @@ export function useProfilePanel() {
     trpc.profile.update.mutationOptions({
       onSuccess: async () => {
         await refreshProfile();
+        if (profile) {
+          await syncOfflineDataForProfile(profile);
+          bumpOfflineDataGeneration();
+        }
         setProfileFeedback("Profile updated.");
       },
     }),
@@ -112,8 +130,14 @@ export function useProfilePanel() {
 
   const householdMutation = useMutation(
     trpc.households.register.mutationOptions({
-      onSuccess: () => {
-        void householdQuery.refetch();
+      onSuccess: async (household) => {
+        if (offlineScope) {
+          await saveOfflineHousehold(offlineScope.scopeId, household);
+        }
+        if (profile) {
+          await syncOfflineDataForProfile(profile);
+        }
+        bumpOfflineDataGeneration();
         setHouseholdFeedback("Household details saved.");
       },
     }),

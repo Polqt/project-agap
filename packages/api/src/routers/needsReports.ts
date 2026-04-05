@@ -23,6 +23,7 @@ export const needsReportsRouter = router({
   submit: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         centerId: uuidSchema.optional(),
         totalEvacuees: z.number().int().min(0),
         needsFoodPacks: z.number().int().min(0),
@@ -34,6 +35,22 @@ export const needsReportsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Check idempotency
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as NeedsReport;
+        }
+      }
+
       const insertPayload: TableInsert<"needs_reports"> = {
         barangay_id: getProfileBarangayIdOrThrow(ctx.profile),
         submitted_by: ctx.session.id,
@@ -47,7 +64,7 @@ export const needsReportsRouter = router({
         notes: input.notes ?? null,
       };
 
-      return getFoundOrThrow<NeedsReport | null>(
+      const report = getFoundOrThrow<NeedsReport | null>(
         getSupabaseDataOrThrow<NeedsReport | null>(
           await ctx.supabase
             .from("needs_reports")
@@ -58,6 +75,18 @@ export const needsReportsRouter = router({
         ),
         "Needs report submission failed.",
       );
+
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "needs-report",
+          result_payload: JSON.stringify(report),
+        });
+      }
+
+      return report;
     }),
 
   list: officialProcedure

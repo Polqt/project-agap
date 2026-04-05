@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { assertNoUpdatedAtConflict } from "../conflicts";
 import { ApiError } from "../errors";
 import {
   getAuthorizedBarangayId,
@@ -387,6 +388,7 @@ export const householdsRouter = router({
       z.object({
         householdId: uuidSchema,
         assigneeProfileId: uuidSchema.optional(),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -410,6 +412,26 @@ export const householdsRouter = router({
       }
 
       const now = new Date().toISOString();
+      const currentHousehold = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .select(householdBaseSelect)
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to load household before welfare assignment.",
+        ),
+        "Household not found.",
+      );
+
+      assertNoUpdatedAtConflict({
+        currentUpdatedAt: currentHousehold.updated_at,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        conflictMessage:
+          "This household was updated by another official. Refresh the registry row before assigning welfare again.",
+      });
+
       const household = getFoundOrThrow<Household | null>(
         getSupabaseDataOrThrow<Household | null>(
           await ctx.supabase
@@ -434,12 +456,30 @@ export const householdsRouter = router({
   recordWelfareOutcome: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         householdId: uuidSchema,
         outcome: z.enum(["safe", "need_help", "not_home", "dispatch_again"]),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      // Check idempotency
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as Household;
+        }
+      }
 
       const current = getFoundOrThrow<Household | null>(
         getSupabaseDataOrThrow<Household | null>(
@@ -453,6 +493,13 @@ export const householdsRouter = router({
         ),
         "Household not found.",
       );
+
+      assertNoUpdatedAtConflict({
+        currentUpdatedAt: current.updated_at,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        conflictMessage:
+          "This welfare assignment changed while you were offline. Refresh assignments before recording another outcome.",
+      });
 
       if (current.evacuation_status !== "welfare_check_dispatched") {
         throw ApiError.badRequest("Household is not in welfare dispatch status.");
@@ -500,6 +547,16 @@ export const householdsRouter = router({
         ),
         "Household not found.",
       );
+
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "welfare-outcome",
+          result_payload: JSON.stringify(household),
+        });
+      }
 
       return household;
     }),
@@ -613,11 +670,31 @@ export const householdsRouter = router({
           "not_home",
           "welfare_check_dispatched",
         ]),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
       const now = new Date().toISOString();
+      const currentHousehold = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .select(householdBaseSelect)
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to load household before status update.",
+        ),
+        "Household not found.",
+      );
+
+      assertNoUpdatedAtConflict({
+        currentUpdatedAt: currentHousehold.updated_at,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        conflictMessage:
+          "This household status was changed by another official. Refresh the registry before applying another status update.",
+      });
 
       const patch =
         input.evacuationStatus === "welfare_check_dispatched"
