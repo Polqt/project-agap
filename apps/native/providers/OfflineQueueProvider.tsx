@@ -15,7 +15,12 @@ import {
   MAX_QUEUE_RETRIES,
   replayQueuedAction,
 } from "@/services/offlineQueueActions";
+import {
+  projectQueuedActionLocally,
+  syncQueuedActionDatasets,
+} from "@/services/offlineQueueProjection";
 import { appShellStore, setSyncStatus } from "@/stores/app-shell-store";
+import { bumpOfflineDataGeneration } from "@/stores/offline-data-store";
 import type { QueuedAction } from "@/types/offline";
 
 export function OfflineQueueProvider({ children }: PropsWithChildren) {
@@ -40,6 +45,8 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const queueAction = useCallback(
     async (action: QueuedAction) => {
       await insertQueuedAction(action);
+      await projectQueuedActionLocally(action);
+      bumpOfflineDataGeneration();
       await refreshPendingActions();
     },
     [refreshPendingActions],
@@ -69,6 +76,8 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
 
         try {
           await replayQueuedAction(action);
+          await syncQueuedActionDatasets(action).catch(() => {});
+          bumpOfflineDataGeneration();
           await deleteQueuedAction(action.id);
         } catch (error) {
           const nextRetries = action.retries + 1;

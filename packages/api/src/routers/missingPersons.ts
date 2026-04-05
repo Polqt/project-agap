@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   getFoundOrThrow,
+  getProfileOrThrow,
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
@@ -23,7 +24,7 @@ export const missingPersonsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
       const insertPayload: TableInsert<"missing_persons"> = {
         barangay_id: barangayId,
@@ -54,7 +55,7 @@ export const missingPersonsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
       let query = ctx.supabase
         .from("missing_persons")
@@ -75,7 +76,7 @@ export const missingPersonsRouter = router({
   markFound: protectedProcedure
     .input(z.object({ id: uuidSchema }))
     .mutation(async ({ ctx, input }) => {
-      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
       return getFoundOrThrow<MissingPerson | null>(
         getSupabaseDataOrThrow<MissingPerson | null>(

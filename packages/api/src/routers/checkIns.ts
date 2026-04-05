@@ -15,6 +15,7 @@ export const checkInsRouter = router({
     .input(
       z
         .object({
+          clientMutationId: z.string().optional(),
           qrToken: z.string().trim().min(1),
           householdId: uuidSchema.nullish(),
         })
@@ -23,6 +24,22 @@ export const checkInsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const profile = getProfileOrThrow(ctx.profile);
       const barangayId = getProfileBarangayIdOrThrow(profile);
+
+      // Check idempotency
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as CheckInByQrResult;
+        }
+      }
 
       if (input.householdId) {
         getFoundOrThrow<{ id: string } | null>(
@@ -55,6 +72,16 @@ export const checkInsRouter = router({
         "QR check-in failed.",
       );
 
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "check-in-qr",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
       return result;
     }),
 
@@ -62,6 +89,7 @@ export const checkInsRouter = router({
     .input(
       z
         .object({
+          clientMutationId: z.string().optional(),
           centerId: uuidSchema,
           householdId: uuidSchema.nullish(),
           notes: z.string().trim().max(500).nullish(),
@@ -71,6 +99,22 @@ export const checkInsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const profile = getProfileOrThrow(ctx.profile);
       const barangayId = getProfileBarangayIdOrThrow(profile);
+
+      // Check idempotency
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as CheckIn;
+        }
+      }
 
       getFoundOrThrow<{ id: string } | null>(
         getSupabaseDataOrThrow<{ id: string } | null>(
@@ -125,6 +169,16 @@ export const checkInsRouter = router({
         "Manual check-in failed.",
       );
 
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "check-in-manual",
+          result_payload: JSON.stringify(checkIn),
+        });
+      }
+
       return checkIn;
     }),
 
@@ -132,6 +186,7 @@ export const checkInsRouter = router({
     .input(
       z
         .object({
+          clientMutationId: z.string().optional(),
           centerId: uuidSchema,
           householdId: uuidSchema,
           memberIds: z.array(uuidSchema).max(20).default([]),
@@ -142,6 +197,22 @@ export const checkInsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const profile = getProfileOrThrow(ctx.profile);
       const barangayId = getProfileBarangayIdOrThrow(profile);
+
+      // Check idempotency
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as CheckIn;
+        }
+      }
 
       getFoundOrThrow<{ id: string } | null>(
         getSupabaseDataOrThrow<{ id: string } | null>(
@@ -198,6 +269,16 @@ export const checkInsRouter = router({
         ),
         "Proxy check-in failed.",
       );
+
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "check-in-proxy",
+          result_payload: JSON.stringify(checkIn),
+        });
+      }
 
       return checkIn;
     }),

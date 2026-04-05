@@ -1,15 +1,23 @@
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 
+import { useAuth } from "@/shared/hooks/useAuth";
 import { AppButton, EmptyState, Pill, SectionCard } from "@/shared/components/ui";
 import { trpc } from "@/services/trpc";
+import { getErrorMessage } from "@/shared/utils/errors";
+import {
+  getOfflineCenterSupplies,
+  getOfflineScope,
+  patchOfflineCenterSupplies,
+  syncOfflineCenterSupplies,
+} from "@/services/offlineData";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 import type { EvacuationCenter } from "@project-agap/api/supabase";
 
 type Props = {
   centers: EvacuationCenter[];
-  isUpdating: boolean;
-  updatingCenterId?: string;
   onToggle: (centerId: string, isOpen: boolean) => void;
 };
 
@@ -25,28 +33,68 @@ function SupplyRow({ label, value, low }: { label: string; value: number; low: b
 }
 
 function CenterSuppliesSection({ centerId }: { centerId: string }) {
+  const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ food: "", water: "", medicine: "", blankets: "" });
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const offlineScope = getOfflineScope(profile);
 
-  const suppliesQuery = useQuery(
-    trpc.evacuationCenters.getSupplies.queryOptions({ centerId }),
-  );
+  const suppliesQuery = useQuery({
+    queryKey: ["offline", "center-supplies", offlineScope?.scopeId, centerId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineCenterSupplies(offlineScope!.scopeId, centerId),
+  });
   const updateMutation = useMutation(trpc.evacuationCenters.updateSupplies.mutationOptions());
 
   const supplies = suppliesQuery.data;
   if (!supplies) return null;
 
   async function handleSave() {
-    await updateMutation.mutateAsync({
-      centerId,
-      ...(draft.food !== "" ? { foodPacks: Number(draft.food) } : {}),
-      ...(draft.water !== "" ? { waterLiters: Number(draft.water) } : {}),
-      ...(draft.medicine !== "" ? { medicineUnits: Number(draft.medicine) } : {}),
+    if (!supplies) {
+      return;
+    }
+
+    setFeedback(null);
+
+    const nextPatch = {
+      ...(draft.food !== "" ? { food_packs: Number(draft.food) } : {}),
+      ...(draft.water !== "" ? { water_liters: Number(draft.water) } : {}),
+      ...(draft.medicine !== "" ? { medicine_units: Number(draft.medicine) } : {}),
       ...(draft.blankets !== "" ? { blankets: Number(draft.blankets) } : {}),
-    });
-    await suppliesQuery.refetch();
-    setEditing(false);
-    setDraft({ food: "", water: "", medicine: "", blankets: "" });
+      updated_at: new Date().toISOString(),
+      updated_by: offlineScope?.profileId ?? null,
+    };
+
+    try {
+      if (offlineScope) {
+        await patchOfflineCenterSupplies(offlineScope.scopeId, centerId, nextPatch);
+        bumpOfflineDataGeneration();
+      }
+
+      await updateMutation.mutateAsync({
+        centerId,
+        ...(draft.food !== "" ? { foodPacks: Number(draft.food) } : {}),
+        ...(draft.water !== "" ? { waterLiters: Number(draft.water) } : {}),
+        ...(draft.medicine !== "" ? { medicineUnits: Number(draft.medicine) } : {}),
+        ...(draft.blankets !== "" ? { blankets: Number(draft.blankets) } : {}),
+        expectedUpdatedAt: supplies.updated_at ?? null,
+      });
+
+      if (offlineScope) {
+        await syncOfflineCenterSupplies(offlineScope, centerId);
+        bumpOfflineDataGeneration();
+      }
+
+      setEditing(false);
+      setDraft({ food: "", water: "", medicine: "", blankets: "" });
+    } catch (error) {
+      if (offlineScope) {
+        await syncOfflineCenterSupplies(offlineScope, centerId).catch(() => {});
+        bumpOfflineDataGeneration();
+      }
+      setFeedback(getErrorMessage(error, "Unable to update center supplies."));
+    }
   }
 
   return (
@@ -61,6 +109,9 @@ function CenterSuppliesSection({ centerId }: { centerId: string }) {
       <SupplyRow label="Water (L)" value={supplies.water_liters} low={supplies.water_liters < 50} />
       <SupplyRow label="Medicine" value={supplies.medicine_units} low={supplies.medicine_units < 5} />
       <SupplyRow label="Blankets" value={supplies.blankets} low={supplies.blankets < 10} />
+      {feedback ? (
+        <Text className="mt-2 text-[12px] font-medium text-rose-600">{feedback}</Text>
+      ) : null}
 
       <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
         <Pressable className="flex-1 items-center justify-center bg-black/50" onPress={() => setEditing(false)}>
@@ -90,8 +141,6 @@ function CenterSuppliesSection({ centerId }: { centerId: string }) {
 
 export function CenterStatusCard({
   centers,
-  isUpdating,
-  updatingCenterId,
   onToggle,
 }: Props) {
   return (
@@ -120,7 +169,6 @@ export function CenterStatusCard({
                 label={center.is_open ? "Close center" : "Open center"}
                 onPress={() => onToggle(center.id, !center.is_open)}
                 variant={center.is_open ? "secondary" : "primary"}
-                loading={isUpdating && updatingCenterId === center.id}
               />
             </View>
           </View>

@@ -5,14 +5,25 @@ import { Text, View } from "react-native";
 
 import { AppButton, Pill, ScreenHeader, SectionCard, TextField } from "@/shared/components/ui";
 import { haptics } from "@/services/haptics";
+import {
+  getOfflineHousehold,
+  getOfflineLatestStatusPing,
+  getOfflineRegistryHousehold,
+  getOfflineResidentAccess,
+  getOfflineScope,
+  saveOfflineLatestStatusPing,
+  searchOfflineRegistryHouseholds,
+  syncOfflineDatasets,
+} from "@/services/offlineData";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { createQueuedAction } from "@/services/offlineQueueActions";
-import { queryClient, trpc } from "@/services/trpc";
+import { trpc } from "@/services/trpc";
 import { formatDateTime, formatRelativeTime } from "@/shared/utils/date";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { appShellStore, setLastStatusPing } from "@/stores/app-shell-store";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import { ProxyPingCard } from "./ProxyPingCard";
 
@@ -24,6 +35,7 @@ function triggerHaptic(effect: () => Promise<unknown>) {
 
 export function PingButtons() {
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { isOnline, pendingActions, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const lastPingPreview = useStore(appShellStore, (state) => state.lastStatusPing);
@@ -33,52 +45,94 @@ export function PingButtons() {
   const [selectedProxyHouseholdId, setSelectedProxyHouseholdId] = useState<string | null>(null);
   const [proxyMessage, setProxyMessage] = useState("");
   const [proxyFeedback, setProxyFeedback] = useState<string | null>(null);
+  const offlineScope = getOfflineScope(profile);
 
-  const householdQuery = useQuery(
-    trpc.households.getMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const householdQuery = useQuery({
+    queryKey: ["offline", "legacy-status-household", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineHousehold(offlineScope!.scopeId),
+  });
 
-  const latestPingQuery = useQuery(
-    trpc.statusPings.getLatestMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-      refetchInterval: 60_000,
-    }),
-  );
-  const latestPingQueryKey = trpc.statusPings.getLatestMine.queryKey();
+  const latestPingQuery = useQuery({
+    queryKey: ["offline", "legacy-latest-status-ping", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineLatestStatusPing(offlineScope!.scopeId),
+  });
 
-  const proxySearchQuery = useQuery(
-    trpc.households.search.queryOptions(
-      {
-        barangayId: profile?.barangay_id ?? undefined,
-        query: proxySearch,
-      },
-      {
-        enabled: Boolean(profile?.barangay_id && proxySearch.trim().length >= 2),
-      },
-    ),
-  );
+  const residentAccessQuery = useQuery({
+    queryKey: ["offline", "legacy-resident-access", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineResidentAccess(offlineScope!.scopeId),
+  });
 
-  const selectedProxyHouseholdQuery = useQuery(
-    trpc.households.getById.queryOptions(
-      { id: selectedProxyHouseholdId ?? "" },
-      {
-        enabled: Boolean(selectedProxyHouseholdId),
-      },
-    ),
-  );
+  const proxySearchQuery = useQuery({
+    queryKey: ["offline", "legacy-proxy-search", offlineScope?.scopeId, proxySearch, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId && proxySearch.trim().length >= 2),
+    queryFn: async () => searchOfflineRegistryHouseholds(offlineScope!.scopeId, proxySearch),
+  });
+
+  const selectedProxyHouseholdQuery = useQuery({
+    queryKey: [
+      "offline",
+      "legacy-proxy-household",
+      offlineScope?.scopeId,
+      selectedProxyHouseholdId,
+      offlineGeneration,
+    ],
+    enabled: Boolean(offlineScope?.scopeId && selectedProxyHouseholdId),
+    queryFn: async () =>
+      getOfflineRegistryHousehold(offlineScope!.scopeId, selectedProxyHouseholdId!),
+  });
+
+  async function syncStatusDatasets() {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, [
+      "latestStatusPing",
+      "household",
+      "residentAccess",
+      "registryHouseholds",
+    ]);
+    bumpOfflineDataGeneration();
+  }
+
+  async function saveOptimisticPing(status: "safe" | "need_help", householdId?: string | null, note?: string) {
+    if (!offlineScope) {
+      return;
+    }
+
+    await saveOfflineLatestStatusPing(offlineScope.scopeId, {
+      id: `offline-status-${Date.now()}`,
+      barangay_id: offlineScope.barangayId,
+      resident_id: offlineScope.profileId,
+      household_id: householdId ?? null,
+      status,
+      channel: "app",
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      message: note ?? null,
+      is_resolved: false,
+      resolved_by: null,
+      resolved_at: null,
+      pinged_at: new Date().toISOString(),
+    });
+    bumpOfflineDataGeneration();
+  }
 
   const submitPingMutation = useMutation(
     trpc.statusPings.submit.mutationOptions({
-      onSuccess: (result) => {
-        queryClient.setQueryData(latestPingQueryKey, result);
-        latestPingQuery.refetch();
+      onSuccess: async (result) => {
+        if (offlineScope) {
+          await saveOfflineLatestStatusPing(offlineScope.scopeId, result);
+        }
         setLastStatusPing({
           status: result.status,
           createdAt: Date.parse(result.pinged_at),
           source: "server",
         });
+        await syncStatusDatasets();
         setFeedback(`Status sent successfully at ${formatDateTime(result.pinged_at)}.`);
         setMessage("");
       },
@@ -87,7 +141,11 @@ export function PingButtons() {
 
   const submitProxyPingMutation = useMutation(
     trpc.statusPings.submit.mutationOptions({
-      onSuccess: (result) => {
+      onSuccess: async (result) => {
+        if (offlineScope) {
+          await saveOfflineLatestStatusPing(offlineScope.scopeId, result);
+        }
+        await syncStatusDatasets();
         setProxyFeedback(`Proxy status sent successfully at ${formatDateTime(result.pinged_at)}.`);
         setProxyMessage("");
         setProxySearch("");
@@ -114,7 +172,8 @@ export function PingButtons() {
     }
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload));
+      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+      await saveOptimisticPing(status, payload.householdId, payload.message);
       setLastStatusPing({
         status,
         createdAt: Date.now(),
@@ -129,7 +188,8 @@ export function PingButtons() {
       await submitPingMutation.mutateAsync(payload);
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload));
+        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+        await saveOptimisticPing(status, payload.householdId, payload.message);
         setLastStatusPing({
           status,
           createdAt: Date.now(),
@@ -167,7 +227,8 @@ export function PingButtons() {
     }
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload));
+      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+      await saveOptimisticPing(status, payload.householdId, payload.message);
       setProxyFeedback("No connection right now. The proxy ping was queued and will sync on reconnect.");
       setProxyMessage("");
       setProxySearch("");
@@ -179,7 +240,8 @@ export function PingButtons() {
       await submitProxyPingMutation.mutateAsync(payload);
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload));
+        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+        await saveOptimisticPing(status, payload.householdId, payload.message);
         setProxyFeedback("Connection dropped while sending. We queued the proxy ping locally.");
         setProxyMessage("");
         setProxySearch("");
@@ -192,6 +254,7 @@ export function PingButtons() {
   }
 
   const latestPing = latestPingQuery.data;
+  const residentPingEnabled = residentAccessQuery.data?.residentPingEnabled ?? true;
   const queuedStatusCount = pendingActions.filter((action) => action.type === "status-ping.submit").length;
   const latestStatusLabel =
     latestPing?.status === "safe"
@@ -208,10 +271,10 @@ export function PingButtons() {
 
   return (
     <View className="flex-1 bg-[#f4f7fb] pb-10">
-      <View className="mx-5 mt-5 overflow-hidden rounded-[32px] border border-slate-200 bg-white">
+      <View className="mx-5 mt-5 overflow-hidden rounded-4xl border border-slate-200 bg-white">
         <View className="bg-slate-950 px-5 pb-8 pt-5">
           <View className="absolute -right-10 top-0 h-40 w-40 rounded-full bg-cyan-400/20" />
-          <View className="absolute -left-8 bottom-[-24px] h-32 w-32 rounded-full bg-emerald-300/20" />
+          <View className="absolute -left-8 -bottom-6 h-32 w-32 rounded-full bg-emerald-300/20" />
           <ScreenHeader
             eyebrow="5.2.1 Safety status ping"
             title="Tell your barangay how you are doing"
@@ -221,13 +284,13 @@ export function PingButtons() {
 
         <View className="border-t border-slate-200 bg-white px-5 py-4">
           <View className="flex-row flex-wrap gap-3">
-            <View className="min-w-[47%] flex-1 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
+            <View className="min-w-[47%] flex-1 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
               <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-slate-500">
                 Response mode
               </Text>
               <Text className="mt-3 text-lg font-semibold text-slate-950">One-tap resident ping</Text>
             </View>
-            <View className="min-w-[47%] flex-1 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-4">
+            <View className="min-w-[47%] flex-1 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
               <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-slate-500">
                 Queue status
               </Text>
@@ -317,7 +380,11 @@ export function PingButtons() {
               Use this when your household is safe and the barangay can count you as accounted for.
             </Text>
             <View className="mt-4">
-              <AppButton label="Send Ligtas Ako" onPress={() => void handleSubmit("safe")} />
+              <AppButton
+                label="Send Ligtas Ako"
+                onPress={() => void handleSubmit("safe")}
+                disabled={!residentPingEnabled}
+              />
             </View>
           </View>
 
@@ -363,6 +430,14 @@ export function PingButtons() {
         }
         feedback={proxyFeedback}
       />
+
+      {!residentPingEnabled ? (
+        <SectionCard title="Resident access" subtitle="Regular resident ping is paused by your barangay.">
+          <Text className="text-sm leading-6 text-amber-800">
+            You can still send an emergency help request even while normal reporting is turned off.
+          </Text>
+        </SectionCard>
+      ) : null}
     </View>
   );
 }

@@ -1,12 +1,22 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import {
+  getOfflineHousehold,
+  getOfflineRegistryHousehold,
+  getOfflineScope,
+  listOfflineEvacuationCenters,
+  searchOfflineRegistryHouseholds,
+  syncOfflineDataForProfile,
+} from "@/services/offlineData";
 import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import type { CheckInMode } from "../types";
 
@@ -18,8 +28,10 @@ export type UseCheckInFlowOptions = {
 export function useCheckInFlow(options?: UseCheckInFlowOptions) {
   const kioskMode = options?.kioskMode ?? false;
   const { profile } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { isOnline, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
+  const offlineScope = getOfflineScope(profile);
 
   const [mode, setMode] = useState<CheckInMode>("manual");
   const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null);
@@ -30,39 +42,35 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
   const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const householdQuery = useQuery(
-    trpc.households.getMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const householdQuery = useQuery({
+    queryKey: ["offline", "checkin-household", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineHousehold(offlineScope!.scopeId),
+  });
 
-  const centersQuery = useQuery(
-    trpc.evacuationCenters.listByBarangay.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
-  );
+  const centersQuery = useQuery({
+    queryKey: ["offline", "checkin-centers", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineEvacuationCenters(offlineScope!.scopeId),
+  });
 
-  const proxySearchQuery = useQuery(
-    trpc.households.search.queryOptions(
-      {
-        barangayId: profile?.barangay_id ?? undefined,
-        query: proxySearch,
-      },
-      {
-        enabled: Boolean(profile?.barangay_id && proxySearch.trim().length >= 2),
-      },
-    ),
-  );
+  const proxySearchQuery = useQuery({
+    queryKey: ["offline", "proxy-search", offlineScope?.scopeId, proxySearch, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId && proxySearch.trim().length >= 2),
+    queryFn: async () => searchOfflineRegistryHouseholds(offlineScope!.scopeId, proxySearch),
+  });
 
-  const selectedProxyHouseholdQuery = useQuery(
-    trpc.households.getById.queryOptions(
-      { id: selectedProxyHouseholdId ?? "" },
-      {
-        enabled: Boolean(selectedProxyHouseholdId),
-      },
-    ),
-  );
+  const selectedProxyHouseholdQuery = useQuery({
+    queryKey: [
+      "offline",
+      "proxy-household",
+      offlineScope?.scopeId,
+      selectedProxyHouseholdId,
+      offlineGeneration,
+    ],
+    enabled: Boolean(offlineScope?.scopeId && selectedProxyHouseholdId),
+    queryFn: async () => getOfflineRegistryHousehold(offlineScope!.scopeId, selectedProxyHouseholdId!),
+  });
 
   const manualMutation = useMutation(trpc.checkIns.manual.mutationOptions());
   const qrMutation = useMutation(trpc.checkIns.byQr.mutationOptions());
@@ -133,7 +141,7 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
     setFeedback(null);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.manual", payload));
+      await queueAction(createQueuedAction("check-in.manual", payload, offlineScope));
       setNotes("");
       setFeedback("Manual check-in queued offline. It will sync automatically.");
       return;
@@ -141,11 +149,15 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
 
     try {
       await manualMutation.mutateAsync(payload);
+      if (profile) {
+        await syncOfflineDataForProfile(profile);
+        bumpOfflineDataGeneration();
+      }
       setNotes("");
       setFeedback("Manual check-in submitted.");
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.manual", payload));
+        await queueAction(createQueuedAction("check-in.manual", payload, offlineScope));
         setNotes("");
         setFeedback("Connection dropped. Your manual check-in was queued.");
         return;
@@ -191,18 +203,22 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
     };
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.qr", payload));
+      await queueAction(createQueuedAction("check-in.qr", payload, offlineScope));
       setFeedback("QR check-in queued offline and ready to sync later.");
       return;
     }
 
     try {
       await qrMutation.mutateAsync(payload);
+      if (profile) {
+        await syncOfflineDataForProfile(profile);
+        bumpOfflineDataGeneration();
+      }
       setQrToken("");
       setFeedback("QR check-in submitted.");
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.qr", payload));
+        await queueAction(createQueuedAction("check-in.qr", payload, offlineScope));
         setFeedback("Connection dropped. Your QR check-in was queued.");
         return;
       }
@@ -229,7 +245,7 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
     setFeedback(null);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.proxy", payload));
+      await queueAction(createQueuedAction("check-in.proxy", payload, offlineScope));
       setNotes("");
       setSelectedProxyMemberIds([]);
       setFeedback("Proxy check-in queued offline.");
@@ -238,6 +254,10 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
 
     try {
       await proxyMutation.mutateAsync(payload);
+      if (profile) {
+        await syncOfflineDataForProfile(profile);
+        bumpOfflineDataGeneration();
+      }
       setNotes("");
       setProxySearch("");
       setSelectedProxyHouseholdId(null);
@@ -245,7 +265,7 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       setFeedback("Proxy check-in submitted.");
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.proxy", payload));
+        await queueAction(createQueuedAction("check-in.proxy", payload, offlineScope));
         setNotes("");
         setSelectedProxyMemberIds([]);
         setFeedback("Connection dropped. Your proxy check-in was queued.");

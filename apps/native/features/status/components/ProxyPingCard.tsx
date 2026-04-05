@@ -75,7 +75,7 @@ export function ProxyPingCard({
             <Pressable
               key={household.id}
               onPress={() => onSelectHousehold(household.id)}
-              className={`rounded-[24px] border px-4 py-4 ${
+              className={`rounded-3xl border px-4 py-4 ${
                 selectedHouseholdId === household.id
                   ? "border-cyan-500 bg-cyan-50"
                   : "border-slate-200 bg-white"

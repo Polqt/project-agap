@@ -1,8 +1,16 @@
 export type WelfareOutcomeQueued = "safe" | "need_help" | "not_home" | "dispatch_again";
 
+export type QueueScopeMeta = {
+  scopeId: string;
+  barangayId: string;
+  profileId: string;
+};
+
 export type WelfareRecordOutcomeQueuePayload = {
   householdId: string;
   outcome: WelfareOutcomeQueued;
+  expectedUpdatedAt?: string | null;
+  clientMutationId?: string;
 };
 
 export type OfflineActionType =
@@ -20,6 +28,7 @@ export type StatusPingQueuePayload = {
   message?: string | null;
   latitude?: number;
   longitude?: number;
+  clientMutationId?: string;
 };
 
 export type CheckInQrQueuePayload = {
@@ -27,6 +36,7 @@ export type CheckInQrQueuePayload = {
   householdId?: string | null;
   latitude?: number;
   longitude?: number;
+  clientMutationId?: string;
 };
 
 export type CheckInManualQueuePayload = {
@@ -35,6 +45,7 @@ export type CheckInManualQueuePayload = {
   notes?: string | null;
   latitude?: number;
   longitude?: number;
+  clientMutationId?: string;
 };
 
 export type CheckInProxyQueuePayload = {
@@ -44,6 +55,7 @@ export type CheckInProxyQueuePayload = {
   notes?: string | null;
   latitude?: number;
   longitude?: number;
+  clientMutationId?: string;
 };
 
 export type NeedsReportSubmitQueuePayload = {
@@ -55,6 +67,7 @@ export type NeedsReportSubmitQueuePayload = {
   needsMedicine: boolean;
   medicalCases?: string;
   notes?: string;
+  clientMutationId?: string;
 };
 
 export type BroadcastCreateQueuePayload = {
@@ -64,6 +77,7 @@ export type BroadcastCreateQueuePayload = {
   message: string;
   messageFilipino?: string | null;
   targetPurok?: string | null;
+  clientMutationId?: string;
 };
 
 export type OfflinePayloadMap = {
@@ -80,6 +94,7 @@ export type QueuedAction<TType extends OfflineActionType = OfflineActionType> = 
   id: string;
   type: TType;
   payload: OfflinePayloadMap[TType];
+  meta?: QueueScopeMeta | null;
   createdAt: number;
   retries: number;
   failedAt: number | null;

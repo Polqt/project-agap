@@ -25,7 +25,7 @@ export function CenterPickerCard({ centers, selectedCenterId, onSelect, kiosk = 
           <Pressable
             key={center.id}
             onPress={() => onSelect(center.id)}
-            className={`mb-3 rounded-2xl border ${kiosk ? "min-h-[88px] px-5 py-5" : "px-4 py-4"} ${
+            className={`mb-3 rounded-2xl border ${kiosk ? "min-h-22 px-5 py-5" : "px-4 py-4"} ${
               selectedCenterId === center.id ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50"
             }`}
           >

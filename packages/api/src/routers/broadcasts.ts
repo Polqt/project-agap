@@ -80,6 +80,7 @@ export const broadcastsRouter = router({
   create: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         broadcastId: z.string().uuid().optional(),
         sentAt: z.string().datetime({ offset: true }).optional(),
         broadcastType: z.enum(["evacuate_now", "stay_alert", "all_clear", "custom"]).default("custom"),
@@ -91,6 +92,23 @@ export const broadcastsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      // Check idempotency first (before any processing)
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload);
+        }
+      }
+
       const existingBroadcast =
         input.broadcastId
           ? getSupabaseDataOrThrow<Broadcast | null>(
@@ -276,7 +294,7 @@ export const broadcastsRouter = router({
           .eq("id", broadcast.id);
       }
 
-      return {
+      const result = {
         ...broadcast,
         sms_sent_count: smsSentCount,
         push_sent_count: pushSentCount,
@@ -291,6 +309,18 @@ export const broadcastsRouter = router({
           failed: pushTokens.length - pushSentCount,
         },
       };
+
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "broadcast-create",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 
   list: officialProcedure

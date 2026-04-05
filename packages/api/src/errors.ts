@@ -15,6 +15,8 @@ export const ApiError = {
 
   badRequest: (message: string) => new TRPCError({ code: "BAD_REQUEST", message }),
 
+  conflict: (message: string) => new TRPCError({ code: "CONFLICT", message }),
+
   internal: (message: string, cause?: unknown) =>
     new TRPCError({ code: "INTERNAL_SERVER_ERROR", message, cause }),
 };
