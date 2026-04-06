@@ -6,10 +6,15 @@ import {
   getProfileOrThrow,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
-import { officialProcedure, protectedProcedure, router } from "../index";
+import { officialProcedure, router } from "../index";
 import { barangayIdSchema, uuidSchema } from "../schemas";
 import type { DashboardSummary, SmsFollowupItem } from "../supabase";
 
+type ResidentHeatmapProfile = {
+  id: string;
+  pinned_latitude: number | string | null;
+  pinned_longitude: number | string | null;
+};
 
 type ResidentHeatmapPoint = {
   resident_id: string;
