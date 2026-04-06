@@ -21,6 +21,7 @@ import type {
 import type { LocationPoint } from "@/types/map";
 
 import { listBroadcastsForBarangay, listOutboundSmsLogsForBarangay } from "@/features/broadcast/services/broadcasts";
+import { getConfiguredOfflineTilePack } from "@/features/map/services/offlineTileStrategy";
 import { saveOfflineMapPack } from "@/services/mapCache";
 import { trpcClient } from "@/services/trpc";
 
@@ -371,6 +372,7 @@ export async function refreshOfflineMapPack(scope: OfflineScope) {
     centers,
     routes,
     alerts,
+    tilePack: getConfiguredOfflineTilePack(),
     updatedAt: Date.now(),
   });
 }

@@ -278,5 +278,14 @@ export function useRegistryPanel() {
     updateStatusMutation,
     assignWelfare,
     updateStatus,
+    refreshConflictData: async () => {
+      await syncDatasets([
+        "registryHouseholds",
+        "welfareAssignments",
+        "welfareDispatch",
+        "dashboardSummary",
+        "unaccountedHouseholds",
+      ]);
+    },
   };
 }

@@ -4,6 +4,7 @@ import { Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/shared/components/container";
+import { OfflineConflictCard } from "@/shared/components/offline-conflict-card";
 import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
 import { getErrorMessage } from "@/shared/utils/errors";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -208,6 +209,12 @@ export default function OfficialAccountScreen() {
           title={profile?.full_name ?? "Barangay official"}
           description="Sign out clears this device session and returns you to the official sign-in screen."
         />
+        <View className="mx-6">
+          <OfflineConflictCard
+            onRefresh={handleManualSync}
+            refreshLabel="Refresh critical offline data"
+          />
+        </View>
         <SectionCard
           title="Resident access"
           subtitle="Turn these on only when residents should be able to submit regular disaster activity."

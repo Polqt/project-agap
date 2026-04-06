@@ -25,7 +25,10 @@ const ACTION_LABELS: Record<QueuedAction["type"], string> = {
 
 export function getOfflineConflictActions(actions: QueuedAction[]) {
   return actions.filter(
-    (action) => action.failedAt !== null && action.lastError && isConflictLikeError(action.lastError),
+    (action) =>
+      action.failedAt !== null &&
+      typeof action.lastError === "string" &&
+      isConflictLikeError(action.lastError),
   );
 }
 

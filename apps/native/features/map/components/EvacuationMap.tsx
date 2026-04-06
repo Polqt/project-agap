@@ -14,6 +14,7 @@ import {
   getOfflineScope,
   listOfflineEvacuationRoutes,
 } from "@/services/offlineData";
+import { getOfflineMapPack } from "@/services/mapCache";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
 import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { createQueuedAction } from "@/services/offlineQueueActions";
@@ -23,6 +24,7 @@ import type { LocationPoint } from "@/types/map";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import { useEvacuationNavigation } from "../hooks/useEvacuationNavigation";
+import { resolveOfflineTileStrategy } from "../services/offlineTileStrategy";
 import type { RankedEvacuationRoute } from "../types";
 import { EvacuationCentersList } from "./EvacuationCentersList";
 
@@ -97,6 +99,11 @@ export function EvacuationMap() {
     queryKey: ["offline", "map-pinned-location", offlineScope?.scopeId, offlineGeneration],
     enabled: Boolean(offlineScope?.scopeId),
     queryFn: async () => getOfflinePinnedLocation(offlineScope!.scopeId),
+  });
+  const mapPackQuery = useQuery({
+    queryKey: ["offline", "map-pack", profile?.barangay_id, offlineGeneration],
+    enabled: Boolean(profile?.barangay_id),
+    queryFn: async () => getOfflineMapPack(profile!.barangay_id!),
   });
 
   const setPinnedLocationMutation = useMutation({});
@@ -201,11 +208,25 @@ export function EvacuationMap() {
     hasOrigin: Boolean(origin),
     hasRoute: Boolean(selectedRoute),
   });
-  const showRemotePreview = !isNativeMapReady && isOnline;
+  const tileStrategy = useMemo(
+    () =>
+      resolveOfflineTileStrategy({
+        mapPack: mapPackQuery.data,
+        supportsNativeMap: Boolean(mapsModule?.default),
+        isOnline,
+      }),
+    [isOnline, mapPackQuery.data, mapsModule],
+  );
+  const showRemotePreview =
+    tileStrategy.kind === "remote-preview" && !isNativeMapReady && isOnline;
 
   const MapViewComponent = mapsModule?.default;
+  const LocalTileComponent = mapsModule?.LocalTile;
   const MarkerComponent = mapsModule?.Marker;
   const PolylineComponent = mapsModule?.Polyline;
+  const localTilePack = tileStrategy.kind === "local-tiles" ? tileStrategy.tilePack : null;
+  const showLocalTiles = Boolean(localTilePack && LocalTileComponent);
+  const effectiveMapType = showLocalTiles ? "none" : mapType;
 
   async function persistPinnedLocation(nextPin: LocationPoint) {
     setPinnedLocation(nextPin);
@@ -314,14 +335,14 @@ export function EvacuationMap() {
               resizeMode="cover"
             />
           ) : !isNativeMapReady ? (
-            <OfflineMapPlaceholder />
+            <OfflineMapPlaceholder summary={tileStrategy.summary} />
           ) : null}
 
           <MapViewComponent
             ref={mapRef}
             style={{ flex: 1, opacity: isNativeMapReady ? 1 : 0 }}
             initialRegion={region}
-            mapType={mapType}
+            mapType={effectiveMapType}
             onMapReady={() => setIsNativeMapReady(true)}
             onLongPress={handleMapLongPress}
             onRegionChangeComplete={(nextRegion: unknown) => {
@@ -332,6 +353,13 @@ export function EvacuationMap() {
             rotateEnabled
             pitchEnabled
           >
+            {showLocalTiles && LocalTileComponent && localTilePack ? (
+              <LocalTileComponent
+                pathTemplate={localTilePack.pathTemplate}
+                tileSize={localTilePack.tileSize}
+              />
+            ) : null}
+
             {origin ? (
               <MarkerComponent coordinate={origin} title="Your location">
                 <UserLocationMarker isPinned={Boolean(pinnedLocation)} />
@@ -441,8 +469,9 @@ export function EvacuationMap() {
               disabled={!origin}
             />
             <FloatingIconButton
-              icon={mapType === "standard" ? "layers" : "map"}
+              icon={showLocalTiles ? "map" : mapType === "standard" ? "layers" : "map"}
               onPress={() => setMapType((current) => (current === "standard" ? "satellite" : "standard"))}
+              disabled={showLocalTiles}
             />
             {pinnedLocation ? (
               <FloatingIconButton
@@ -478,13 +507,15 @@ export function EvacuationMap() {
             }
             onSelectCenter={handleSelectCenter}
           />
+
+          <MapTileStatusCard summary={tileStrategy.summary} mode={tileStrategy.kind} />
         </View>
       ) : (
         <View className="flex-1">
           {isOnline ? (
             <Image source={{ uri: staticMapPreviewUrl }} className="h-full w-full" resizeMode="cover" />
           ) : (
-            <OfflineMapPlaceholder />
+            <OfflineMapPlaceholder summary={tileStrategy.summary} />
           )}
           {infoMessage ? (
             <View
@@ -505,13 +536,14 @@ export function EvacuationMap() {
               staleTresholdMinutes={45}
             />
           </View>
+          <MapTileStatusCard summary={tileStrategy.summary} mode={tileStrategy.kind} />
         </View>
       )}
     </View>
   );
 }
 
-function OfflineMapPlaceholder() {
+function OfflineMapPlaceholder({ summary }: { summary: string }) {
   return (
     <View className="absolute inset-0 bg-slate-900">
       <View className="absolute inset-0 opacity-20">
@@ -527,9 +559,45 @@ function OfflineMapPlaceholder() {
         <View className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
           <Text className="text-center text-[18px] font-bold text-white">Offline map mode</Text>
           <Text className="mt-2 text-center text-[13px] leading-5 text-slate-300">
-            Using your locally saved evacuation centers, seeded routes, and cached guidance while the network is unavailable.
+            {summary}
           </Text>
         </View>
+      </View>
+    </View>
+  );
+}
+
+function MapTileStatusCard({
+  summary,
+  mode,
+}: {
+  summary: string;
+  mode: "local-tiles" | "vector-fallback" | "remote-preview";
+}) {
+  const toneClasses =
+    mode === "local-tiles"
+      ? "border-emerald-300 bg-emerald-50"
+      : mode === "remote-preview"
+        ? "border-blue-300 bg-blue-50"
+        : "border-amber-300 bg-amber-50";
+  const textClasses =
+    mode === "local-tiles"
+      ? "text-emerald-900"
+      : mode === "remote-preview"
+        ? "text-blue-900"
+        : "text-amber-950";
+
+  return (
+    <View className="absolute bottom-32 left-4 right-4">
+      <View className={`rounded-3xl border px-4 py-3 shadow ${toneClasses}`}>
+        <Text className={`text-xs font-semibold uppercase tracking-[1px] ${textClasses}`}>
+          {mode === "local-tiles"
+            ? "Offline tiles ready"
+            : mode === "remote-preview"
+              ? "Remote preview fallback"
+              : "Vector fallback mode"}
+        </Text>
+        <Text className={`mt-1 text-xs leading-5 ${textClasses}`}>{summary}</Text>
       </View>
     </View>
   );

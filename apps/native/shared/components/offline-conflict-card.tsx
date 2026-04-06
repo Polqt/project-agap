@@ -8,7 +8,7 @@ import {
   getQueuedActionLabel,
 } from "@/shared/utils/offline-conflicts";
 
-import { AppButton, SectionCard } from "./ui";
+import { AppButton } from "./ui";
 
 type Props = {
   onRefresh: () => Promise<void>;
@@ -73,15 +73,19 @@ export function OfflineConflictCard({
   const visibleActions = isExpanded ? conflictActions : conflictActions.slice(0, 3);
 
   return (
-    <SectionCard
-      title="Sync conflicts need review"
-      subtitle="Another official changed the same live record while this device was offline. Refresh first so you can compare the latest values before retrying."
-      right={
+    <View className="mt-4 rounded-2xl border border-rose-200 bg-white p-4">
+      <View className="mb-4 flex-row items-start justify-between gap-4">
+        <View className="flex-1 gap-1">
+          <Text className="text-lg font-semibold text-slate-950">Sync conflicts need review</Text>
+          <Text className="text-sm leading-6 text-slate-500">
+            Another official changed the same live record while this device was offline. Refresh first so you can compare the latest values before retrying.
+          </Text>
+        </View>
         <View className="rounded-full bg-rose-100 px-3 py-1">
           <Text className="text-xs font-semibold text-rose-700">{conflictActions.length} blocked</Text>
         </View>
-      }
-    >
+      </View>
+
       <View className="gap-3">
         {visibleActions.map((action) => (
           <View key={action.id} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
@@ -131,6 +135,6 @@ export function OfflineConflictCard({
           />
         </View>
       </View>
-    </SectionCard>
+    </View>
   );
 }

@@ -1,4 +1,5 @@
 import { ScreenShell } from "@/shared/components/screen-shell";
+import { OfflineConflictCard } from "@/shared/components/offline-conflict-card";
 import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { useRouter } from "expo-router";
 import { AppButton, SpeedDialFab, type SpeedDialAction } from "@/shared/components/ui";
@@ -30,6 +31,7 @@ export function OfficialDashboard() {
     rotateCenterQr,
     copyCenterToken,
     shareCenterToken,
+    refreshConflictData,
   } = useOfficialDashboard();
 
   async function handleSignOut() {
@@ -67,11 +69,17 @@ export function OfficialDashboard() {
       description="Live command surface for your barangay."
       action={<AppButton label="Sign out" onPress={() => void handleSignOut()} variant="ghost" />}
       topContent={
-        <LastSyncedBadge
-          lastSyncedAt={lastSyncedAt}
-          freshnessThresholdMinutes={15}
-          staleTresholdMinutes={45}
-        />
+        <>
+          <LastSyncedBadge
+            lastSyncedAt={lastSyncedAt}
+            freshnessThresholdMinutes={15}
+            staleTresholdMinutes={45}
+          />
+          <OfflineConflictCard
+            onRefresh={refreshConflictData}
+            refreshLabel="Refresh command data"
+          />
+        </>
       }
       feedback={feedback}
       isLoading={isLoading}

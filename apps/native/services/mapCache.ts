@@ -14,7 +14,15 @@ export async function getOfflineMapPack(barangayId: string) {
   }
 
   try {
-    return JSON.parse(rawValue) as OfflineMapPack;
+    const parsedValue = JSON.parse(rawValue) as Partial<OfflineMapPack>;
+    return {
+      barangayId,
+      centers: parsedValue.centers ?? [],
+      routes: parsedValue.routes ?? [],
+      alerts: parsedValue.alerts ?? [],
+      tilePack: parsedValue.tilePack ?? null,
+      updatedAt: parsedValue.updatedAt ?? 0,
+    } satisfies OfflineMapPack;
   } catch {
     return null;
   }
