@@ -79,7 +79,7 @@ export const missingPersonsRouter = router({
           .from("profiles")
           .select("id")
           .eq("barangay_id", barangayId)
-          .eq("app_role", "official");
+          .eq("role", "official");
 
         const officialIds = (officialProfiles ?? []).map((p) => p.id);
         
