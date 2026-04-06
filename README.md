@@ -1,174 +1,88 @@
 # Project Agap
 
-Project Agap is an offline-first disaster risk reduction and response platform designed for barangays, responders, and residents. It helps communities report safety status, locate evacuation centers, coordinate welfare checks, monitor alerts, and keep critical information usable even under weak connectivity or no signal.
+Project Agap is a disaster risk reduction and response platform built for barangays, responders, and residents. It is designed for the moments when ordinary communication becomes unreliable but the need for accurate coordination becomes even more urgent.
 
-The system has two main parts:
+At its core, Project Agap helps a community answer the questions that matter most during an emergency:
 
-- `Mobile app`: used by residents and barangay officials in the field
-- `Web/API app`: serves the backend, tRPC API, and operational services connected to the mobile app
+- Who is safe?
+- Who still needs help?
+- Which households remain unaccounted for?
+- Where should people evacuate?
+- What resources are needed right now?
+- How can officials keep response moving even under weak connectivity?
 
-## What The App Does
+## Why Project Agap Matters
 
-Project Agap is built for emergency situations where normal communication becomes unreliable. The goal is to make disaster coordination faster, clearer, and more resilient.
+Disasters do not wait for stable internet, complete information, or ideal operating conditions. Floods, earthquakes, storms, and forced evacuations create a gap between what people need to report and what systems are still capable of receiving.
 
-With the app, a barangay can:
+Project Agap is built to close that gap.
 
-- track household accountability
-- receive resident safety and help pings
-- coordinate evacuation center operations
-- submit and review needs reports
-- assign and record welfare checks
-- send emergency broadcasts
-- continue core operations using cached data and queued actions while offline
+Instead of treating connectivity loss as a failure state, the platform is designed around continuity:
 
-## Key Features
+- residents can still report safety status quickly
+- officials can continue operations from mobile in the field
+- command staff can maintain barangay-wide visibility from the web
+- map, routing, alerts, and cached records remain useful even when live services degrade
+- weak connections are treated as recoverable, not immediately lost
 
-### Resident Features
+## The Platform
 
-- send `I Am Safe` and `I Need Help` status pings
-- view evacuation centers and route guidance
-- check in to evacuation centers
-- read hazard alerts and barangay broadcasts
-- use locally cached data during connectivity loss
+Project Agap has two connected experiences:
 
-### Official Features
+- [Project Agap Mobile](./apps/native/README.md)
+- [Project Agap Web Command Center](./apps/web/README.md)
 
-- monitor dashboard summaries and unresolved help pings
-- manage registry and household evacuation status
-- assign and complete welfare checks
-- send emergency broadcasts
-- manage evacuation center availability and supplies
-- control resident access to status ping and check-in flows
+Together, they form one emergency workflow across residents, responders, and decision-makers.
 
-### Offline-First Features
+## Core Capabilities
 
-- SQLite-backed local data cache on the device
-- queued mutation replay after reconnect
-- local-first reads for critical mobile flows
-- cached map guidance and seeded route fallback
-- stale-data indicators and last-synced timestamps
-- conflict protection for overlapping official edits on key datasets
+### Resident Safety Reporting
 
-## Why This App Matters
+- one-tap `I Am Safe` and `I Need Help` status updates
+- household visibility and last-ping state
+- emergency reporting designed for speed and clarity
 
-During disasters, connectivity is often degraded before information needs are reduced. Project Agap is designed around that reality. Instead of assuming strong internet is always available, it prioritizes:
+### Barangay Command And Coordination
 
-- graceful offline behavior
-- fast local access to critical data
-- clear sync recovery when the connection returns
-- safer coordination between residents and responders
+- dashboard for accountability and response KPIs
+- unresolved help queue for immediate action
+- household registry and evacuation status management
+- welfare assignment and follow-up tracking
+- center operations, occupancy, and supplies monitoring
 
-## Tech Stack
+### Emergency Communication
 
-- `Expo` + `React Native`
-- `Next.js`
-- `tRPC`
-- `Supabase Auth` + `Postgres`
-- `Drizzle`
-- `TanStack Query`
-- `expo-sqlite`
+- barangay-wide and purok-targeted broadcasts
+- app and SMS-supported communication workflows
+- communication history and delivery visibility
 
-## Project Structure
+### Evacuation Mapping And Guidance
 
-```text
-project-agap/
-├── apps/
-│   ├── native/      # Mobile app
-│   └── web/         # Next.js app hosting the API route
-├── packages/
-│   ├── api/         # Shared tRPC routers and business logic
-│   ├── auth/        # Auth-related code
-│   └── db/          # Database schema and Supabase migrations
-```
+- evacuation center discovery
+- safer-center route ranking
+- traffic-aware route guidance when available
+- seeded route fallback when live routing is unavailable
+- offline map pack support for cached routes, alerts, and center data
 
-## Quick Start
+### Offline And Weak-Connectivity Resilience
 
-Install dependencies:
+- local-first mobile read model
+- queued write recovery when live delivery is impossible
+- weak-connectivity retry before queue fallback
+- conflict-aware mobile recovery for official workflows
+- freshness indicators so users understand what is live, stale, or pending sync
 
-```bash
-pnpm install
-```
+## What Makes It Competition-Ready
 
-Start local Supabase and apply migrations:
+Project Agap is not just a reporting tool. It is a coordination system built for real emergency constraints:
 
-```bash
-pnpm run supabase:start
-pnpm run db:push
-```
+- it supports both residents and officials
+- it bridges field action and command oversight
+- it treats mapping, communication, and accountability as one integrated problem
+- it remains usable during unstable network conditions
+- it is tailored to barangay-level response, where timing and clarity have immediate consequences
 
-Start the backend:
+## Explore The Experience
 
-```bash
-pnpm run dev:web
-```
-
-Start the mobile app:
-
-```bash
-pnpm run dev:native
-```
-
-## Mobile Setup
-
-For physical-device development, the mobile app must point to a reachable backend.
-
-In `apps/native/.env`:
-
-```bash
-EXPO_PUBLIC_SERVER_URL=http://YOUR-LAPTOP-LAN-IP:3001
-EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-EXPO_PUBLIC_APP_ENV=development
-```
-
-Do not use `localhost` on a real device.
-
-## Remote Deployment
-
-For remote demos or judging, deploy the backend first, then point the mobile app to that hosted URL.
-
-Recommended:
-
-- host `apps/web` on Vercel
-- keep Supabase as the managed database/auth provider
-- install a mobile build that uses the hosted backend URL
-
-See:
-
-- Native deployment guide: [apps/native/README.md](/c:/Users/poyhi/project-agap/apps/native/README.md)
-- Web/API deployment guide: [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
-- Remote judging checklist: [JUDGE-CHECKLIST.md](/c:/Users/poyhi/project-agap/JUDGE-CHECKLIST.md)
-
-## Validation
-
-Before shipping:
-
-```bash
-pnpm run check-types
-pnpm run test:native
-```
-
-For the web deployment path, also verify:
-
-```bash
-pnpm --filter web build
-```
-
-## Current Offline Model
-
-The mobile app is built around an offline-first architecture, but the most important rule is this:
-
-- core flows work best offline after the device has synced once while online
-
-That means:
-
-- resident status reporting can queue offline
-- official workflows can continue using cached local data
-- queued actions sync after reconnect
-- live external feeds still depend on network freshness
-
-## Documentation
-
-- Native app guide: [apps/native/README.md](/c:/Users/poyhi/project-agap/apps/native/README.md)
-- Web/API guide: [apps/web/README.md](/c:/Users/poyhi/project-agap/apps/web/README.md)
-- Judge checklist: [JUDGE-CHECKLIST.md](/c:/Users/poyhi/project-agap/JUDGE-CHECKLIST.md)
+- Mobile field app: [apps/native/README.md](./apps/native/README.md)
+- Web command center: [apps/web/README.md](./apps/web/README.md)

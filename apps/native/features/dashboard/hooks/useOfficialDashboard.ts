@@ -18,6 +18,7 @@ import {
   syncOfflineDatasets,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
@@ -31,7 +32,7 @@ import { buildCenterQrShareMessage } from "../services/centerQr";
 export function useOfficialDashboard() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const signOut = useSignOutRedirect("/(auth)/sign-in");
   const [feedback, setFeedback] = useState<string | null>(null);
   const offlineScope = getOfflineScope(profile);
@@ -121,10 +122,12 @@ export function useOfficialDashboard() {
         bumpOfflineDataGeneration();
       },
       onSuccess: () => {
-        void syncDatasets(["unresolvedPings", "dashboardSummary", "welfareDispatch"]);
+        void syncDatasets(["unresolvedPings", "dashboardSummary", "welfareDispatch"]).catch(
+          () => {},
+        );
       },
       onError: () => {
-        void syncDatasets(["unresolvedPings", "dashboardSummary"]);
+        void syncDatasets(["unresolvedPings", "dashboardSummary"]).catch(() => {});
       },
     }),
   );
@@ -144,7 +147,7 @@ export function useOfficialDashboard() {
         setFeedback(isOpen ? "Center opened" : "Center closed");
       },
       onSuccess: () => {
-        void syncDatasets(["evacuationCenters"]);
+        void syncDatasets(["evacuationCenters"]).catch(() => {});
       },
       onError: (_error, { centerId, isOpen }) => {
         // Rollback on error
@@ -153,7 +156,7 @@ export function useOfficialDashboard() {
           bumpOfflineDataGeneration();
         }
         setFeedback("Center status changed elsewhere. Data refreshed.");
-        void syncDatasets(["evacuationCenters"]);
+        void syncDatasets(["evacuationCenters"]).catch(() => {});
       },
     }),
   );
@@ -168,11 +171,11 @@ export function useOfficialDashboard() {
           });
           bumpOfflineDataGeneration();
         }
-        void syncDatasets(["evacuationCenters"]);
+        void syncDatasets(["evacuationCenters"]).catch(() => {});
         setFeedback("Center check-in token rotated.");
       },
       onError: () => {
-        void syncDatasets(["evacuationCenters"]);
+        void syncDatasets(["evacuationCenters"]).catch(() => {});
       },
     }),
   );
@@ -204,26 +207,30 @@ export function useOfficialDashboard() {
   }
 
   async function rotateCenterQr(centerId: string) {
+    const queuedAction = createQueuedAction("center.rotate-qr", {
+      centerId,
+    }, offlineScope);
+
     if (!isOnline) {
-      await queueAction(
-        createQueuedAction("center.rotate-qr", {
-          centerId,
-        }, offlineScope),
-      );
+      await queueAction(queuedAction);
       setFeedback("QR token rotation queued offline.");
       return;
     }
 
     try {
-      await rotateQrMutation.mutateAsync({ centerId });
+      await runWithNetworkResilience(
+        "Center QR rotation",
+        () => rotateQrMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(
-          createQueuedAction("center.rotate-qr", {
-            centerId,
-          }, offlineScope),
+        await queueAction(queuedAction);
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so QR rotation was staged for retry."
+            : "Connection dropped. QR token rotation queued for auto-sync.",
         );
-        setFeedback("Connection dropped. QR token rotation queued for auto-sync.");
         return;
       }
 
@@ -246,35 +253,32 @@ export function useOfficialDashboard() {
     toggleCenter: async (centerId: string, isOpen: boolean) => {
       const expectedUpdatedAt =
         centersQuery.data?.find((center) => center.id === centerId)?.updated_at ?? null;
+      const queuedAction = createQueuedAction("center.toggle-open", {
+        centerId,
+        isOpen,
+        expectedUpdatedAt,
+      }, offlineScope);
 
       if (!isOnline) {
-        await queueAction(
-          createQueuedAction("center.toggle-open", {
-            centerId,
-            isOpen,
-            expectedUpdatedAt,
-          }, offlineScope),
-        );
+        await queueAction(queuedAction);
         setFeedback(isOpen ? "Center opening queued offline." : "Center closing queued offline.");
         return;
       }
 
       try {
-        await toggleCenterMutation.mutateAsync({
-          centerId,
-          isOpen,
-          expectedUpdatedAt,
-        });
+        await runWithNetworkResilience(
+          "Center status update",
+          () => toggleCenterMutation.mutateAsync(queuedAction.payload),
+          { isWeakConnection },
+        );
       } catch (error) {
         if (isOfflineLikeError(error)) {
-          await queueAction(
-            createQueuedAction("center.toggle-open", {
-              centerId,
-              isOpen,
-              expectedUpdatedAt,
-            }, offlineScope),
+          await queueAction(queuedAction);
+          setFeedback(
+            isWeakConnection
+              ? "Weak signal blocked live delivery, so the center update was staged for retry."
+              : "Connection dropped. Center update queued for auto-sync.",
           );
-          setFeedback("Connection dropped. Center update queued for auto-sync.");
           return;
         }
 

@@ -3,6 +3,7 @@ import { createContext, useContext } from "react";
 
 export type OfflineQueueContextValue = {
   isOnline: boolean;
+  isWeakConnection: boolean;
   isFlushing: boolean;
   pendingActions: QueuedAction[];
   queueAction: (action: QueuedAction) => Promise<void>;

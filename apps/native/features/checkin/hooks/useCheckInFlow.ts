@@ -3,6 +3,7 @@ import { useStore } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import {
   getOfflineHousehold,
   getOfflineRegistryHousehold,
@@ -29,7 +30,7 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
   const kioskMode = options?.kioskMode ?? false;
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const offlineScope = getOfflineScope(profile);
 
@@ -137,18 +138,24 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("check-in.manual", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setFeedback(null);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.manual", payload, offlineScope));
+      await queueAction(queuedAction);
       setNotes("");
       setFeedback("Manual check-in queued offline. It will sync automatically.");
       return;
     }
 
     try {
-      await manualMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Manual check-in",
+        () => manualMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
       if (profile) {
         await syncOfflineDataForProfile(profile);
         bumpOfflineDataGeneration();
@@ -157,9 +164,13 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       setFeedback("Manual check-in submitted.");
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.manual", payload, offlineScope));
+        await queueAction(queuedAction);
         setNotes("");
-        setFeedback("Connection dropped. Your manual check-in was queued.");
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so your manual check-in was staged for retry."
+            : "Connection dropped. Your manual check-in was queued.",
+        );
         return;
       }
 
@@ -201,15 +212,21 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("check-in.qr", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.qr", payload, offlineScope));
+      await queueAction(queuedAction);
       setFeedback("QR check-in queued offline and ready to sync later.");
       return;
     }
 
     try {
-      await qrMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "QR check-in",
+        () => qrMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
       if (profile) {
         await syncOfflineDataForProfile(profile);
         bumpOfflineDataGeneration();
@@ -218,8 +235,12 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       setFeedback("QR check-in submitted.");
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.qr", payload, offlineScope));
-        setFeedback("Connection dropped. Your QR check-in was queued.");
+        await queueAction(queuedAction);
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so your QR check-in was staged for retry."
+            : "Connection dropped. Your QR check-in was queued.",
+        );
         return;
       }
 
@@ -241,11 +262,13 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("check-in.proxy", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setFeedback(null);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("check-in.proxy", payload, offlineScope));
+      await queueAction(queuedAction);
       setNotes("");
       setSelectedProxyMemberIds([]);
       setFeedback("Proxy check-in queued offline.");
@@ -253,7 +276,11 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
     }
 
     try {
-      await proxyMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Proxy check-in",
+        () => proxyMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
       if (profile) {
         await syncOfflineDataForProfile(profile);
         bumpOfflineDataGeneration();
@@ -265,10 +292,14 @@ export function useCheckInFlow(options?: UseCheckInFlowOptions) {
       setFeedback("Proxy check-in submitted.");
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("check-in.proxy", payload, offlineScope));
+        await queueAction(queuedAction);
         setNotes("");
         setSelectedProxyMemberIds([]);
-        setFeedback("Connection dropped. Your proxy check-in was queued.");
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so your proxy check-in was staged for retry."
+            : "Connection dropped. Your proxy check-in was queued.",
+        );
         return;
       }
 

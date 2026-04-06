@@ -1,17 +1,17 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
+import { startTransition, useEffect, useState } from "react";
 import { Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Container } from "@/shared/components/container";
 import { OfflineConflictCard } from "@/shared/components/offline-conflict-card";
 import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
-import { getErrorMessage } from "@/shared/utils/errors";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { queryClient, trpc } from "@/services/trpc";
-import { useEffect, useState } from "react";
 import {
   getOfflineResidentAccess,
   getOfflineScope,
@@ -33,6 +33,11 @@ export default function OfficialAccountScreen() {
   const signOutToLogin = useSignOutRedirect("/(auth)/sign-in");
   const [accessFeedback, setAccessFeedback] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [draftAccess, setDraftAccess] = useState<{
+    pingEnabled: boolean;
+    checkInEnabled: boolean;
+  } | null>(null);
+  const [isSavingAccess, setIsSavingAccess] = useState(false);
   const offlineScope = getOfflineScope(profile);
   const residentAccessQueryKey = trpc.barangays.getMyResidentAccess.queryKey();
   const residentAccessQuery = useQuery({
@@ -101,13 +106,28 @@ export default function OfficialAccountScreen() {
         if (context?.previousAccess) {
           queryClient.setQueryData(residentAccessQueryKey, context.previousAccess);
         }
-        void syncResidentAccess();
+        void syncResidentAccess().catch(() => {});
       },
     }),
   );
 
-  const residentPingEnabled = residentAccessQuery.data?.residentPingEnabled ?? true;
-  const residentCheckInEnabled = residentAccessQuery.data?.residentCheckInEnabled ?? true;
+  useEffect(() => {
+    if (!residentAccessQuery.data) {
+      return;
+    }
+
+    setDraftAccess({
+      pingEnabled: residentAccessQuery.data.residentPingEnabled,
+      checkInEnabled: residentAccessQuery.data.residentCheckInEnabled,
+    });
+  }, [
+    residentAccessQuery.data?.residentCheckInEnabled,
+    residentAccessQuery.data?.residentPingEnabled,
+  ]);
+
+  const residentPingEnabled = draftAccess?.pingEnabled ?? residentAccessQuery.data?.residentPingEnabled ?? true;
+  const residentCheckInEnabled =
+    draftAccess?.checkInEnabled ?? residentAccessQuery.data?.residentCheckInEnabled ?? true;
 
   // Auto-hide toast after 3 seconds
   useEffect(() => {
@@ -119,20 +139,26 @@ export default function OfficialAccountScreen() {
     }
   }, [showToast]);
 
-  function updateResidentAccess(next: { pingEnabled?: boolean; checkInEnabled?: boolean }) {
+  async function updateResidentAccess(next: { pingEnabled?: boolean; checkInEnabled?: boolean }) {
     setAccessFeedback(null);
     setShowToast(false);
-    
-    // Read from query cache to get optimistic updates from pending mutations
-    const cachedData = queryClient.getQueryData(residentAccessQueryKey);
-    const currentPingEnabled = cachedData?.residentPingEnabled ?? true;
-    const currentCheckInEnabled = cachedData?.residentCheckInEnabled ?? true;
-    
+    const previousState = {
+      pingEnabled: residentPingEnabled,
+      checkInEnabled: residentCheckInEnabled,
+    };
     const payload = {
-      pingEnabled: next.pingEnabled !== undefined ? next.pingEnabled : currentPingEnabled,
-      checkInEnabled: next.checkInEnabled !== undefined ? next.checkInEnabled : currentCheckInEnabled,
+      pingEnabled: next.pingEnabled !== undefined ? next.pingEnabled : previousState.pingEnabled,
+      checkInEnabled:
+        next.checkInEnabled !== undefined ? next.checkInEnabled : previousState.checkInEnabled,
       expectedUpdatedAt: residentAccessQuery.data?.updatedAt ?? null,
     };
+
+    startTransition(() => {
+      setDraftAccess({
+        pingEnabled: payload.pingEnabled,
+        checkInEnabled: payload.checkInEnabled,
+      });
+    });
 
     if (!isOnline) {
       if (offlineScope) {
@@ -141,11 +167,31 @@ export default function OfficialAccountScreen() {
           residentCheckInEnabled: payload.checkInEnabled,
         }).then(() => bumpOfflineDataGeneration());
       }
-      void retryQueueAccess(payload);
+      await retryQueueAccess(payload);
       return;
     }
 
-    residentAccessMutation.mutate(payload);
+    setIsSavingAccess(true);
+
+    try {
+      await residentAccessMutation.mutateAsync(payload);
+    } catch (error) {
+      if (isOfflineLikeError(error)) {
+        if (offlineScope) {
+          await patchOfflineResidentAccess(offlineScope.scopeId, {
+            residentPingEnabled: payload.pingEnabled,
+            residentCheckInEnabled: payload.checkInEnabled,
+          });
+          bumpOfflineDataGeneration();
+        }
+        await retryQueueAccess(payload);
+        return;
+      }
+
+      setDraftAccess(previousState);
+    } finally {
+      setIsSavingAccess(false);
+    }
   }
 
   async function retryQueueAccess(payload: {
@@ -171,10 +217,15 @@ export default function OfficialAccountScreen() {
       return;
     }
 
-    await syncOfflineDataForProfile(profile);
-    bumpOfflineDataGeneration();
-    setAccessFeedback("Critical offline datasets synced.");
-    setShowToast(true);
+    try {
+      await syncOfflineDataForProfile(profile);
+      bumpOfflineDataGeneration();
+      setAccessFeedback("Critical offline datasets synced.");
+    } catch (error) {
+      setAccessFeedback(getErrorMessage(error, "Failed to sync critical offline datasets."));
+    } finally {
+      setShowToast(true);
+    }
   }
 
   return (
@@ -237,15 +288,19 @@ export default function OfficialAccountScreen() {
                   : "Residents only see the emergency help button."
               }
               value={residentPingEnabled}
-              disabled={residentAccessQuery.isLoading || residentAccessMutation.isPending}
-              onValueChange={(value) => updateResidentAccess({ pingEnabled: value })}
+              disabled={residentAccessQuery.isLoading || residentAccessMutation.isPending || isSavingAccess}
+              onValueChange={(value) => {
+                void updateResidentAccess({ pingEnabled: value });
+              }}
             />
             <ResidentToggleRow
               title="Resident check-in"
               description="Residents can open QR and manual evacuation center check-in."
               value={residentCheckInEnabled}
-              disabled={residentAccessQuery.isLoading || residentAccessMutation.isPending}
-              onValueChange={(value) => updateResidentAccess({ checkInEnabled: value })}
+              disabled={residentAccessQuery.isLoading || residentAccessMutation.isPending || isSavingAccess}
+              onValueChange={(value) => {
+                void updateResidentAccess({ checkInEnabled: value });
+              }}
             />
           </View>
           <Text className="mt-3 text-sm leading-6 text-slate-500">

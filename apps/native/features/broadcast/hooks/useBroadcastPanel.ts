@@ -17,6 +17,7 @@ import {
   syncOfflineDatasets,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpcClient } from "@/services/trpc";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 import {
@@ -122,11 +123,18 @@ function queryStartsWithRoot(queryKey: readonly unknown[], root: string) {
   return Array.isArray(first) && first[0] === root;
 }
 
+const EMPTY_AUDIENCE = {
+  householdCount: 0,
+  smsReachableCount: 0,
+  appReachableCount: 0,
+  puroks: [],
+};
+
 export function useBroadcastPanel() {
   const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, pendingActions, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, pendingActions, queueAction } = useOfflineQueue();
   const offlineScope = getOfflineScope(profile);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<BroadcastTab>(getInitialTab(params.tab));
@@ -208,6 +216,16 @@ export function useBroadcastPanel() {
     },
   });
 
+  useEffect(() => {
+    if (!offlineScope || !isOnline || audienceQuery.isLoading || audienceQuery.data) {
+      return;
+    }
+
+    void refreshOfflineBroadcastDatasets(["registryHouseholds", "broadcasts", "alerts", "smsLogs"]).catch(
+      () => {},
+    );
+  }, [audienceQuery.data, audienceQuery.isLoading, isOnline, offlineScope]);
+
   const broadcasts = useMemo(
     () => mergeBroadcastHistory(broadcastsQuery.data ?? [], pendingActions),
     [broadcastsQuery.data, pendingActions],
@@ -225,9 +243,18 @@ export function useBroadcastPanel() {
   const selectedPurok = form.watch("targetPurok")?.trim() ?? "";
 
   const recipientPreview = useMemo(() => {
+    if (!offlineScope) {
+      return {
+        label: "Offline audience unavailable",
+        householdCount: 0,
+        smsReachableCount: 0,
+        appReachableCount: 0,
+      };
+    }
+
     if (!audienceQuery.data) {
       return {
-        label: "Loading audience...",
+        label: audienceQuery.isLoading ? "Loading audience..." : "No cached audience yet",
         householdCount: 0,
         smsReachableCount: 0,
         appReachableCount: 0,
@@ -260,7 +287,7 @@ export function useBroadcastPanel() {
       smsReachableCount: purokAudience.smsReachableCount,
       appReachableCount: purokAudience.appReachableCount,
     };
-  }, [audienceQuery.data, purokOptions, selectedPurok, targetMode]);
+  }, [audienceQuery.data, audienceQuery.isLoading, offlineScope, purokOptions, selectedPurok, targetMode]);
 
   const queuedBroadcastCount = pendingActions.filter((action) => action.type === "broadcast.create").length;
 
@@ -334,9 +361,11 @@ export function useBroadcastPanel() {
   const handleSubmit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
 
-    if (!profile?.barangay_id) {
+    if (!offlineScope?.barangayId) {
       form.setError("root", {
-        message: "Your official profile is not assigned to a barangay yet.",
+        message: isOnline
+          ? "Your official profile is still loading. Try again in a moment."
+          : "This device has not cached your official barangay profile yet. Reconnect once to load it for offline broadcast use.",
       });
       return;
     }
@@ -355,6 +384,8 @@ export function useBroadcastPanel() {
       messageFilipino: values.messageFilipino?.trim() || null,
       targetPurok: targetMode === "purok" ? selectedPurok : null,
     });
+    const queuedAction = createQueuedAction("broadcast.create", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setIsSubmitting(true);
 
@@ -363,8 +394,28 @@ export function useBroadcastPanel() {
 
       if (isOnline) {
         try {
-          await publishBroadcastRecord(payload, profile);
+          await runWithNetworkResilience(
+            "Broadcast publish",
+            () =>
+              publishBroadcastRecord(prepareBroadcastPayload(livePayload), {
+                id: offlineScope.profileId,
+                barangay_id: offlineScope.barangayId,
+              }),
+            { isWeakConnection },
+          );
+          await runWithNetworkResilience(
+            "Broadcast delivery finalize",
+            () => trpcClient.broadcasts.create.mutate(livePayload),
+            { isWeakConnection },
+          );
           wasPublished = true;
+          form.reset(defaultValues);
+          setTargetMode("all");
+          setFeedback(
+            isWeakConnection
+              ? "Broadcast sent over a weak connection."
+              : "Broadcast sent.",
+          );
           await refreshOfflineBroadcastDatasets(["broadcasts", "smsLogs", "alerts"]);
         } catch (publishError) {
           if (!isOfflineLikeError(publishError)) {
@@ -377,38 +428,15 @@ export function useBroadcastPanel() {
       }
 
       if (!wasPublished) {
-        await queueBroadcast(
-          payload,
-          isOnline
-            ? "Connection dropped before Supabase publish. Broadcast queued locally and will publish once online."
-            : "No connection. Broadcast queued locally and will publish once online.",
-        );
-        return;
-      }
-
-      try {
-        await trpcClient.broadcasts.create.mutate(payload);
-        form.reset(defaultValues);
-        setTargetMode("all");
-        setFeedback("Broadcast sent.");
-        await refreshOfflineBroadcastDatasets(["broadcasts", "smsLogs", "alerts"]);
-      } catch (finalizeError) {
-        if (shouldQueueFinalize(finalizeError)) {
-          await queueBroadcast(
-            payload,
-            "Broadcast published to Supabase. SMS fan-out will resume once the web server is reachable.",
-          );
-          return;
-        }
-
+        await queueAction(queuedAction);
         form.reset(defaultValues);
         setTargetMode("all");
         setFeedback(
-          `Broadcast published, but delivery follow-up needs attention. ${getErrorMessage(
-            finalizeError,
-            getServerConnectionErrorMessage("Unable to confirm delivery."),
-          )}`,
+          isOnline
+            ? "Weak signal prevented live delivery, so the broadcast was staged for automatic retry."
+            : "No connection. Broadcast queued locally and will publish once online.",
         );
+        return;
       }
     } finally {
       setIsSubmitting(false);

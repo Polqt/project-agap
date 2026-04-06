@@ -17,6 +17,7 @@ import {
   upsertOfflineNeedsReport,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import {
   getErrorMessage,
@@ -32,7 +33,7 @@ import type { IncidentReportLanguage } from "../types";
 export function useNeedsReportsPanel() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [exportLanguage, setExportLanguage] = useState<IncidentReportLanguage>("english");
   const offlineScope = getOfflineScope(profile);
@@ -129,7 +130,7 @@ export function useNeedsReportsPanel() {
         setFeedback("Needs report submitted.");
       },
       onError: () => {
-        void syncDatasets(["needsReports", "needsSummary"]);
+        void syncDatasets(["needsReports", "needsSummary"]).catch(() => {});
       },
     }),
   );
@@ -145,9 +146,10 @@ export function useNeedsReportsPanel() {
       medicalCases: values.medicalCases || undefined,
       notes: values.notes || undefined,
     };
+    const queuedAction = createQueuedAction("needs-report.submit", payload, offlineScope);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("needs-report.submit", payload, offlineScope));
+      await queueAction(queuedAction);
       form.reset({
         centerId: "",
         totalEvacuees: "0",
@@ -163,10 +165,14 @@ export function useNeedsReportsPanel() {
     }
 
     try {
-      await submitMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Needs report",
+        () => submitMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("needs-report.submit", payload, offlineScope));
+        await queueAction(queuedAction);
         form.reset({
           centerId: "",
           totalEvacuees: "0",
@@ -177,7 +183,11 @@ export function useNeedsReportsPanel() {
           medicalCases: "",
           notes: "",
         });
-        setFeedback("Connection dropped. Needs report queued for auto-sync.");
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the needs report was staged for retry."
+            : "Connection dropped. Needs report queued for auto-sync.",
+        );
         return;
       }
 
