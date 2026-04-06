@@ -26,6 +26,7 @@ export function WelfareCheckPanel() {
     recordingHouseholdId,
     recordOutcome,
     isOnline,
+    feedback,
   } = useWelfareCheck();
 
   return (
@@ -44,6 +45,12 @@ export function WelfareCheckPanel() {
           <Text className="text-sm leading-6 text-amber-800">
             You are offline. Outcomes are queued and will sync when you reconnect.
           </Text>
+        </SectionCard>
+      ) : null}
+
+      {feedback ? (
+        <SectionCard title="Update">
+          <Text className="text-sm leading-6 text-slate-700">{feedback}</Text>
         </SectionCard>
       ) : null}
 

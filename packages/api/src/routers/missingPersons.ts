@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   getFoundOrThrow,
+  getProfileOrThrow,
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
@@ -16,6 +17,7 @@ export const missingPersonsRouter = router({
   report: protectedProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         fullName: z.string().trim().min(1).max(160),
         age: z.number().int().min(0).max(130).optional(),
         lastSeenLocation: z.string().trim().max(300).optional(),
@@ -23,7 +25,22 @@ export const missingPersonsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
+
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as MissingPerson;
+        }
+      }
 
       const insertPayload: TableInsert<"missing_persons"> = {
         barangay_id: barangayId,
@@ -34,7 +51,7 @@ export const missingPersonsRouter = router({
         description: input.description ?? null,
       };
 
-      return getFoundOrThrow<MissingPerson | null>(
+      const result = getFoundOrThrow<MissingPerson | null>(
         getSupabaseDataOrThrow<MissingPerson | null>(
           await ctx.supabase
             .from("missing_persons")
@@ -45,6 +62,17 @@ export const missingPersonsRouter = router({
         ),
         "Missing person report failed.",
       );
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "missing-person-report",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 
   list: protectedProcedure
@@ -54,7 +82,7 @@ export const missingPersonsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
       let query = ctx.supabase
         .from("missing_persons")
@@ -73,11 +101,26 @@ export const missingPersonsRouter = router({
     }),
 
   markFound: protectedProcedure
-    .input(z.object({ id: uuidSchema }))
+    .input(z.object({ clientMutationId: z.string().optional(), id: uuidSchema }))
     .mutation(async ({ ctx, input }) => {
-      const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
-      return getFoundOrThrow<MissingPerson | null>(
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as MissingPerson;
+        }
+      }
+
+      const result = getFoundOrThrow<MissingPerson | null>(
         getSupabaseDataOrThrow<MissingPerson | null>(
           await ctx.supabase
             .from("missing_persons")
@@ -94,5 +137,16 @@ export const missingPersonsRouter = router({
         ),
         "Missing person not found.",
       );
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "missing-person-mark-found",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 });

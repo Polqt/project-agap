@@ -48,6 +48,9 @@ export type BarangaysRow = TimestampedUpdated &
     region: string;
     alert_level: AlertLevel;
     active_alert_text: string | null;
+    emergency_mode_enabled: boolean;
+    resident_ping_enabled: boolean;
+    resident_checkin_enabled: boolean;
     total_households: number;
   };
 export type BarangaysInsert = ReadonlyMutationShape<
@@ -349,4 +352,20 @@ export type MissingPersonsInsert = Omit<MissingPersonsRow, "id" | "created_at" |
 };
 export type MissingPersonsUpdate = Partial<Omit<MissingPersonsRow, "id" | "barangay_id" | "reported_by" | "created_at">>;
 
-// appended
+export type MutationHistoryRow = {
+  client_mutation_id: string;
+  user_id: string;
+  mutation_type: string;
+  result_payload: string | null;
+  created_at: string;
+  processed_at: string;
+};
+export type MutationHistoryInsert = ReadonlyMutationShape<
+  MutationHistoryRow,
+  "created_at" | "processed_at",
+  "client_mutation_id" | "user_id" | "mutation_type"
+>;
+export type MutationHistoryUpdate = ReadonlyMutationShape<
+  MutationHistoryRow,
+  "client_mutation_id" | "created_at" | "processed_at"
+>;

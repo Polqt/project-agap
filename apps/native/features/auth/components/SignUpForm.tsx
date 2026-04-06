@@ -5,6 +5,7 @@ import { Alert, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { haptics } from "@/services/haptics";
+import { getPostAuthRoute } from "@/services/onboarding";
 import { AuthFormScroll } from "@/shared/components/auth-form-scroll";
 import { useAuth } from "@/shared/hooks/useAuth";
 
@@ -21,13 +22,32 @@ import { SignUpStepPermissions } from "./SignUpStepPermissions";
 export function SignUpForm() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { role, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { role, isAuthenticated, isLoading: authLoading, session } = useAuth();
   const signUp = useSignUpForm();
 
   useEffect(() => {
-    if (authLoading || !isAuthenticated || !role) return;
-    router.replace("/welcome");
-  }, [authLoading, isAuthenticated, role, router]);
+    if (authLoading || !isAuthenticated || !role || !session?.user.id) {
+      return;
+    }
+
+    let isCancelled = false;
+    const userId = session.user.id;
+    const resolvedRole = role;
+
+    async function routeAfterSignUp() {
+      const nextRoute = await getPostAuthRoute(userId, resolvedRole);
+
+      if (!isCancelled) {
+        router.replace(nextRoute);
+      }
+    }
+
+    void routeAfterSignUp();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authLoading, isAuthenticated, role, router, session?.user.id]);
 
   const goBack = useCallback(() => {
     if (signUp.step > 0) {

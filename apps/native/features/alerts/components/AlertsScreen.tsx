@@ -124,7 +124,7 @@ export function AlertsScreen() {
           <MissingPersonsTab
             missingPersons={data.missingPersons}
             onReportPress={() => setShowReportModal(true)}
-            markFoundMutation={data.markFoundMutation}
+            onMarkFound={data.markMissingPersonFound}
           />
         )}
       </ScrollView>
@@ -132,7 +132,8 @@ export function AlertsScreen() {
       <ReportMissingModal
         visible={showReportModal}
         onClose={() => setShowReportModal(false)}
-        reportMutation={data.reportMutation}
+        onSubmit={data.reportMissingPerson}
+        isSubmitting={data.reportMutation.isPending}
       />
     </View>
   );

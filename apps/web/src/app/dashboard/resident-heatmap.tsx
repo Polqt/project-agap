@@ -8,9 +8,11 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet.heat";
 
 export type ResidentHeatmapPoint = {
-  resident_id: string;
   latitude: number;
   longitude: number;
+  resident_id?: string;
+  purok?: string;
+  count?: number;
 };
 
 export type NeedHelpPingPoint = {

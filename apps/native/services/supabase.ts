@@ -28,3 +28,46 @@ export const supabase = createClient<Database>(
 export async function clearStoredSupabaseSession() {
   await SecureStore.deleteItemAsync(SUPABASE_STORAGE_KEY);
 }
+
+export function isInvalidRefreshTokenError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("invalid refresh token") ||
+    message.includes("refresh token not found")
+  );
+}
+
+export async function clearBrokenSupabaseSession() {
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch {
+    // Clearing broken local auth state should stay best-effort.
+  }
+
+  await clearStoredSupabaseSession();
+}
+
+export async function getSafeSupabaseSession() {
+  try {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    return session;
+  } catch (error) {
+    if (isInvalidRefreshTokenError(error)) {
+      await clearBrokenSupabaseSession();
+    }
+
+    return null;
+  }
+}

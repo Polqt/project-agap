@@ -60,7 +60,7 @@ export function PriorityQueueCard({
       ) : (
         <EmptyState
           title="No unresolved pings"
-          description="Need-help pings will appear here as soon as residents or SMS-only households report them."
+          description="Need-help pings appear here after residents report them to the server. Pings still queued offline on other devices will show up once those devices reconnect."
         />
       )}
       {unresolvedPings.length > 8 ? (

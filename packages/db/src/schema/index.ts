@@ -55,3 +55,12 @@ export const notificationPreferences = pgTable("notification_preferences", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
+
+export const mutationHistory = pgTable("mutation_history", {
+  clientMutationId: text("client_mutation_id").primaryKey(),
+  userId: uuid("user_id").notNull(),
+  mutationType: text("mutation_type").notNull(),
+  resultPayload: text("result_payload"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});

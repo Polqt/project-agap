@@ -1,5 +1,6 @@
 import { Text, View } from "react-native";
 
+import { OfflineConflictCard } from "@/shared/components/offline-conflict-card";
 import { ScreenShell } from "@/shared/components/screen-shell";
 
 import { RegistryListCard } from "./RegistryListCard";
@@ -23,6 +24,7 @@ export function RegistryPanel() {
     updateStatusMutation,
     assignWelfare,
     updateStatus,
+    refreshConflictData,
   } = useRegistryPanel();
 
   return (
@@ -31,12 +33,18 @@ export function RegistryPanel() {
       description="Search, expand, act."
       feedback={feedback}
       topContent={
-        <RegistrySearchCard
-          activeFilter={filter}
-          value={query}
-          onChange={setQuery}
-          onSelectFilter={setFilter}
-        />
+        <>
+          <RegistrySearchCard
+            activeFilter={filter}
+            value={query}
+            onChange={setQuery}
+            onSelectFilter={setFilter}
+          />
+          <OfflineConflictCard
+            onRefresh={refreshConflictData}
+            refreshLabel="Refresh registry data"
+          />
+        </>
       }
     >
       {/* Summary strip */}

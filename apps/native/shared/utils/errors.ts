@@ -30,6 +30,15 @@ export function isOfflineLikeError(error: unknown) {
   return hasNetworkSignature(message) || hasNetworkSignature(causeMessage);
 }
 
+export function isConflictLikeError(error: unknown) {
+  if (error instanceof TRPCClientError) {
+    return error.data?.code === "CONFLICT";
+  }
+
+  const message = getErrorMessage(error, "").toLowerCase();
+  return message.includes("conflict") || message.includes("changed by another official");
+}
+
 function hasNetworkSignature(message: string) {
   const value = message.toLowerCase();
 
@@ -40,8 +49,10 @@ function hasNetworkSignature(message: string) {
     value.includes("failed to fetch") ||
     value.includes("connection refused") ||
     value.includes("timed out") ||
+    value.includes("timeout") ||
     value.includes("econnrefused") ||
-    value.includes("offline")
+    value.includes("offline") ||
+    value.includes("request timed out")
   );
 }
 

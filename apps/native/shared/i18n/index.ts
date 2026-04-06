@@ -50,7 +50,8 @@ const i18nReady: Promise<void> = i18n
     fallbackLng: "fil",
     interpolation: { escapeValue: false },
     compatibilityJSON: "v4",
-  });
+  })
+  .then(() => undefined);
 
 /** Load persisted language preference from AsyncStorage. Call once on app boot. */
 export async function loadPersistedLanguage() {

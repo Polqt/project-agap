@@ -1,46 +1,61 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import { haptics } from "@/services/haptics";
+import {
+  getOfflineRegistryHousehold,
+  getOfflineScope,
+  saveOfflineLatestStatusPing,
+  searchOfflineRegistryHouseholds,
+  syncOfflineDatasets,
+} from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { formatDateTime } from "@/shared/utils/date";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import type { Household } from "@project-agap/api/supabase";
 
 export function ProxyPingSection() {
   const { profile } = useAuth();
-  const { isOnline, queueAction } = useOfflineQueue();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
+  const offlineScope = getOfflineScope(profile);
 
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const searchQuery = useQuery(
-    trpc.households.search.queryOptions(
-      { barangayId: profile?.barangay_id ?? undefined, query: search },
-      { enabled: Boolean(profile?.barangay_id && search.trim().length >= 2) },
-    ),
-  );
+  const searchQuery = useQuery({
+    queryKey: ["offline", "proxy-status-search", offlineScope?.scopeId, search, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId && search.trim().length >= 2),
+    queryFn: async () => searchOfflineRegistryHouseholds(offlineScope!.scopeId, search),
+  });
 
-  const selectedQuery = useQuery(
-    trpc.households.getById.queryOptions(
-      { id: selectedId ?? "" },
-      { enabled: Boolean(selectedId) },
-    ),
-  );
+  const selectedQuery = useQuery({
+    queryKey: ["offline", "proxy-status-household", offlineScope?.scopeId, selectedId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId && selectedId),
+    queryFn: async () => getOfflineRegistryHousehold(offlineScope!.scopeId, selectedId!),
+  });
 
   const mutation = useMutation(
     trpc.statusPings.submit.mutationOptions({
-      onSuccess: (result) => {
+      onSuccess: async (result) => {
+        if (offlineScope) {
+          await saveOfflineLatestStatusPing(offlineScope.scopeId, result);
+          await syncOfflineDatasets(offlineScope, ["latestStatusPing"]);
+          bumpOfflineDataGeneration();
+        }
         setFeedback(`Proxy sent at ${formatDateTime(result.pinged_at)}.`);
         setNote("");
         setSearch("");
@@ -62,12 +77,32 @@ export function ProxyPingSection() {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("status-ping.submit", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setFeedback(null);
     void (status === "need_help" ? haptics.heavy() : haptics.light()).catch(() => {});
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload));
+      await queueAction(queuedAction);
+      if (offlineScope) {
+        await saveOfflineLatestStatusPing(offlineScope.scopeId, {
+          id: livePayload.clientMutationId ?? `offline-proxy-status-${Date.now()}`,
+          barangay_id: offlineScope.barangayId,
+          resident_id: offlineScope.profileId,
+          household_id: selectedId,
+          status,
+          channel: "app",
+          latitude: livePayload.latitude ?? null,
+          longitude: livePayload.longitude ?? null,
+          message: livePayload.message ?? null,
+          is_resolved: false,
+          resolved_by: null,
+          resolved_at: null,
+          pinged_at: new Date().toISOString(),
+        });
+        bumpOfflineDataGeneration();
+      }
       setFeedback("Queued offline.");
       setNote("");
       setSearch("");
@@ -76,11 +111,37 @@ export function ProxyPingSection() {
     }
 
     try {
-      await mutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Proxy status ping",
+        () => mutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload));
-        setFeedback("Connection dropped. Queued locally.");
+        await queueAction(queuedAction);
+        if (offlineScope) {
+          await saveOfflineLatestStatusPing(offlineScope.scopeId, {
+            id: livePayload.clientMutationId ?? `offline-proxy-status-${Date.now()}`,
+            barangay_id: offlineScope.barangayId,
+            resident_id: offlineScope.profileId,
+            household_id: selectedId,
+            status,
+            channel: "app",
+            latitude: livePayload.latitude ?? null,
+            longitude: livePayload.longitude ?? null,
+            message: livePayload.message ?? null,
+            is_resolved: false,
+            resolved_by: null,
+            resolved_at: null,
+            pinged_at: new Date().toISOString(),
+          });
+          bumpOfflineDataGeneration();
+        }
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal prevented live delivery, so the proxy ping was staged for retry."
+            : "Connection dropped. Queued locally.",
+        );
         setNote("");
         setSearch("");
         setSelectedId(null);

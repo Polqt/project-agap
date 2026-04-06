@@ -82,7 +82,10 @@ export default function ResidentLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          href: null,
+          title: t("profile.title"),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={color} name="person-outline" size={size} />
+          ),
         }}
       />
     </Tabs>

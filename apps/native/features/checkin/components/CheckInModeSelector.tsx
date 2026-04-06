@@ -27,7 +27,7 @@ export function CheckInModeSelector({
             <Pressable
               key={entry}
               onPress={() => onChange(entry)}
-              className={`min-h-[64px] min-w-[44%] flex-1 items-center justify-center rounded-2xl border-2 px-4 ${
+              className={`min-h-16 min-w-[44%] flex-1 items-center justify-center rounded-2xl border-2 px-4 ${
                 mode === entry ? "border-amber-400 bg-amber-500" : "border-white/40 bg-neutral-800"
               }`}
             >

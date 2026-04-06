@@ -36,6 +36,7 @@ export const statusPingsRouter = router({
     .input(
       z
         .object({
+          clientMutationId: z.string().optional(),
           householdId: uuidSchema.nullish(),
           status: z.enum(["safe", "need_help"]),
           message: z.string().trim().max(500).nullish(),
@@ -45,6 +46,23 @@ export const statusPingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const profile = getProfileOrThrow(ctx.profile);
       const barangayId = getProfileBarangayIdOrThrow(profile);
+
+      // Check if this mutation was already processed (idempotency)
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          // Mutation already processed, return cached result
+          return JSON.parse(existingMutation.result_payload) as StatusPing;
+        }
+      }
       const latestExistingPing = getSupabaseDataOrThrow<Pick<StatusPing, "pinged_at"> | null>(
         await ctx.supabase
           .from("status_pings")
@@ -109,6 +127,16 @@ export const statusPingsRouter = router({
         ),
         "Status ping submission failed.",
       );
+
+      // Store mutation in history for idempotency (fire-and-forget)
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "status-ping",
+          result_payload: JSON.stringify(ping),
+        });
+      }
 
       return ping;
     }),

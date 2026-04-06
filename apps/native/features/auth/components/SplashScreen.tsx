@@ -11,11 +11,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { getPostAuthRoute } from "@/services/onboarding";
 import { useAuth } from "@/shared/hooks/useAuth";
 
 export function SplashScreen() {
   const router = useRouter();
-  const { isLoading, isAuthenticated, role } = useAuth();
+  const { isLoading, isAuthenticated, role, session } = useAuth();
   const hasNavigated = useRef(false);
 
   // Subtle loading bar animation
@@ -30,20 +31,42 @@ export function SplashScreen() {
   }));
 
   useEffect(() => {
-    if (isLoading || hasNavigated.current) return;
-
-    hasNavigated.current = true;
-
-    if (isAuthenticated && role) {
-      router.replace(role === "official" ? "/(official)/dashboard" : "/(resident)/status");
-    } else {
-      // Auto-advance to role selector after brief splash
-      const timer = setTimeout(() => {
-        router.replace("/onboarding");
-      }, 1500);
-      return () => clearTimeout(timer);
+    if (isLoading || hasNavigated.current) {
+      return;
     }
-  }, [isLoading, isAuthenticated, role, router]);
+
+    let isCancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function routeFromSplash() {
+      hasNavigated.current = true;
+
+      if (isAuthenticated && role && session?.user.id) {
+        const nextRoute = await getPostAuthRoute(session.user.id, role);
+
+        if (!isCancelled) {
+          router.replace(nextRoute);
+        }
+
+        return;
+      }
+
+      timer = setTimeout(() => {
+        if (!isCancelled) {
+          router.replace("/onboarding");
+        }
+      }, 1500);
+    }
+
+    void routeFromSplash();
+
+    return () => {
+      isCancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [isLoading, isAuthenticated, role, router, session?.user.id]);
 
   return (
     <Animated.View

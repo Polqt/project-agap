@@ -1,14 +1,15 @@
 import { z } from "zod";
 
-import { getAuthorizedBarangayId, getProfileBarangayIdOrThrow, getSupabaseDataOrThrow } from "../router-helpers";
+import {
+  getAuthorizedBarangayId,
+  getProfileBarangayIdOrThrow,
+  getProfileOrThrow,
+  getSupabaseDataOrThrow,
+} from "../router-helpers";
 import { officialProcedure, protectedProcedure, router } from "../index";
 import { barangayIdSchema, uuidSchema } from "../schemas";
-import type { DashboardSummary, SmsFollowupItem, TableRow } from "../supabase";
+import type { DashboardSummary, SmsFollowupItem } from "../supabase";
 
-type ResidentHeatmapProfile = Pick<
-  TableRow<"profiles">,
-  "id" | "pinned_latitude" | "pinned_longitude"
->;
 
 type ResidentHeatmapPoint = {
   resident_id: string;
@@ -78,7 +79,7 @@ export const dashboardRouter = router({
   heatmapData: officialProcedure
     .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
-      const barangayId = input.barangayId ?? getProfileBarangayIdOrThrow(ctx.profile);
+      const barangayId = input.barangayId ?? getProfileBarangayIdOrThrow(getProfileOrThrow(ctx.profile));
 
       // Count unresolved need_help pings, joined to household purok
       const { data: pings } = await ctx.supabase

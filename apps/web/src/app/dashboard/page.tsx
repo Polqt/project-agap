@@ -175,7 +175,7 @@ export default function DashboardPage() {
     refetchInterval: 15000,
   });
   const heatmapQuery = useQuery({
-    ...trpc.dashboard.residentHeatmap.queryOptions({}),
+    ...trpc.dashboard.heatmapData.queryOptions({}),
     refetchInterval: 30000,
   });
   const broadcastsQuery = useQuery({

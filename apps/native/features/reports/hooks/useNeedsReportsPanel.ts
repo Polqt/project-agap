@@ -1,12 +1,23 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import * as Clipboard from "expo-clipboard";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import {
+  getOfflineNeedsSummary,
+  getOfflineScope,
+  listOfflineEvacuationCenters,
+  listOfflineNeedsReports,
+  rebuildOfflineNeedsSummary,
+  syncOfflineDatasets,
+  upsertOfflineNeedsReport,
+} from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import {
   getErrorMessage,
@@ -14,15 +25,18 @@ import {
   isOfflineLikeError,
 } from "@/shared/utils/errors";
 import { needsReportSchema, type NeedsReportFormValues } from "@/types/forms";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import { getNeedsSummaryText } from "../services/needsReportExport";
 import type { IncidentReportLanguage } from "../types";
 
 export function useNeedsReportsPanel() {
   const { profile } = useAuth();
-  const { isOnline, queueAction } = useOfflineQueue();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [exportLanguage, setExportLanguage] = useState<IncidentReportLanguage>("english");
+  const offlineScope = getOfflineScope(profile);
 
   const form = useForm<NeedsReportFormValues>({
     resolver: zodResolver(needsReportSchema),
@@ -38,31 +52,71 @@ export function useNeedsReportsPanel() {
     },
   });
 
-  const centersQuery = useQuery(
-    trpc.evacuationCenters.listByBarangay.queryOptions(
-      { barangayId: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
-  );
+  const centersQuery = useQuery({
+    queryKey: ["offline", "needs-centers", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineEvacuationCenters(offlineScope!.scopeId),
+  });
 
-  const reportsQuery = useQuery(
-    trpc.needsReports.list.queryOptions({ barangayId: profile?.barangay_id ?? undefined }, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
-  );
+  const reportsQuery = useQuery({
+    queryKey: ["offline", "needs-reports", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineNeedsReports(offlineScope!.scopeId),
+  });
 
-  const summaryQuery = useQuery(
-    trpc.needsReports.getSummary.queryOptions(
-      { barangayId: profile?.barangay_id ?? undefined },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
-  );
+  const summaryQuery = useQuery({
+    queryKey: ["offline", "needs-summary", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflineNeedsSummary(offlineScope!.scopeId),
+  });
+
+  async function syncDatasets(
+    datasets: Parameters<typeof syncOfflineDatasets>[1],
+  ) {
+    if (!offlineScope) {
+      return;
+    }
+
+    await syncOfflineDatasets(offlineScope, datasets);
+    bumpOfflineDataGeneration();
+  }
 
   const submitMutation = useMutation(
     trpc.needsReports.submit.mutationOptions({
-      onSuccess: () => {
-        void reportsQuery.refetch();
-        void summaryQuery.refetch();
+      onMutate: async (payload) => {
+        if (!offlineScope) {
+          return;
+        }
+
+        const optimisticReport = {
+          id: `offline-needs-${Date.now()}`,
+          barangay_id: offlineScope.barangayId,
+          center_id: payload.centerId ?? null,
+          submitted_by: offlineScope.profileId,
+          total_evacuees: payload.totalEvacuees,
+          needs_food_packs: payload.needsFoodPacks,
+          needs_water_liters: payload.needsWaterLiters,
+          needs_medicine: payload.needsMedicine,
+          needs_blankets: payload.needsBlankets,
+          medical_cases: payload.medicalCases ?? null,
+          notes: payload.notes ?? null,
+          status: "pending",
+          acknowledged_by: null,
+          acknowledged_at: null,
+          submitted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as const;
+
+        await upsertOfflineNeedsReport(offlineScope.scopeId, optimisticReport);
+        await rebuildOfflineNeedsSummary(offlineScope.scopeId);
+        bumpOfflineDataGeneration();
+      },
+      onSuccess: async (report) => {
+        if (offlineScope) {
+          await upsertOfflineNeedsReport(offlineScope.scopeId, report);
+          await rebuildOfflineNeedsSummary(offlineScope.scopeId);
+        }
+        await syncDatasets(["needsReports", "needsSummary"]);
         form.reset({
           centerId: "",
           totalEvacuees: "0",
@@ -74,6 +128,9 @@ export function useNeedsReportsPanel() {
           notes: "",
         });
         setFeedback("Needs report submitted.");
+      },
+      onError: () => {
+        void syncDatasets(["needsReports", "needsSummary"]).catch(() => {});
       },
     }),
   );
@@ -89,9 +146,10 @@ export function useNeedsReportsPanel() {
       medicalCases: values.medicalCases || undefined,
       notes: values.notes || undefined,
     };
+    const queuedAction = createQueuedAction("needs-report.submit", payload, offlineScope);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("needs-report.submit", payload));
+      await queueAction(queuedAction);
       form.reset({
         centerId: "",
         totalEvacuees: "0",
@@ -107,10 +165,14 @@ export function useNeedsReportsPanel() {
     }
 
     try {
-      await submitMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Needs report",
+        () => submitMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("needs-report.submit", payload));
+        await queueAction(queuedAction);
         form.reset({
           centerId: "",
           totalEvacuees: "0",
@@ -121,7 +183,11 @@ export function useNeedsReportsPanel() {
           medicalCases: "",
           notes: "",
         });
-        setFeedback("Connection dropped. Needs report queued for auto-sync.");
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the needs report was staged for retry."
+            : "Connection dropped. Needs report queued for auto-sync.",
+        );
         return;
       }
 

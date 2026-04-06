@@ -1,11 +1,23 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useStore } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import {
+  getOfflineBarangay,
+  getOfflineHousehold,
+  getOfflineScope,
+  patchOfflineProfile,
+  saveOfflineHousehold,
+  syncOfflineDataForProfile,
+} from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import {
   householdSchema,
   profileSchema,
@@ -13,14 +25,18 @@ import {
   type HouseholdMemberFormValues,
   type ProfileFormValues,
 } from "@/types/forms";
-import { getErrorMessage } from "@/shared/utils/errors";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
+import { offlineDataStore, bumpOfflineDataGeneration } from "@/stores/offline-data-store";
 
 export function useProfilePanel() {
   const { profile, session, signOut, refreshProfile, resetPassword } = useAuth();
+  const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
   const [householdFeedback, setHouseholdFeedback] = useState<string | null>(null);
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const offlineScope = getOfflineScope(profile);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -47,16 +63,19 @@ export function useProfilePanel() {
   });
 
   const barangayQuery = useQuery(
-    trpc.barangays.getById.queryOptions(
-      { id: profile?.barangay_id ?? "" },
-      { enabled: Boolean(profile?.barangay_id) },
-    ),
+    {
+      queryKey: ["offline", "barangay", offlineScope?.scopeId, offlineGeneration],
+      enabled: Boolean(offlineScope?.scopeId),
+      queryFn: async () => getOfflineBarangay(offlineScope!.scopeId),
+    },
   );
 
   const householdQuery = useQuery(
-    trpc.households.getMine.queryOptions(undefined, {
-      enabled: Boolean(profile?.barangay_id),
-    }),
+    {
+      queryKey: ["offline", "household", offlineScope?.scopeId, offlineGeneration],
+      enabled: Boolean(offlineScope?.scopeId),
+      queryFn: async () => getOfflineHousehold(offlineScope!.scopeId),
+    },
   );
 
   useEffect(() => {
@@ -105,6 +124,10 @@ export function useProfilePanel() {
     trpc.profile.update.mutationOptions({
       onSuccess: async () => {
         await refreshProfile();
+        if (profile) {
+          await syncOfflineDataForProfile(profile);
+          bumpOfflineDataGeneration();
+        }
         setProfileFeedback("Profile updated.");
       },
     }),
@@ -112,8 +135,14 @@ export function useProfilePanel() {
 
   const householdMutation = useMutation(
     trpc.households.register.mutationOptions({
-      onSuccess: () => {
-        void householdQuery.refetch();
+      onSuccess: async (household) => {
+        if (offlineScope) {
+          await saveOfflineHousehold(offlineScope.scopeId, household);
+        }
+        if (profile) {
+          await syncOfflineDataForProfile(profile);
+        }
+        bumpOfflineDataGeneration();
         setHouseholdFeedback("Household details saved.");
       },
     }),
@@ -121,39 +150,103 @@ export function useProfilePanel() {
 
   const handleProfileSubmit = profileForm.handleSubmit(async (values) => {
     setProfileFeedback(null);
+    const payload = {
+      fullName: values.fullName,
+      phoneNumber: values.phoneNumber || null,
+      purok: values.purok,
+    };
+    const queuedAction = createQueuedAction("profile.update", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     try {
-      await profileMutation.mutateAsync({
-        fullName: values.fullName,
-        phoneNumber: values.phoneNumber || null,
-        purok: values.purok,
-      });
+      if (!isOnline) {
+        if (offlineScope) {
+          await patchOfflineProfile(offlineScope.scopeId, {
+            full_name: payload.fullName,
+            phone_number: payload.phoneNumber,
+            purok: payload.purok,
+          });
+          bumpOfflineDataGeneration();
+        }
+
+        await queueAction(queuedAction);
+        setProfileFeedback("Profile update queued offline.");
+        return;
+      }
+
+      await runWithNetworkResilience(
+        "Profile update",
+        () => profileMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        if (offlineScope) {
+          await patchOfflineProfile(offlineScope.scopeId, {
+            full_name: payload.fullName,
+            phone_number: payload.phoneNumber,
+            purok: payload.purok,
+          });
+          bumpOfflineDataGeneration();
+        }
+
+        await queueAction(queuedAction);
+        setProfileFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the profile update was staged for retry."
+            : "Connection dropped. Profile update queued for auto-sync.",
+        );
+        return;
+      }
+
       setProfileFeedback(getErrorMessage(error, "Unable to update your profile."));
     }
   });
 
   const handleHouseholdSubmit = householdForm.handleSubmit(async (values) => {
     setHouseholdFeedback(null);
+    const payload = {
+      householdHead: values.householdHead,
+      purok: values.purok,
+      address: values.address,
+      phoneNumber: values.phoneNumber || null,
+      totalMembers: Number(values.totalMembers),
+      isSmsOnly: values.isSmsOnly,
+      notes: values.notes || null,
+      vulnerabilityFlags: values.vulnerabilityFlags,
+      members: values.members.map((member: HouseholdMemberFormValues) => ({
+        fullName: member.fullName,
+        age: member.age ? Number(member.age) : null,
+        vulnerabilityFlags: member.vulnerabilityFlags,
+        notes: member.notes || null,
+      })),
+    };
+    const queuedAction = createQueuedAction("household.register", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     try {
-      await householdMutation.mutateAsync({
-        householdHead: values.householdHead,
-        purok: values.purok,
-        address: values.address,
-        phoneNumber: values.phoneNumber || null,
-        totalMembers: Number(values.totalMembers),
-        isSmsOnly: values.isSmsOnly,
-        notes: values.notes || null,
-        vulnerabilityFlags: values.vulnerabilityFlags,
-        members: values.members.map((member: HouseholdMemberFormValues) => ({
-          fullName: member.fullName,
-          age: member.age ? Number(member.age) : null,
-          vulnerabilityFlags: member.vulnerabilityFlags,
-          notes: member.notes || null,
-        })),
-      });
+      if (!isOnline) {
+        await queueAction(queuedAction);
+        setHouseholdFeedback("Household details queued offline.");
+        return;
+      }
+
+      await runWithNetworkResilience(
+        "Household registration",
+        () => householdMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(queuedAction);
+        setHouseholdFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so household details were staged for retry."
+            : "Connection dropped. Household details queued for auto-sync.",
+        );
+        return;
+      }
+
       setHouseholdFeedback(getErrorMessage(error, "Unable to save your household."));
     }
   });

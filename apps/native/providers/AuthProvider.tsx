@@ -1,17 +1,40 @@
 import type { Profile, VulnerabilityFlag } from "@project-agap/api/supabase";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
+import NetInfo from "@react-native-community/netinfo";
 import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 
 import { AuthContext, type ResidentSignUpInput } from "@/shared/hooks/useAuth";
 import { useNotifications } from "@/shared/hooks/useNotifications";
-import { clearStoredSupabaseSession, supabase } from "@/services/supabase";
+import {
+  clearBrokenSupabaseSession,
+  clearStoredSupabaseSession,
+  getSafeSupabaseSession,
+  isInvalidRefreshTokenError,
+  supabase,
+} from "@/services/supabase";
+import { getOfflineAuthProfile, saveOfflineProfile } from "@/services/offlineData";
 import { clearRegisteredPushToken, getRegisteredPushToken } from "@/services/notifications";
 import { queryClient, trpcClient } from "@/services/trpc";
 import { resetAppShellStore, setSelectedRole } from "@/stores/app-shell-store";
 
 function mapSessionRole(profile: Profile | null) {
   return profile?.role ?? null;
+}
+
+async function assertOnlineForAuthAction(actionLabel: string) {
+  const networkState = await NetInfo.fetch();
+  const isReachable = networkState.isConnected !== false && networkState.isInternetReachable !== false;
+
+  if (!isReachable) {
+    throw new Error(`You're offline. ${actionLabel} needs an internet connection.`);
+  }
+}
+
+async function clearAuthStateLocally() {
+  await clearBrokenSupabaseSession();
+  queryClient.clear();
+  resetAppShellStore();
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -30,12 +53,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const data = await trpcClient.profile.getMe.query();
       setProfile(data);
+      await saveOfflineProfile(data);
       setSelectedRole(data?.role ?? null);
       return data;
     } catch {
-      setProfile(null);
-      setSelectedRole(null);
-      return null;
+      const cachedProfile = currentUserId ? await getOfflineAuthProfile(currentUserId) : null;
+      setProfile(cachedProfile);
+      setSelectedRole(cachedProfile?.role ?? null);
+      return cachedProfile;
     }
   }, [session?.user.id]);
 
@@ -54,11 +79,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         const data = await trpcClient.profile.getMe.query();
         setProfile(data);
+        await saveOfflineProfile(data);
         setSelectedRole(data?.role ?? null);
       } catch {
-        setSession(null);
-        setProfile(null);
-        setSelectedRole(null);
+        const cachedProfile = await getOfflineAuthProfile(nextSession.user.id);
+        setProfile(cachedProfile);
+        setSelectedRole(
+          cachedProfile?.role ??
+            (typeof nextSession.user.user_metadata?.role === "string"
+              ? (nextSession.user.user_metadata.role as Profile["role"])
+              : null),
+        );
       } finally {
         setIsLoading(false);
       }
@@ -71,9 +102,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     async function bootstrap() {
       try {
-        const {
-          data: { session: currentSession },
-        } = await supabase.auth.getSession();
+        const currentSession = await getSafeSupabaseSession();
 
         if (!isMounted) {
           return;
@@ -92,15 +121,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
               return;
             }
             setProfile(data);
+            await saveOfflineProfile(data);
             setSelectedRole(data?.role ?? null);
           } catch {
-            setProfile(null);
-            setSelectedRole(null);
+            const cachedProfile = await getOfflineAuthProfile(currentSession.user.id);
+            if (!isMounted) {
+              return;
+            }
+            setProfile(cachedProfile);
+            setSelectedRole(
+              cachedProfile?.role ??
+                (typeof currentSession.user.user_metadata?.role === "string"
+                  ? (currentSession.user.user_metadata.role as Profile["role"])
+                  : null),
+            );
           }
         }
-      } catch {
+      } catch (error) {
         if (!isMounted) {
           return;
+        }
+
+        if (isInvalidRefreshTokenError(error)) {
+          await clearAuthStateLocally();
         }
 
         setSession(null);
@@ -135,7 +178,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useNotifications(Boolean(session?.user.id && profile?.barangay_id));
 
   const signIn = useCallback(async ({ email, password }: { email: string; password: string }) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    await assertOnlineForAuthAction("Sign-in");
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -143,10 +188,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (error) {
       throw error;
     }
-  }, []);
+
+    if (data.session) {
+      await handleSessionChange(data.session);
+    }
+  }, [handleSessionChange]);
 
   const signUpResident = useCallback(
     async (input: ResidentSignUpInput) => {
+      await assertOnlineForAuthAction("Sign-up");
+
       const { data, error } = await supabase.auth.signUp({
         email: input.email,
         password: input.password,
@@ -226,6 +277,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
+    await assertOnlineForAuthAction("Password reset");
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: Linking.createURL("/(auth)/sign-in"),
     });

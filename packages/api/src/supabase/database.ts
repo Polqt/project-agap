@@ -31,6 +31,9 @@ import type {
   MissingPersonsInsert,
   MissingPersonsRow,
   MissingPersonsUpdate,
+  MutationHistoryInsert,
+  MutationHistoryRow,
+  MutationHistoryUpdate,
   BarangaysRow,
   BarangaysUpdate,
   BroadcastsInsert,
@@ -90,6 +93,7 @@ export interface Database {
       incident_reports: Table<IncidentReportsRow, IncidentReportsInsert, IncidentReportsUpdate>;
       center_supplies: Table<CenterSuppliesRow, CenterSuppliesInsert, CenterSuppliesUpdate>;
       missing_persons: Table<MissingPersonsRow, MissingPersonsInsert, MissingPersonsUpdate>;
+      mutation_history: Table<MutationHistoryRow, MutationHistoryInsert, MutationHistoryUpdate>;
     };
     Views: Record<string, never>;
     Functions: {

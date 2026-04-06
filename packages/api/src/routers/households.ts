@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { assertNoUpdatedAtConflict } from "../conflicts";
 import { ApiError } from "../errors";
 import {
   getAuthorizedBarangayId,
@@ -66,6 +67,7 @@ const householdMemberInputSchema = z.object({
 
 const registerHouseholdSchema = z
   .object({
+    clientMutationId: z.string().optional(),
     householdHead: z.string().trim().min(2).max(160),
     purok: z.string().trim().min(1).max(120),
     address: z.string().trim().min(1).max(240),
@@ -272,6 +274,21 @@ export const householdsRouter = router({
   register: protectedProcedure
     .input(registerHouseholdSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as HouseholdWithMembers;
+        }
+      }
+
       const profile = getProfileOrThrow(ctx.profile);
       const barangayId = getProfileBarangayIdOrThrow(profile);
 
@@ -363,10 +380,21 @@ export const householdsRouter = router({
           "Failed to load household members.",
         ) ?? [];
 
-      return {
+      const result = {
         ...household,
         household_members: members,
       } satisfies HouseholdWithMembers;
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "household-register",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 
   list: officialProcedure
@@ -461,11 +489,28 @@ export const householdsRouter = router({
   assignWelfareVisit: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         householdId: uuidSchema,
         assigneeProfileId: uuidSchema.optional(),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as Household;
+        }
+      }
+
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
       const assigneeId = input.assigneeProfileId ?? ctx.session.id;
 
@@ -486,6 +531,26 @@ export const householdsRouter = router({
       }
 
       const now = new Date().toISOString();
+      const currentHousehold = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .select(householdBaseSelect)
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to load household before welfare assignment.",
+        ),
+        "Household not found.",
+      );
+
+      assertNoUpdatedAtConflict({
+        currentUpdatedAt: currentHousehold.updated_at,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        conflictMessage:
+          "This household was updated by another official. Refresh the registry row before assigning welfare again.",
+      });
+
       const household = getFoundOrThrow<Household | null>(
         getSupabaseDataOrThrow<Household | null>(
           await ctx.supabase
@@ -504,18 +569,45 @@ export const householdsRouter = router({
         "Household not found.",
       );
 
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "household-assign-welfare",
+          result_payload: JSON.stringify(household),
+        });
+      }
+
       return household;
     }),
 
   recordWelfareOutcome: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         householdId: uuidSchema,
         outcome: z.enum(["safe", "need_help", "not_home", "dispatch_again"]),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
+
+      // Check idempotency
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as Household;
+        }
+      }
 
       const current = getFoundOrThrow<Household | null>(
         getSupabaseDataOrThrow<Household | null>(
@@ -529,6 +621,13 @@ export const householdsRouter = router({
         ),
         "Household not found.",
       );
+
+      assertNoUpdatedAtConflict({
+        currentUpdatedAt: current.updated_at,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        conflictMessage:
+          "This welfare assignment changed while you were offline. Refresh assignments before recording another outcome.",
+      });
 
       if (current.evacuation_status !== "welfare_check_dispatched") {
         throw ApiError.badRequest("Household is not in welfare dispatch status.");
@@ -576,6 +675,16 @@ export const householdsRouter = router({
         ),
         "Household not found.",
       );
+
+      // Store mutation history
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "welfare-outcome",
+          result_payload: JSON.stringify(household),
+        });
+      }
 
       return household;
     }),
@@ -678,6 +787,7 @@ export const householdsRouter = router({
   updateStatus: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         householdId: uuidSchema,
         evacuationStatus: z.enum([
           "home",
@@ -689,15 +799,50 @@ export const householdsRouter = router({
           "not_home",
           "welfare_check_dispatched",
         ]),
-        notifyBySms: z.boolean().default(true),
-        notifyInApp: z.boolean().default(true),
+        notifyBySms: z.boolean().default(false),
+        notifyInApp: z.boolean().default(false),
         smsTemplate: z.enum(["help_acknowledged", "team_dispatched", "safe_confirmed"]).optional(),
-        note: z.string().trim().max(500).nullish(),
+        note: z.string().trim().max(300).nullish(),
+        expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload);
+        }
+      }
+
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
       const now = new Date().toISOString();
+      const currentHousehold = getFoundOrThrow<Household | null>(
+        getSupabaseDataOrThrow<Household | null>(
+          await ctx.supabase
+            .from("households")
+            .select(householdBaseSelect)
+            .eq("id", input.householdId)
+            .eq("barangay_id", barangayId)
+            .maybeSingle(),
+          "Failed to load household before status update.",
+        ),
+        "Household not found.",
+      );
+
+      assertNoUpdatedAtConflict({
+        currentUpdatedAt: currentHousehold.updated_at,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        conflictMessage:
+          "This household status was changed by another official. Refresh the registry before applying another status update.",
+      });
 
       const patch =
         input.evacuationStatus === "welfare_check_dispatched"
@@ -796,7 +941,7 @@ export const householdsRouter = router({
         appError = "Household has no linked resident profile for app notification.";
       }
 
-      return {
+      const result = {
         ...household,
         _statusComms: {
           smsSent,
@@ -808,6 +953,17 @@ export const householdsRouter = router({
           note: input.note ?? null,
         },
       };
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "household-update-status",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 
   markLocated: protectedProcedure

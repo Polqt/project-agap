@@ -5,7 +5,7 @@ type AppShellState = {
   selectedRole: AppRole | null;
   pendingQueueCount: number;
   failedQueueCount: number;
-  syncStatus: "online" | "offline" | "syncing";
+  syncStatus: "online" | "offline" | "syncing" | "degraded";
   lastStatusPing: {
     status: "safe" | "need_help";
     createdAt: number;
