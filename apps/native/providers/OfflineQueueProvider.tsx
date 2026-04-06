@@ -7,11 +7,12 @@ import {
   insertQueuedAction,
   listQueuedActions,
   markQueuedActionFailed,
+  resetFailedQueuedActions,
+  resetFailedQueuedActionsByIds,
   updateQueuedActionRetries,
 } from "@/services/offlineQueueDb";
 import {
   getRetryDelayMs,
-  isExpiredQueuedAction,
   MAX_QUEUE_RETRIES,
   replayQueuedAction,
 } from "@/services/offlineQueueActions";
@@ -69,11 +70,6 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
           continue;
         }
 
-        if (isExpiredQueuedAction(action)) {
-          await deleteQueuedAction(action.id);
-          continue;
-        }
-
         try {
           await replayQueuedAction(action);
           await syncQueuedActionDatasets(action).catch(() => {});
@@ -105,6 +101,19 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
     }
   }, [isOnline, refreshPendingActions]);
 
+  const retryFailedActions = useCallback(async (actionIds?: string[]) => {
+    if (actionIds && actionIds.length > 0) {
+      await resetFailedQueuedActionsByIds(actionIds);
+    } else {
+      await resetFailedQueuedActions();
+    }
+
+    await refreshPendingActions();
+    if (isOnline) {
+      await flushQueue();
+    }
+  }, [flushQueue, isOnline, refreshPendingActions]);
+
   useEffect(() => {
     async function bootstrapQueueState() {
       await refreshPendingActions();
@@ -132,8 +141,9 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
       pendingActions,
       queueAction,
       flushQueue,
+      retryFailedActions,
     }),
-    [flushQueue, isFlushing, isOnline, pendingActions, queueAction],
+    [flushQueue, isFlushing, isOnline, pendingActions, queueAction, retryFailedActions],
   );
 
   return <OfflineQueueContext.Provider value={value}>{children}</OfflineQueueContext.Provider>;

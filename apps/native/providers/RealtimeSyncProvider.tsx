@@ -2,6 +2,7 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { useEffect, useRef, type PropsWithChildren } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { getOfflineScope, syncOfflineDatasets } from "@/services/offlineData";
 import { scheduleAlertNotificationAsync } from "@/services/notifications";
 import {
   REALTIME_TABLES,
@@ -15,6 +16,7 @@ import {
 } from "@/services/realtime";
 import { supabase } from "@/services/supabase";
 import { queryClient } from "@/services/trpc";
+import { bumpOfflineDataGeneration } from "@/stores/offline-data-store";
 
 type RealtimeRow = {
   id?: string;
@@ -34,13 +36,36 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
   const lastAlertIdRef = useRef<string | null>(null);
   const lastBroadcastIdRef = useRef<string | null>(null);
   const lastStatusPingIdRef = useRef<string | null>(null);
+  const pendingOfflineSyncRef = useRef<Set<string>>(new Set());
+  const offlineSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !profile?.barangay_id) {
       return;
     }
 
+    const offlineScope = getOfflineScope(profile);
     const channel = supabase.channel(`agap-realtime:${profile.role}:${profile.barangay_id}`);
+
+    function queueOfflineDatasets(datasets: Array<Parameters<typeof syncOfflineDatasets>[1][number]>) {
+      if (!offlineScope) {
+        return;
+      }
+
+      datasets.forEach((dataset) => pendingOfflineSyncRef.current.add(dataset));
+
+      if (offlineSyncTimerRef.current) {
+        clearTimeout(offlineSyncTimerRef.current);
+      }
+
+      offlineSyncTimerRef.current = setTimeout(() => {
+        const nextDatasets = Array.from(pendingOfflineSyncRef.current) as Parameters<typeof syncOfflineDatasets>[1];
+        pendingOfflineSyncRef.current.clear();
+        void syncOfflineDatasets(offlineScope, nextDatasets)
+          .then(() => bumpOfflineDataGeneration())
+          .catch(() => {});
+      }, 800);
+    }
 
     REALTIME_TABLES.forEach((table) => {
       channel.on(
@@ -73,6 +98,22 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
                 return Array.isArray(first) && first[0] === tableRoot;
               },
             });
+          }
+
+          const datasetsByRealtimeTable: Partial<
+            Record<(typeof REALTIME_TABLES)[number], Array<Parameters<typeof syncOfflineDatasets>[1][number]>>
+          > = {
+            alerts: ["alerts", "barangay"],
+            broadcasts: ["broadcasts", "smsLogs"],
+            check_ins: ["household", "registryHouseholds", "evacuationCenters"],
+            evacuation_centers: ["evacuationCenters", "centerSupplies"],
+            households: ["household", "registryHouseholds", "dashboardSummary", "unaccountedHouseholds", "welfareAssignments", "welfareDispatch"],
+            needs_reports: ["needsReports", "needsSummary", "dashboardSummary"],
+            status_pings: ["latestStatusPing", "unresolvedPings", "dashboardSummary"],
+          };
+          const offlineDatasets = datasetsByRealtimeTable[table];
+          if (offlineDatasets) {
+            queueOfflineDatasets(offlineDatasets);
           }
 
           if (profile.role === "resident" && table === "alerts" && shouldNotifyResidentAlert(payload)) {
@@ -130,6 +171,10 @@ export function RealtimeSyncProvider({ children }: PropsWithChildren) {
     void channel.subscribe();
 
     return () => {
+      if (offlineSyncTimerRef.current) {
+        clearTimeout(offlineSyncTimerRef.current);
+        offlineSyncTimerRef.current = null;
+      }
       void supabase.removeChannel(channel);
     };
   }, [isAuthenticated, profile?.barangay_id, profile?.role]);

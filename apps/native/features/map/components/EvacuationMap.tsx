@@ -9,14 +9,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
-import { getOfflineScope, listOfflineEvacuationRoutes } from "@/services/offlineData";
+import {
+  getOfflinePinnedLocation,
+  getOfflineScope,
+  listOfflineEvacuationRoutes,
+} from "@/services/offlineData";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
-import { queryClient, trpc } from "@/services/trpc";
 import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { getErrorMessage } from "@/shared/utils/errors";
 import { getLatestSyncedTimestamp } from "@/shared/utils/offline-freshness";
 import type { LocationPoint } from "@/types/map";
-import { offlineDataStore } from "@/stores/offline-data-store";
+import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import { useEvacuationNavigation } from "../hooks/useEvacuationNavigation";
 import type { RankedEvacuationRoute } from "../types";
@@ -53,7 +57,7 @@ function getReactNativeMapsModule() {
 export function EvacuationMap() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
-  const { isOnline } = useOfflineQueue();
+  const { isOnline, queueAction } = useOfflineQueue();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
   const { location, error: locationError } = useCurrentLocation(Boolean(profile?.barangay_id));
   const [isNativeMapReady, setIsNativeMapReady] = useState(false);
@@ -83,33 +87,20 @@ export function EvacuationMap() {
         readOfflineSyncTimestamp(offlineScope.scopeId, "evacuation-centers"),
         readOfflineSyncTimestamp(offlineScope.scopeId, "evacuation-routes"),
         readOfflineSyncTimestamp(offlineScope.scopeId, "alerts"),
+        readOfflineSyncTimestamp(offlineScope.scopeId, "pinned-location"),
       ]);
       return getLatestSyncedTimestamp(...timestamps);
     },
   });
 
-  const pinnedLocationQueryKey = trpc.profile.getPinnedLocation.queryKey();
-  const pinnedLocationQuery = useQuery(
-    trpc.profile.getPinnedLocation.queryOptions(undefined, {
-      enabled: Boolean(profile?.id),
-    }),
-  );
+  const pinnedLocationQuery = useQuery({
+    queryKey: ["offline", "map-pinned-location", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => getOfflinePinnedLocation(offlineScope!.scopeId),
+  });
 
-  const setPinnedLocationMutation = useMutation(
-    trpc.profile.setPinnedLocation.mutationOptions({
-      onSuccess: (result) => {
-        queryClient.setQueryData(pinnedLocationQueryKey, result);
-      },
-    }),
-  );
-
-  const clearPinnedLocationMutation = useMutation(
-    trpc.profile.clearPinnedLocation.mutationOptions({
-      onSuccess: () => {
-        queryClient.setQueryData(pinnedLocationQueryKey, null);
-      },
-    }),
-  );
+  const setPinnedLocationMutation = useMutation({});
+  const clearPinnedLocationMutation = useMutation({});
 
   useEffect(() => {
     if (!pinnedLocationQuery.data) {
@@ -132,6 +123,7 @@ export function EvacuationMap() {
   const navigation = useEvacuationNavigation({
     barangayId: profile?.barangay_id,
     offlineScopeId: offlineScope?.scopeId,
+    cacheGeneration: offlineGeneration,
     origin,
     profilePurok: profile?.purok,
     fallbackRoutes: routesQuery.data ?? [],
@@ -219,8 +211,8 @@ export function EvacuationMap() {
     setPinnedLocation(nextPin);
 
     try {
-      await setPinnedLocationMutation.mutateAsync(nextPin);
-      await pinnedLocationQuery.refetch();
+      await queueAction(createQueuedAction("profile.set-pinned-location", nextPin, offlineScope));
+      bumpOfflineDataGeneration();
     } catch (error) {
       setPinnedLocation(
         pinnedLocationQuery.data
@@ -262,8 +254,8 @@ export function EvacuationMap() {
     setPinnedLocation(null);
 
     try {
-      await clearPinnedLocationMutation.mutateAsync();
-      await pinnedLocationQuery.refetch();
+      await queueAction(createQueuedAction("profile.clear-pinned-location", {}, offlineScope));
+      bumpOfflineDataGeneration();
     } catch (error) {
       setPinnedLocation(
         pinnedLocationQuery.data

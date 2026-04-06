@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { env } from "@project-agap/env/native";
 import type { Alert, EvacuationRoute, NearbyCenter } from "@project-agap/api/supabase";
 
+import { getOfflineMapPack } from "@/services/mapCache";
 import { trpcClient } from "@/services/trpc";
 import { listOfflineAlerts, listOfflineEvacuationCenters } from "@/services/offlineData";
 import { shouldUseStaleCachedRoute } from "@/shared/utils/offline-freshness";
@@ -94,10 +95,12 @@ export async function buildEvacuationNavigation(params: {
   fallbackRoutes: EvacuationRoute[];
 }) {
   const { barangayId, offlineScopeId, origin, profilePurok, fallbackRoutes } = params;
+  const mapPack = await getOfflineMapPack(barangayId);
   const [candidateCenters, activeAlerts] = await Promise.all([
-    loadCandidateCenters({ barangayId, origin, offlineScopeId }),
-    loadActiveAlerts(barangayId, offlineScopeId),
+    loadCandidateCenters({ barangayId, origin, offlineScopeId, mapPack }),
+    loadActiveAlerts(barangayId, offlineScopeId, mapPack),
   ]);
+  const resolvedFallbackRoutes = fallbackRoutes.length > 0 ? fallbackRoutes : (mapPack?.routes ?? []);
 
   const rankedRoutes = await Promise.all(
     candidateCenters.slice(0, MAX_CENTER_CANDIDATES).map((center) =>
@@ -105,7 +108,7 @@ export async function buildEvacuationNavigation(params: {
         center,
         origin,
         profilePurok,
-        fallbackRoutes,
+        fallbackRoutes: resolvedFallbackRoutes,
         activeAlerts,
       }),
     ),
@@ -133,8 +136,9 @@ async function loadCandidateCenters(params: {
   barangayId: string;
   offlineScopeId?: string | null;
   origin: LocationPoint;
+  mapPack?: Awaited<ReturnType<typeof getOfflineMapPack>> | null;
 }) {
-  const { barangayId, offlineScopeId, origin } = params;
+  const { barangayId, offlineScopeId, origin, mapPack } = params;
 
   try {
     const nearbyCenters = await trpcClient.evacuationCenters.getNearby.query({
@@ -153,7 +157,13 @@ async function loadCandidateCenters(params: {
 
   let centers = await trpcClient.evacuationCenters.listByBarangay
     .query({ barangayId })
-    .catch(async () => (offlineScopeId ? await listOfflineEvacuationCenters(offlineScopeId) : []));
+    .catch(async () => {
+      if (mapPack?.centers.length) {
+        return mapPack.centers;
+      }
+
+      return offlineScopeId ? await listOfflineEvacuationCenters(offlineScopeId) : [];
+    });
 
   return centers
     .filter((center) => center.is_open)
@@ -178,10 +188,18 @@ async function loadCandidateCenters(params: {
     .sort((left, right) => left.straightLineDistanceKm - right.straightLineDistanceKm);
 }
 
-async function loadActiveAlerts(barangayId: string, offlineScopeId?: string | null) {
+async function loadActiveAlerts(
+  barangayId: string,
+  offlineScopeId?: string | null,
+  mapPack?: Awaited<ReturnType<typeof getOfflineMapPack>> | null,
+) {
   try {
     return await trpcClient.alerts.listActive.query({ barangayId });
   } catch {
+    if (mapPack?.alerts.length) {
+      return mapPack.alerts;
+    }
+
     return offlineScopeId ? await listOfflineAlerts(offlineScopeId) : [];
   }
 }

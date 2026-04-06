@@ -1,7 +1,32 @@
 // Free public hazard data feeds — no API keys required
 // Sources: USGS, GDACS, PAGASA (via allorigins CORS proxy)
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CORS_PROXY = "https://api.allorigins.win/get?url=";
+const HAZARD_CACHE_PREFIX = "agap-hazard-cache:";
+
+async function withCachedHazardFeed<TValue>(cacheKey: string, loader: () => Promise<TValue>): Promise<TValue> {
+  try {
+    const value = await loader();
+    await AsyncStorage.setItem(
+      `${HAZARD_CACHE_PREFIX}${cacheKey}`,
+      JSON.stringify({ cachedAt: Date.now(), value }),
+    );
+    return value;
+  } catch (error) {
+    const cached = await AsyncStorage.getItem(`${HAZARD_CACHE_PREFIX}${cacheKey}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as { value: TValue };
+        return parsed.value;
+      } catch {
+        // Ignore malformed cache and rethrow the original error.
+      }
+    }
+
+    throw error;
+  }
+}
 
 function proxied(url: string) {
   return `${CORS_PROXY}${encodeURIComponent(url)}`;
@@ -23,45 +48,47 @@ export type UsgsEarthquake = {
 };
 
 export async function fetchPhilippineEarthquakes(): Promise<UsgsEarthquake[]> {
-  const params = new URLSearchParams({
-    format: "geojson",
-    minlatitude: "4.5",
-    maxlatitude: "21.5",
-    minlongitude: "116",
-    maxlongitude: "127",
-    limit: "20",
-    orderby: "time",
+  return withCachedHazardFeed("usgs-earthquakes", async () => {
+    const params = new URLSearchParams({
+      format: "geojson",
+      minlatitude: "4.5",
+      maxlatitude: "21.5",
+      minlongitude: "116",
+      maxlongitude: "127",
+      limit: "20",
+      orderby: "time",
+    });
+    const res = await fetch(
+      `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`,
+    );
+    if (!res.ok) throw new Error("USGS fetch failed");
+    const data = (await res.json()) as {
+      features: Array<{
+        id: string;
+        properties: {
+          mag: number;
+          place: string;
+          time: number;
+          tsunami: number;
+          sig: number;
+          url: string;
+        };
+        geometry: { coordinates: [number, number, number] };
+      }>;
+    };
+    return data.features.map((f) => ({
+      id: f.id,
+      magnitude: f.properties.mag,
+      place: f.properties.place,
+      time: f.properties.time,
+      depth: f.geometry.coordinates[2],
+      longitude: f.geometry.coordinates[0],
+      latitude: f.geometry.coordinates[1],
+      tsunami: f.properties.tsunami,
+      sig: f.properties.sig,
+      url: f.properties.url,
+    }));
   });
-  const res = await fetch(
-    `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`,
-  );
-  if (!res.ok) throw new Error("USGS fetch failed");
-  const data = (await res.json()) as {
-    features: Array<{
-      id: string;
-      properties: {
-        mag: number;
-        place: string;
-        time: number;
-        tsunami: number;
-        sig: number;
-        url: string;
-      };
-      geometry: { coordinates: [number, number, number] };
-    }>;
-  };
-  return data.features.map((f) => ({
-    id: f.id,
-    magnitude: f.properties.mag,
-    place: f.properties.place,
-    time: f.properties.time,
-    depth: f.geometry.coordinates[2],
-    longitude: f.geometry.coordinates[0],
-    latitude: f.geometry.coordinates[1],
-    tsunami: f.properties.tsunami,
-    sig: f.properties.sig,
-    url: f.properties.url,
-  }));
 }
 
 // ─── GDACS Disaster Alerts ───────────────────────────────────────────────────
@@ -107,10 +134,11 @@ function extractTag(xml: string, tag: string): string {
 }
 
 export async function fetchGdacsAlerts(): Promise<GdacsAlert[]> {
-  const res = await fetch(proxied("https://www.gdacs.org/xml/rss.xml"));
-  if (!res.ok) throw new Error("GDACS fetch failed");
-  const wrapper = (await res.json()) as { contents: string };
-  const xml = wrapper.contents;
+  return withCachedHazardFeed("gdacs-alerts", async () => {
+    const res = await fetch(proxied("https://www.gdacs.org/xml/rss.xml"));
+    if (!res.ok) throw new Error("GDACS fetch failed");
+    const wrapper = (await res.json()) as { contents: string };
+    const xml = wrapper.contents;
 
   // Parse <item> blocks
   const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
@@ -169,7 +197,8 @@ export async function fetchGdacsAlerts(): Promise<GdacsAlert[]> {
     });
   }
 
-  return alerts;
+    return alerts;
+  });
 }
 
 // ─── Air Quality & Weather — Open-Meteo (no API key) ─────────────────────────
@@ -249,7 +278,7 @@ export async function fetchCityAirQuality(city: (typeof PH_CITIES)[number]): Pro
 }
 
 export async function fetchPhCitiesAirQuality(): Promise<CityAirQuality[]> {
-  return Promise.all(PH_CITIES.map(fetchCityAirQuality));
+  return withCachedHazardFeed("ph-air-quality", async () => Promise.all(PH_CITIES.map(fetchCityAirQuality)));
 }
 
 export function aqiLabel(aqi: number | null): { label: string; color: string; bg: string; text: string } {
@@ -420,14 +449,15 @@ async function fetchFeed(feed: (typeof NEWS_FEEDS)[number]): Promise<PhNewsArtic
 }
 
 export async function fetchPhilippineNews(): Promise<PhNewsArticle[]> {
-  const results = await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
-  const all: PhNewsArticle[] = [];
-  for (const r of results) {
-    if (r.status === "fulfilled") all.push(...r.value);
-  }
-  // Sort newest first
-  all.sort((a, b) => Date.parse(b.pubDate) - Date.parse(a.pubDate));
-  return all.slice(0, 20);
+  return withCachedHazardFeed("ph-news", async () => {
+    const results = await Promise.allSettled(NEWS_FEEDS.map(fetchFeed));
+    const all: PhNewsArticle[] = [];
+    for (const r of results) {
+      if (r.status === "fulfilled") all.push(...r.value);
+    }
+    all.sort((a, b) => Date.parse(b.pubDate) - Date.parse(a.pubDate));
+    return all.slice(0, 20);
+  });
 }
 
 // ─── PAGASA Weather Bulletin ─────────────────────────────────────────────────
@@ -442,19 +472,21 @@ export type PagasaBulletin = {
 
 export async function fetchPagasaBulletin(): Promise<PagasaBulletin | null> {
   try {
-    const res = await fetch(
-      proxied("https://pubfiles.pagasa.dost.gov.ph/tamss/weather/bulletin.json"),
-    );
-    if (!res.ok) return null;
-    const wrapper = (await res.json()) as { contents: string };
-    const data = JSON.parse(wrapper.contents) as Record<string, unknown>;
-    return {
-      title: (data.title as string) ?? (data.BulletinTitle as string),
-      effectivity: (data.effectivity as string) ?? (data.Effectivity as string),
-      forecaster: (data.forecaster as string) ?? (data.Forecaster as string),
-      issued: (data.issued as string) ?? (data.IssuedAt as string),
-      raw: data,
-    };
+    return await withCachedHazardFeed("pagasa-bulletin", async () => {
+      const res = await fetch(
+        proxied("https://pubfiles.pagasa.dost.gov.ph/tamss/weather/bulletin.json"),
+      );
+      if (!res.ok) return null;
+      const wrapper = (await res.json()) as { contents: string };
+      const data = JSON.parse(wrapper.contents) as Record<string, unknown>;
+      return {
+        title: (data.title as string) ?? (data.BulletinTitle as string),
+        effectivity: (data.effectivity as string) ?? (data.Effectivity as string),
+        forecaster: (data.forecaster as string) ?? (data.Forecaster as string),
+        issued: (data.issued as string) ?? (data.IssuedAt as string),
+        raw: data,
+      };
+    });
   } catch {
     return null;
   }

@@ -27,6 +27,7 @@ export function OfficialDashboard() {
     toggleCenterMutation,
     toggleCenter,
     rotateQrMutation,
+    rotateCenterQr,
     copyCenterToken,
     shareCenterToken,
   } = useOfficialDashboard();
@@ -105,7 +106,7 @@ export function OfficialDashboard() {
           void shareCenterToken(center.id);
         }}
         onRotate={(centerId) => {
-          void rotateQrMutation.mutateAsync({ centerId });
+          void rotateCenterQr(centerId);
         }}
       />
     </ScreenShell>

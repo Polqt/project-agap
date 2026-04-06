@@ -4,15 +4,17 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { AppButton, EmptyState, Pill, SectionCard } from "@/shared/components/ui";
 import { trpc } from "@/services/trpc";
-import { getErrorMessage } from "@/shared/utils/errors";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import {
   getOfflineCenterSupplies,
   getOfflineScope,
   patchOfflineCenterSupplies,
   syncOfflineCenterSupplies,
 } from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 import type { EvacuationCenter } from "@project-agap/api/supabase";
 
@@ -38,6 +40,7 @@ function CenterSuppliesSection({ centerId }: { centerId: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ food: "", water: "", medicine: "", blankets: "" });
   const [feedback, setFeedback] = useState<string | null>(null);
+  const { isOnline, queueAction } = useOfflineQueue();
   const offlineScope = getOfflineScope(profile);
 
   const suppliesQuery = useQuery({
@@ -72,14 +75,24 @@ function CenterSuppliesSection({ centerId }: { centerId: string }) {
         bumpOfflineDataGeneration();
       }
 
-      await updateMutation.mutateAsync({
+      const payload = {
         centerId,
         ...(draft.food !== "" ? { foodPacks: Number(draft.food) } : {}),
         ...(draft.water !== "" ? { waterLiters: Number(draft.water) } : {}),
         ...(draft.medicine !== "" ? { medicineUnits: Number(draft.medicine) } : {}),
         ...(draft.blankets !== "" ? { blankets: Number(draft.blankets) } : {}),
         expectedUpdatedAt: supplies.updated_at ?? null,
-      });
+      };
+
+      if (!isOnline) {
+        await queueAction(createQueuedAction("center.update-supplies", payload, offlineScope));
+        setEditing(false);
+        setDraft({ food: "", water: "", medicine: "", blankets: "" });
+        setFeedback("Center supplies queued offline.");
+        return;
+      }
+
+      await updateMutation.mutateAsync(payload);
 
       if (offlineScope) {
         await syncOfflineCenterSupplies(offlineScope, centerId);
@@ -89,6 +102,23 @@ function CenterSuppliesSection({ centerId }: { centerId: string }) {
       setEditing(false);
       setDraft({ food: "", water: "", medicine: "", blankets: "" });
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(
+          createQueuedAction("center.update-supplies", {
+            centerId,
+            ...(draft.food !== "" ? { foodPacks: Number(draft.food) } : {}),
+            ...(draft.water !== "" ? { waterLiters: Number(draft.water) } : {}),
+            ...(draft.medicine !== "" ? { medicineUnits: Number(draft.medicine) } : {}),
+            ...(draft.blankets !== "" ? { blankets: Number(draft.blankets) } : {}),
+            expectedUpdatedAt: supplies.updated_at ?? null,
+          }, offlineScope),
+        );
+        setEditing(false);
+        setDraft({ food: "", water: "", medicine: "", blankets: "" });
+        setFeedback("Connection dropped. Center supplies queued for auto-sync.");
+        return;
+      }
+
       if (offlineScope) {
         await syncOfflineCenterSupplies(offlineScope, centerId).catch(() => {});
         bumpOfflineDataGeneration();

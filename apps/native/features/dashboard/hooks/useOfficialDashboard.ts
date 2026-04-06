@@ -17,8 +17,11 @@ import {
   removeOfflineUnresolvedPing,
   syncOfflineDatasets,
 } from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { getLatestSyncedTimestamp } from "@/shared/utils/offline-freshness";
 import { trpc } from "@/services/trpc";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
@@ -28,6 +31,7 @@ import { buildCenterQrShareMessage } from "../services/centerQr";
 export function useOfficialDashboard() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, queueAction } = useOfflineQueue();
   const signOut = useSignOutRedirect("/(auth)/sign-in");
   const [feedback, setFeedback] = useState<string | null>(null);
   const offlineScope = getOfflineScope(profile);
@@ -199,6 +203,34 @@ export function useOfficialDashboard() {
     });
   }
 
+  async function rotateCenterQr(centerId: string) {
+    if (!isOnline) {
+      await queueAction(
+        createQueuedAction("center.rotate-qr", {
+          centerId,
+        }, offlineScope),
+      );
+      setFeedback("QR token rotation queued offline.");
+      return;
+    }
+
+    try {
+      await rotateQrMutation.mutateAsync({ centerId });
+    } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(
+          createQueuedAction("center.rotate-qr", {
+            centerId,
+          }, offlineScope),
+        );
+        setFeedback("Connection dropped. QR token rotation queued for auto-sync.");
+        return;
+      }
+
+      setFeedback(getErrorMessage(error, "Unable to rotate the center QR token."));
+    }
+  }
+
   return {
     signOut,
     feedback,
@@ -211,15 +243,56 @@ export function useOfficialDashboard() {
     lastSyncedAt: syncTimestampQuery.data ?? null,
     resolveMutation,
     toggleCenterMutation,
-    toggleCenter: (centerId: string, isOpen: boolean) =>
-      toggleCenterMutation.mutateAsync({
-        centerId,
-        isOpen,
-        expectedUpdatedAt:
-          centersQuery.data?.find((center) => center.id === centerId)?.updated_at ?? null,
-      }),
+    toggleCenter: async (centerId: string, isOpen: boolean) => {
+      const expectedUpdatedAt =
+        centersQuery.data?.find((center) => center.id === centerId)?.updated_at ?? null;
+
+      if (!isOnline) {
+        await queueAction(
+          createQueuedAction("center.toggle-open", {
+            centerId,
+            isOpen,
+            expectedUpdatedAt,
+          }, offlineScope),
+        );
+        setFeedback(isOpen ? "Center opening queued offline." : "Center closing queued offline.");
+        return;
+      }
+
+      try {
+        await toggleCenterMutation.mutateAsync({
+          centerId,
+          isOpen,
+          expectedUpdatedAt,
+        });
+      } catch (error) {
+        if (isOfflineLikeError(error)) {
+          await queueAction(
+            createQueuedAction("center.toggle-open", {
+              centerId,
+              isOpen,
+              expectedUpdatedAt,
+            }, offlineScope),
+          );
+          setFeedback("Connection dropped. Center update queued for auto-sync.");
+          return;
+        }
+
+        setFeedback(getErrorMessage(error, "Unable to update the evacuation center."));
+      }
+    },
     rotateQrMutation,
+    rotateCenterQr,
     copyCenterToken,
     shareCenterToken,
+    refreshConflictData: async () => {
+      await syncDatasets([
+        "evacuationCenters",
+        "dashboardSummary",
+        "unresolvedPings",
+        "unaccountedHouseholds",
+        "welfareDispatch",
+      ]);
+    },
   };
 }

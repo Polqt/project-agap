@@ -60,12 +60,28 @@ export const evacuationCentersRouter = router({
   toggleOpen: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         centerId: uuidSchema,
         isOpen: z.boolean(),
         expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as EvacuationCenter;
+        }
+      }
+
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
       const currentCenter = getFoundOrThrow<EvacuationCenter | null>(
         getSupabaseDataOrThrow<EvacuationCenter | null>(
@@ -105,16 +121,41 @@ export const evacuationCentersRouter = router({
         "Evacuation center not found.",
       );
 
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "center-toggle-open",
+          result_payload: JSON.stringify(center),
+        });
+      }
+
       return center;
     }),
 
   rotateQrToken: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         centerId: uuidSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as EvacuationCenter;
+        }
+      }
+
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
       const center = getFoundOrThrow<EvacuationCenter | null>(
         getSupabaseDataOrThrow<EvacuationCenter | null>(
@@ -131,6 +172,15 @@ export const evacuationCentersRouter = router({
         ),
         "Evacuation center not found.",
       );
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "center-rotate-qr",
+          result_payload: JSON.stringify(center),
+        });
+      }
 
       return center;
     }),
@@ -191,6 +241,7 @@ export const evacuationCentersRouter = router({
   updateSupplies: officialProcedure
     .input(
       z.object({
+        clientMutationId: z.string().optional(),
         centerId: uuidSchema,
         foodPacks: z.number().int().min(0).optional(),
         waterLiters: z.number().int().min(0).optional(),
@@ -200,6 +251,21 @@ export const evacuationCentersRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as CenterSupplies | null;
+        }
+      }
+
       const barangayId = getProfileBarangayIdOrThrow(ctx.profile);
 
       getFoundOrThrow<EvacuationCenter | null>(
@@ -261,10 +327,21 @@ export const evacuationCentersRouter = router({
         );
       }
 
-      return getSupabaseDataOrThrow<CenterSupplies | null>(
+      const supplies = getSupabaseDataOrThrow<CenterSupplies | null>(
         result,
         "Failed to update center supplies.",
       );
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "center-update-supplies",
+          result_payload: JSON.stringify(supplies),
+        });
+      }
+
+      return supplies;
     }),
 });
 

@@ -7,12 +7,14 @@ import { uuidSchema } from "../schemas";
 import type { Profile } from "../supabase";
 
 const pinnedLocationSchema = z.object({
+  clientMutationId: z.string().optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
 });
 
 const updateProfileSchema = z
   .object({
+    clientMutationId: z.string().optional(),
     fullName: z.string().trim().min(1).max(160).optional(),
     phoneNumber: z.string().trim().min(1).max(40).nullable().optional(),
     barangayId: uuidSchema.nullable().optional(),
@@ -53,6 +55,21 @@ export const profileRouter = router({
   update: protectedProcedure
     .input(updateProfileSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as Profile;
+        }
+      }
+
       const updatePayload = {
         ...(input.fullName !== undefined ? { full_name: input.fullName } : {}),
         ...(input.phoneNumber !== undefined ? { phone_number: input.phoneNumber } : {}),
@@ -75,6 +92,15 @@ export const profileRouter = router({
         ),
         "Profile not found.",
       );
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "profile-update",
+          result_payload: JSON.stringify(profile),
+        });
+      }
 
       return profile;
     }),
@@ -114,6 +140,25 @@ export const profileRouter = router({
   setPinnedLocation: protectedProcedure
     .input(pinnedLocationSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as {
+            latitude: number;
+            longitude: number;
+            pinnedAt: string | null;
+          };
+        }
+      }
+
       const profile = getFoundOrThrow<{
         pinned_latitude: number | null;
         pinned_longitude: number | null;
@@ -143,35 +188,74 @@ export const profileRouter = router({
         throw ApiError.internal("Pinned location did not save correctly.");
       }
 
-      return {
+      const result = {
         latitude: profile.pinned_latitude,
         longitude: profile.pinned_longitude,
         pinnedAt: profile.pinned_at,
       };
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "profile-set-pinned-location",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 
-  clearPinnedLocation: protectedProcedure.mutation(async ({ ctx }) => {
-    getFoundOrThrow<{ id: string } | null>(
-      getSupabaseDataOrThrow<{ id: string } | null>(
-        await ctx.supabase
-          .from("profiles")
-          .update({
-            pinned_latitude: null,
-            pinned_longitude: null,
-            pinned_at: null,
-          })
-          .eq("id", ctx.session.id)
-          .select("id")
-          .maybeSingle(),
-        "Failed to clear pinned location.",
-      ),
-      "Profile not found.",
-    );
+  clearPinnedLocation: protectedProcedure
+    .input(z.object({ clientMutationId: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      if (input?.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
 
-    return {
-      success: true,
-    };
-  }),
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as { success: true };
+        }
+      }
+
+      getFoundOrThrow<{ id: string } | null>(
+        getSupabaseDataOrThrow<{ id: string } | null>(
+          await ctx.supabase
+            .from("profiles")
+            .update({
+              pinned_latitude: null,
+              pinned_longitude: null,
+              pinned_at: null,
+            })
+            .eq("id", ctx.session.id)
+            .select("id")
+            .maybeSingle(),
+          "Failed to clear pinned location.",
+        ),
+        "Profile not found.",
+      );
+
+      const result = {
+        success: true,
+      };
+
+      if (input?.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: ctx.session.id,
+          mutation_type: "profile-clear-pinned-location",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
+    }),
 
   upsertPushToken: protectedProcedure
     .input(

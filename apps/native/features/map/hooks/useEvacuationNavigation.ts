@@ -8,18 +8,20 @@ import type { RankedEvacuationRoute } from "../types";
 export function useEvacuationNavigation(params: {
   barangayId?: string | null;
   offlineScopeId?: string | null;
+  cacheGeneration?: number;
   origin: LocationPoint | null;
   profilePurok?: string | null;
   fallbackRoutes: import("@project-agap/api/supabase").EvacuationRoute[];
   selectedCenterId: string | null;
 }) {
-  const { barangayId, offlineScopeId, origin, profilePurok, fallbackRoutes, selectedCenterId } = params;
+  const { barangayId, offlineScopeId, cacheGeneration, origin, profilePurok, fallbackRoutes, selectedCenterId } = params;
 
   const navigationQuery = useQuery({
     queryKey: [
       "evacuation-navigation",
       barangayId,
       profilePurok,
+      cacheGeneration ?? 0,
       origin?.latitude ?? null,
       origin?.longitude ?? null,
       fallbackRoutes.map((route) => route.id).join(","),

@@ -1,25 +1,29 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import type { CachedResidentMapData } from "@/types/map";
+import type { OfflineMapPack } from "@/types/map";
 
-function getResidentMapCacheKey(barangayId: string) {
-  return `agap-map-cache:${barangayId}`;
+function getMapPackCacheKey(barangayId: string) {
+  return `agap-map-pack:${barangayId}`;
 }
 
-export async function getResidentMapCache(barangayId: string) {
-  const rawValue = await AsyncStorage.getItem(getResidentMapCacheKey(barangayId));
+export async function getOfflineMapPack(barangayId: string) {
+  const rawValue = await AsyncStorage.getItem(getMapPackCacheKey(barangayId));
 
   if (!rawValue) {
     return null;
   }
 
   try {
-    return JSON.parse(rawValue) as CachedResidentMapData;
+    return JSON.parse(rawValue) as OfflineMapPack;
   } catch {
     return null;
   }
 }
 
-export async function setResidentMapCache(value: CachedResidentMapData) {
-  await AsyncStorage.setItem(getResidentMapCacheKey(value.barangayId), JSON.stringify(value));
+export async function saveOfflineMapPack(value: OfflineMapPack) {
+  await AsyncStorage.setItem(getMapPackCacheKey(value.barangayId), JSON.stringify(value));
+}
+
+export async function clearOfflineMapPack(barangayId: string) {
+  await AsyncStorage.removeItem(getMapPackCacheKey(barangayId));
 }

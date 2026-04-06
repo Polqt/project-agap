@@ -7,6 +7,7 @@ import { Container } from "@/shared/components/container";
 import { AppButton, ScreenHeader, SectionCard } from "@/shared/components/ui";
 import { getErrorMessage } from "@/shared/utils/errors";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { queryClient, trpc } from "@/services/trpc";
 import { useEffect, useState } from "react";
@@ -15,14 +16,19 @@ import {
   getOfflineScope,
   patchOfflineResidentAccess,
   saveOfflineResidentAccess,
+  syncOfflineDataForProfile,
   syncOfflineDatasets,
 } from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
+import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 
 export default function OfficialAccountScreen() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const lastSyncedAt = useStore(offlineDataStore, (state) => state.lastSyncedAt);
   const insets = useSafeAreaInsets();
+  const { isOnline, pendingActions, queueAction, retryFailedActions } = useOfflineQueue();
   const signOutToLogin = useSignOutRedirect("/(auth)/sign-in");
   const [accessFeedback, setAccessFeedback] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -121,11 +127,53 @@ export default function OfficialAccountScreen() {
     const currentPingEnabled = cachedData?.residentPingEnabled ?? true;
     const currentCheckInEnabled = cachedData?.residentCheckInEnabled ?? true;
     
-    residentAccessMutation.mutate({
+    const payload = {
       pingEnabled: next.pingEnabled !== undefined ? next.pingEnabled : currentPingEnabled,
       checkInEnabled: next.checkInEnabled !== undefined ? next.checkInEnabled : currentCheckInEnabled,
       expectedUpdatedAt: residentAccessQuery.data?.updatedAt ?? null,
-    });
+    };
+
+    if (!isOnline) {
+      if (offlineScope) {
+        void patchOfflineResidentAccess(offlineScope.scopeId, {
+          residentPingEnabled: payload.pingEnabled,
+          residentCheckInEnabled: payload.checkInEnabled,
+        }).then(() => bumpOfflineDataGeneration());
+      }
+      void retryQueueAccess(payload);
+      return;
+    }
+
+    residentAccessMutation.mutate(payload);
+  }
+
+  async function retryQueueAccess(payload: {
+    pingEnabled: boolean;
+    checkInEnabled: boolean;
+    expectedUpdatedAt: string | null;
+  }) {
+    await createResidentAccessQueue(payload);
+    setAccessFeedback("Resident access queued offline.");
+    setShowToast(true);
+  }
+
+  async function createResidentAccessQueue(payload: {
+    pingEnabled: boolean;
+    checkInEnabled: boolean;
+    expectedUpdatedAt: string | null;
+  }) {
+    await queueAction(createQueuedAction("barangay.set-resident-access", payload, offlineScope));
+  }
+
+  async function handleManualSync() {
+    if (!profile) {
+      return;
+    }
+
+    await syncOfflineDataForProfile(profile);
+    bumpOfflineDataGeneration();
+    setAccessFeedback("Critical offline datasets synced.");
+    setShowToast(true);
   }
 
   return (
@@ -164,6 +212,15 @@ export default function OfficialAccountScreen() {
           title="Resident access"
           subtitle="Turn these on only when residents should be able to submit regular disaster activity."
         >
+          <View className="mb-3 flex-row items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-slate-900">Offline readiness</Text>
+              <Text className="mt-1 text-xs leading-5 text-slate-500">
+                SQLite is now the mobile read model. Use manual sync before deployment or field handoff.
+              </Text>
+            </View>
+            <LastSyncedBadge lastSyncedAt={lastSyncedAt} freshnessThresholdMinutes={15} staleTresholdMinutes={45} />
+          </View>
           <View className="gap-3">
             <ResidentToggleRow
               title="Resident status ping"
@@ -187,6 +244,19 @@ export default function OfficialAccountScreen() {
           <Text className="mt-3 text-sm leading-6 text-slate-500">
             For sudden events like earthquakes, residents can still use the emergency help button even if regular ping is off.
           </Text>
+          <View className="mt-4 gap-3">
+            <AppButton
+              label={isOnline ? "Sync critical offline data" : "Sync unavailable while offline"}
+              onPress={() => void handleManualSync()}
+              disabled={!isOnline}
+              variant="secondary"
+            />
+            <AppButton
+              label={`Retry failed queue items (${pendingActions.filter((action) => action.failedAt !== null).length})`}
+              onPress={() => void retryFailedActions()}
+              variant="secondary"
+            />
+          </View>
         </SectionCard>
         <SectionCard title="Session" subtitle="Use this when handing the device to another user or ending your shift.">
           <AppButton label="Sign out" onPress={() => void signOutToLogin()} variant="secondary" />
