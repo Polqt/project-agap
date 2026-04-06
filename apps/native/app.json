@@ -55,6 +55,9 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "install": {
+      "exclude": ["react", "react-dom"]
+    },
     "extra": {
       "eas": {
         "projectId": "19205e34-a713-4c7f-8950-8c84844e63f4"
