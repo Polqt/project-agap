@@ -49,8 +49,10 @@ function hasNetworkSignature(message: string) {
     value.includes("failed to fetch") ||
     value.includes("connection refused") ||
     value.includes("timed out") ||
+    value.includes("timeout") ||
     value.includes("econnrefused") ||
-    value.includes("offline")
+    value.includes("offline") ||
+    value.includes("request timed out")
   );
 }
 

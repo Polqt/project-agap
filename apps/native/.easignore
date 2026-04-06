@@ -1,0 +1,17 @@
+# Exclude development artifacts
+.git
+node_modules
+
+# Exclude other apps (not needed for the native build)
+apps/web
+apps/web/**
+
+# Exclude test and docs
+**/*.test.ts
+**/*.spec.ts
+**/__tests__/**
+**/coverage/**
+
+# Exclude OS artifacts
+.DS_Store
+Thumbs.db

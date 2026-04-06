@@ -217,14 +217,16 @@ export function useBroadcastPanel() {
   });
 
   useEffect(() => {
-    if (!offlineScope || !isOnline || audienceQuery.isLoading || audienceQuery.data) {
+    if (!offlineScope || !isOnline) {
       return;
     }
 
     void refreshOfflineBroadcastDatasets(["registryHouseholds", "broadcasts", "alerts", "smsLogs"]).catch(
       () => {},
     );
-  }, [audienceQuery.data, audienceQuery.isLoading, isOnline, offlineScope]);
+  // Run whenever the scope becomes available or we come back online
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineScope?.scopeId, isOnline]);
 
   const broadcasts = useMemo(
     () => mergeBroadcastHistory(broadcastsQuery.data ?? [], pendingActions),
@@ -245,7 +247,7 @@ export function useBroadcastPanel() {
   const recipientPreview = useMemo(() => {
     if (!offlineScope) {
       return {
-        label: "Offline audience unavailable",
+        label: "Loading profile...",
         householdCount: 0,
         smsReachableCount: 0,
         appReachableCount: 0,
@@ -363,9 +365,7 @@ export function useBroadcastPanel() {
 
     if (!offlineScope?.barangayId) {
       form.setError("root", {
-        message: isOnline
-          ? "Your official profile is still loading. Try again in a moment."
-          : "This device has not cached your official barangay profile yet. Reconnect once to load it for offline broadcast use.",
+        message: "Your official profile is still loading. Wait a moment and try again.",
       });
       return;
     }

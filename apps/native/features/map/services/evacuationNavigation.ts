@@ -375,7 +375,7 @@ async function fetchGoogleDirections(params: {
     url.searchParams.set("traffic_model", "best_guess");
   }
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithTimeout(url.toString());
   const payload = (await response.json()) as GoogleDirectionsResponse;
 
   if (!response.ok || payload.status !== "OK" || !payload.routes?.length) {
@@ -434,6 +434,19 @@ function getTrafficCandidateScore(candidate: {
   );
 }
 
+const ROUTING_FETCH_TIMEOUT_MS = 8_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), ROUTING_FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
+
 async function buildOsrmRoadRoute(params: {
   center: EvacuationCenterOption;
   origin: LocationPoint;
@@ -446,7 +459,7 @@ async function buildOsrmRoadRoute(params: {
   url.searchParams.set("geometries", "geojson");
   url.searchParams.set("overview", "full");
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithTimeout(url.toString());
   const payload = (await response.json()) as OsrmRouteResponse;
   const route = payload.routes?.[0];
 

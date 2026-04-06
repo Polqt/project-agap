@@ -36,13 +36,15 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
 
   const updateConnectivity = useCallback((state: NetInfoState) => {
     const nextOnline = state.isConnected !== false;
+    // Only treat as weak when explicitly confirmed: 2G/3G cellular or internet
+    // reachability explicitly false. Null/unknown generation (4G/LTE reporting as
+    // null on some Android versions) should NOT be treated as weak.
     const nextWeakConnection =
       nextOnline &&
       (state.isInternetReachable === false ||
         (state.type === "cellular" &&
           (state.details?.cellularGeneration === "2g" ||
-            state.details?.cellularGeneration === "3g" ||
-            state.details?.cellularGeneration == null)));
+            state.details?.cellularGeneration === "3g")));
 
     isOnlineRef.current = nextOnline;
     isWeakConnectionRef.current = nextWeakConnection;
