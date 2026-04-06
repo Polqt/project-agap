@@ -1,6 +1,7 @@
-import { Text, View } from "react-native";
+import { memo } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
-import { AppButton, EmptyState, Pill, SectionCard } from "@/shared/components/ui";
+import { EmptyState, Pill, SectionCard } from "@/shared/components/ui";
 import { formatRelativeTime } from "@/shared/utils/date";
 import type { StatusPing } from "@project-agap/api/supabase";
 
@@ -11,7 +12,7 @@ type Props = {
   onResolve: (pingId: string) => void;
 };
 
-export function PriorityQueueCard({
+function PriorityQueueCardComponent({
   unresolvedPings,
   isResolving,
   resolvingPingId,
@@ -48,12 +49,17 @@ export function PriorityQueueCard({
                 />
               </View>
             </View>
-            <View className="mt-4">
-              <AppButton
-                label="Mark resolved"
+            <View className="mt-3 flex-row justify-end">
+              <Pressable
                 onPress={() => onResolve(ping.id)}
-                loading={isResolving && resolvingPingId === ping.id}
-              />
+                disabled={isResolving && resolvingPingId === ping.id}
+                className="flex-row items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 active:bg-slate-50"
+              >
+                {isResolving && resolvingPingId === ping.id ? (
+                  <ActivityIndicator size="small" color="#64748b" />
+                ) : null}
+                <Text className="text-xs font-semibold text-slate-600">Mark resolved</Text>
+              </Pressable>
             </View>
           </View>
         ))
@@ -71,3 +77,14 @@ export function PriorityQueueCard({
     </SectionCard>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const PriorityQueueCard = memo(PriorityQueueCardComponent, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.unresolvedPings.length === nextProps.unresolvedPings.length &&
+    prevProps.unresolvedPings[0]?.id === nextProps.unresolvedPings[0]?.id &&
+    prevProps.isResolving === nextProps.isResolving &&
+    prevProps.resolvingPingId === nextProps.resolvingPingId
+  );
+});

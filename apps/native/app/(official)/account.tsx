@@ -22,7 +22,6 @@ import {
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
-import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 
 export default function OfficialAccountScreen() {
   const { profile } = useAuth();
@@ -270,14 +269,11 @@ export default function OfficialAccountScreen() {
           title="Resident access"
           subtitle="Turn these on only when residents should be able to submit regular disaster activity."
         >
-          <View className="mb-3 flex-row items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-            <View className="flex-1">
-              <Text className="text-sm font-semibold text-slate-900">Offline readiness</Text>
-              <Text className="mt-1 text-xs leading-5 text-slate-500">
-                SQLite is now the mobile read model. Use manual sync before deployment or field handoff.
-              </Text>
-            </View>
-            <LastSyncedBadge lastSyncedAt={lastSyncedAt} freshnessThresholdMinutes={15} staleTresholdMinutes={45} />
+          <View className="mb-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <Text className="text-sm font-semibold text-slate-900">Offline readiness</Text>
+            <Text className="mt-1 text-xs leading-5 text-slate-500">
+              SQLite is now the mobile read model. Use manual sync before deployment or field handoff.
+            </Text>
           </View>
           <View className="gap-3">
             <ResidentToggleRow

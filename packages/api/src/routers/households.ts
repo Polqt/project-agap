@@ -405,12 +405,17 @@ export const householdsRouter = router({
 
       const query = await ctx.supabase
         .from("households")
-        .select(householdBaseSelect, { count: "exact" })
+        .select(`${householdBaseSelect}, household_members(id, household_id, full_name, age, vulnerability_flags, notes, created_at)`, { count: "exact" })
         .eq("barangay_id", barangayId)
         .order("household_head", { ascending: true })
         .range(from, to);
 
-      const households = getSupabaseDataOrThrow<Household[]>(query, "Failed to list households.") ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = getSupabaseDataOrThrow<HouseholdRecordWithMembers[]>(query as any, "Failed to list households.") ?? [];
+      const households: HouseholdWithMembers[] = rows.map((row) => ({
+        ...row,
+        household_members: row.household_members ?? [],
+      }));
 
       return {
         items: households,

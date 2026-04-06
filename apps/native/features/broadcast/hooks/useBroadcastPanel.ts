@@ -12,6 +12,7 @@ import {
   getOfflineScope,
   listOfflineAlerts,
   listOfflineBroadcasts,
+  listOfflineMissingPersons,
   listOfflineRegistryHouseholds,
   listOfflineSmsLogs,
   syncOfflineDatasets,
@@ -169,6 +170,12 @@ export function useBroadcastPanel() {
     queryFn: async () => listOfflineSmsLogs(offlineScope!.scopeId),
   });
 
+  const missingPersonsQuery = useQuery({
+    queryKey: ["offline", "broadcasts-panel-missing-persons", offlineScope?.scopeId, offlineGeneration],
+    enabled: Boolean(offlineScope?.scopeId),
+    queryFn: async () => listOfflineMissingPersons(offlineScope!.scopeId),
+  });
+
   const audienceQuery = useQuery({
     queryKey: ["offline", "broadcasts-panel-audience", offlineScope?.scopeId, offlineGeneration],
     enabled: Boolean(offlineScope?.scopeId),
@@ -221,8 +228,10 @@ export function useBroadcastPanel() {
       return;
     }
 
-    void refreshOfflineBroadcastDatasets(["registryHouseholds", "broadcasts", "alerts", "smsLogs"]).catch(
-      () => {},
+    void refreshOfflineBroadcastDatasets(["registryHouseholds", "broadcasts", "alerts", "smsLogs", "missingPersons"]).catch(
+      (error) => {
+        console.error("[Broadcast] Failed to refresh datasets:", error);
+      },
     );
   // Run whenever the scope becomes available or we come back online
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -456,14 +465,17 @@ export function useBroadcastPanel() {
     isLoadingAlerts: alertsQuery.isLoading,
     isLoadingAudience: audienceQuery.isLoading,
     isLoadingBroadcasts: broadcastsQuery.isLoading,
+    isLoadingMissingPersons: missingPersonsQuery.isLoading,
     isLoadingSmsStats: smsLogsQuery.isLoading,
     isOnline,
     isRefreshing:
       alertsQuery.isFetching ||
       audienceQuery.isFetching ||
       broadcastsQuery.isFetching ||
+      missingPersonsQuery.isFetching ||
       smsLogsQuery.isFetching,
     isSubmitting,
+    missingPersons: missingPersonsQuery.data ?? [],
     purokOptions,
     queuedBroadcastCount,
     recipientPreview,

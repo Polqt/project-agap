@@ -242,11 +242,6 @@ export function StatusScreen() {
               <Text className="text-[13px] text-slate-400">{profile.purok}</Text>
             </View>
           ) : null}
-          {syncTimestampQuery.data ? (
-            <View className="mt-2">
-              <LastSyncedBadge lastSyncedAt={syncTimestampQuery.data} freshnessThresholdMinutes={15} staleTresholdMinutes={30} />
-            </View>
-          ) : null}
         </View>
 
         {!isOnline ? (
@@ -254,7 +249,6 @@ export function StatusScreen() {
             <Ionicons name="cloud-offline-outline" size={16} color="#d97706" />
             <Text className="flex-1 text-[13px] font-medium text-amber-700">
               {t("common.offline")}
-              {queuedCount > 0 ? ` · ${queuedCount} ping${queuedCount > 1 ? "s" : ""} queued` : ""}
             </Text>
           </View>
         ) : null}
@@ -285,7 +279,7 @@ export function StatusScreen() {
               <View className="flex-1">
                 <Text className="text-[15px] font-bold text-slate-900">{lastStatusLabel}</Text>
                 <Text className="text-[12px] text-slate-500">
-                  {formatRelativeTime(latestPing.pinged_at)} · {latestPingIsQueued ? "queued" : "synced"}
+                  {formatRelativeTime(latestPing.pinged_at)}
                 </Text>
               </View>
               <View
@@ -309,7 +303,7 @@ export function StatusScreen() {
                   {lastPingPreview.status === "safe" ? t("status.iAmSafe") : t("status.iNeedHelp")}
                 </Text>
                 <Text className="text-[12px] text-amber-700">
-                  {formatRelativeTime(lastPingPreview.createdAt)} · queued
+                  {formatRelativeTime(lastPingPreview.createdAt)}
                 </Text>
               </View>
               <View className="h-2 w-2 rounded-full bg-amber-400" />

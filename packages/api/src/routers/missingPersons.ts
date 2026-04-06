@@ -9,6 +9,7 @@ import {
 import { protectedProcedure, router } from "../index";
 import { uuidSchema } from "../schemas";
 import type { MissingPerson, TableInsert } from "../supabase";
+import { sendExpoPush, type ExpoPushMessage } from "../expo-push";
 
 const columns =
   "id, barangay_id, reported_by, full_name, age, last_seen_location, description, status, found_at, found_by, created_at, updated_at";
@@ -70,6 +71,44 @@ export const missingPersonsRouter = router({
           mutation_type: "missing-person-report",
           result_payload: JSON.stringify(result),
         });
+      }
+
+      // Send push notifications to all Officials in the barangay
+      try {
+        const { data: officialProfiles } = await ctx.supabase
+          .from("profiles")
+          .select("id")
+          .eq("barangay_id", barangayId)
+          .eq("app_role", "official");
+
+        const officialIds = (officialProfiles ?? []).map((p) => p.id);
+        
+        if (officialIds.length > 0) {
+          const { data: tokens } = await ctx.supabase
+            .from("push_tokens")
+            .select("token")
+            .in("resident_id", officialIds)
+            .eq("is_active", true);
+
+          const pushTokens = (tokens ?? []).map((t) => t.token).filter(Boolean);
+
+          if (pushTokens.length > 0) {
+            const pushMessages: ExpoPushMessage[] = pushTokens.map((token) => ({
+              to: token,
+              title: "MISSING PERSON REPORT",
+              body: `${input.fullName}${input.age ? `, ${input.age} years old` : ""} has been reported missing${input.lastSeenLocation ? ` last seen at ${input.lastSeenLocation}` : ""}.`,
+              data: { type: "missing-person", missingPersonId: result.id },
+              sound: "default",
+              channelId: "agap-alerts",
+              priority: "high",
+            }));
+
+            await sendExpoPush(pushMessages);
+          }
+        }
+      } catch (error) {
+        // Log but don't fail the request if notifications fail
+        console.error("Failed to send missing person notifications:", error);
       }
 
       return result;

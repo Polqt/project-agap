@@ -16,7 +16,6 @@ import {
 } from "@/services/offlineData";
 import { getOfflineMapPack } from "@/services/mapCache";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
-import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { createQueuedAction } from "@/services/offlineQueueActions";
 import { getErrorMessage } from "@/shared/utils/errors";
 import { getLatestSyncedTimestamp } from "@/shared/utils/offline-freshness";
@@ -311,20 +310,7 @@ export function EvacuationMap() {
     );
   }
 
-  function handleZoom(multiplier: number) {
-    const currentRegion = mapRef.current?.__lastRegion ?? region;
-
-    mapRef.current?.animateToRegion(
-      {
-        ...currentRegion,
-        latitudeDelta: Math.max(0.0015, currentRegion.latitudeDelta * multiplier),
-        longitudeDelta: Math.max(0.0015, currentRegion.longitudeDelta * multiplier),
-      },
-      250,
-    );
-  }
-
-  return (
+return (
     <View className="flex-1 bg-slate-950">
       {MapViewComponent && MarkerComponent && PolylineComponent ? (
         <View className="flex-1">
@@ -437,32 +423,10 @@ export function EvacuationMap() {
           ) : null}
 
           <View
-            pointerEvents="none"
-            className="absolute left-4"
-            style={{ top: insets.top + (infoMessage ? 88 : 12) }}
-          >
-            <LastSyncedBadge
-              lastSyncedAt={syncTimestampQuery.data ?? null}
-              freshnessThresholdMinutes={15}
-              staleTresholdMinutes={45}
-            />
-          </View>
-
-          <View
             pointerEvents="box-none"
             className="absolute right-4 gap-3"
             style={{ top: insets.top + 14 }}
           >
-            <FloatingIconButton
-              icon="add"
-              onPress={() => handleZoom(0.6)}
-              disabled={!origin}
-            />
-            <FloatingIconButton
-              icon="remove"
-              onPress={() => handleZoom(1.5)}
-              disabled={!origin}
-            />
             <FloatingIconButton
               icon="locate"
               onPress={handleRecenter}
@@ -508,7 +472,6 @@ export function EvacuationMap() {
             onSelectCenter={handleSelectCenter}
           />
 
-          <MapTileStatusCard summary={tileStrategy.summary} mode={tileStrategy.kind} />
         </View>
       ) : (
         <View className="flex-1">
@@ -525,18 +488,6 @@ export function EvacuationMap() {
               <Text className="text-sm font-medium text-slate-700">{infoMessage}</Text>
             </View>
           ) : null}
-          <View
-            pointerEvents="none"
-            className="absolute left-4"
-            style={{ top: insets.top + (infoMessage ? 88 : 12) }}
-          >
-            <LastSyncedBadge
-              lastSyncedAt={syncTimestampQuery.data ?? null}
-              freshnessThresholdMinutes={15}
-              staleTresholdMinutes={45}
-            />
-          </View>
-          <MapTileStatusCard summary={tileStrategy.summary} mode={tileStrategy.kind} />
         </View>
       )}
     </View>
@@ -567,41 +518,6 @@ function OfflineMapPlaceholder({ summary }: { summary: string }) {
   );
 }
 
-function MapTileStatusCard({
-  summary,
-  mode,
-}: {
-  summary: string;
-  mode: "local-tiles" | "vector-fallback" | "remote-preview";
-}) {
-  const toneClasses =
-    mode === "local-tiles"
-      ? "border-emerald-300 bg-emerald-50"
-      : mode === "remote-preview"
-        ? "border-blue-300 bg-blue-50"
-        : "border-amber-300 bg-amber-50";
-  const textClasses =
-    mode === "local-tiles"
-      ? "text-emerald-900"
-      : mode === "remote-preview"
-        ? "text-blue-900"
-        : "text-amber-950";
-
-  return (
-    <View className="absolute bottom-32 left-4 right-4">
-      <View className={`rounded-3xl border px-4 py-3 shadow ${toneClasses}`}>
-        <Text className={`text-xs font-semibold uppercase tracking-[1px] ${textClasses}`}>
-          {mode === "local-tiles"
-            ? "Offline tiles ready"
-            : mode === "remote-preview"
-              ? "Remote preview fallback"
-              : "Vector fallback mode"}
-        </Text>
-        <Text className={`mt-1 text-xs leading-5 ${textClasses}`}>{summary}</Text>
-      </View>
-    </View>
-  );
-}
 
 function UserLocationMarker({ isPinned }: { isPinned: boolean }) {
   return (
@@ -719,7 +635,7 @@ function getInfoMessage(params: {
   }
 
   if (!params.hasRoute) {
-    return "No open evacuation centers with route guidance are available right now.";
+    return null;
   }
 
   if (params.navigationError) {

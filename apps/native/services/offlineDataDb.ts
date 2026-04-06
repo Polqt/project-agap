@@ -118,26 +118,28 @@ export async function replaceOfflineCollection<TValue extends { id: string }>(
   items: TValue[],
 ) {
   const database = await getOfflineDataDatabase();
-  await database.withTransactionAsync(async () => {
+  // Do not use withTransactionAsync here — concurrent calls (e.g. Promise.all
+  // in syncOfflineDatasets) would cause "cannot start a transaction within a
+  // transaction". Individual runAsync calls are atomic enough for our needs;
+  // a partial write is self-healing on the next sync.
+  const now = Date.now();
+  await database.runAsync(
+    "DELETE FROM offline_documents WHERE scope_id = ? AND collection = ?",
+    scopeId,
+    collection,
+  );
+  for (const item of items) {
     await database.runAsync(
-      "DELETE FROM offline_documents WHERE scope_id = ? AND collection = ?",
+      `INSERT OR REPLACE INTO offline_documents
+        (scope_id, collection, document_key, payload, updated_at)
+        VALUES (?, ?, ?, ?, ?)`,
       scopeId,
       collection,
+      item.id,
+      JSON.stringify(item),
+      now,
     );
-
-    for (const item of items) {
-      await database.runAsync(
-        `INSERT INTO offline_documents
-          (scope_id, collection, document_key, payload, updated_at)
-          VALUES (?, ?, ?, ?, ?)`,
-        scopeId,
-        collection,
-        item.id,
-        JSON.stringify(item),
-        Date.now(),
-      );
-    }
-  });
+  }
 }
 
 export async function setOfflineSyncTimestamp(scopeId: string, dataset: string, syncedAt = Date.now()) {
@@ -180,8 +182,6 @@ export async function readAllSyncTimestamps(scopeId: string) {
 
 export async function clearOfflineScope(scopeId: string) {
   const database = await getOfflineDataDatabase();
-  await database.withTransactionAsync(async () => {
-    await database.runAsync("DELETE FROM offline_documents WHERE scope_id = ?", scopeId);
-    await database.runAsync("DELETE FROM offline_sync_state WHERE scope_id = ?", scopeId);
-  });
+  await database.runAsync("DELETE FROM offline_documents WHERE scope_id = ?", scopeId);
+  await database.runAsync("DELETE FROM offline_sync_state WHERE scope_id = ?", scopeId);
 }

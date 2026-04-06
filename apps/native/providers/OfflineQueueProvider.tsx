@@ -111,9 +111,9 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
           await updateQueuedActionRetries(action.id, nextRetries);
           await new Promise((resolve) => setTimeout(resolve, getRetryDelayMs(nextRetries - 1)));
 
-          // Avoid repeatedly processing the rest of the queue in the same cycle when
-          // the backend/session is currently failing; retry on the next online event.
-          break;
+          // Continue processing remaining queued actions instead of breaking.
+          // This ensures that one failed action doesn't block the entire queue.
+          continue;
         }
       }
     } finally {

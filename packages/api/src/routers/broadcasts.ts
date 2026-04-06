@@ -7,7 +7,7 @@ import {
   getProfileBarangayIdOrThrow,
   getSupabaseDataOrThrow,
 } from "../router-helpers";
-import { officialProcedure, router } from "../index";
+import { officialProcedure, protectedProcedure, router } from "../index";
 import { barangayIdSchema } from "../schemas";
 import type { Broadcast, TableInsert } from "../supabase";
 import { sendExpoPush, type ExpoPushMessage } from "../expo-push";
@@ -323,10 +323,10 @@ export const broadcastsRouter = router({
       return result;
     }),
 
-  list: officialProcedure
-    .input(barangayIdSchema)
+  list: protectedProcedure
+    .input(barangayIdSchema.optional())
     .query(async ({ ctx, input }) => {
-      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+      const barangayId = input?.barangayId ?? getProfileBarangayIdOrThrow(ctx.profile);
 
       return getSupabaseDataOrThrow<Broadcast[]>(
         await ctx.supabase

@@ -13,7 +13,6 @@ import { OfflineDataProvider } from "@/providers/OfflineDataProvider";
 import { OfflineQueueProvider } from "@/providers/OfflineQueueProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { RealtimeSyncProvider } from "@/providers/RealtimeSyncProvider";
-import { OfflineBanner } from "@/shared/components/offline-banner";
 import { i18n, loadPersistedLanguage } from "@/shared/i18n";
 
 export const unstable_settings = {
@@ -65,7 +64,6 @@ export default function RootLayout() {
                 <OfflineQueueProvider>
                   <OfflineDataProvider>
                     <RealtimeSyncProvider>
-                      <OfflineBanner />
                       <Stack key={langKey} screenOptions={{ headerShown: false }}>
                         <Stack.Screen name="index" />
                         <Stack.Screen name="onboarding" />

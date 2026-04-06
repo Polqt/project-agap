@@ -24,10 +24,12 @@ export function BroadcastPanel() {
     isLoadingAlerts,
     isLoadingAudience,
     isLoadingBroadcasts,
+    isLoadingMissingPersons,
     isLoadingSmsStats,
     isOnline,
     isRefreshing,
     isSubmitting,
+    missingPersons,
     purokOptions,
     queuedBroadcastCount,
     recipientPreview,
@@ -122,7 +124,8 @@ export function BroadcastPanel() {
           alerts={alerts}
           broadcasts={broadcasts}
           deliveryStatsByBroadcastId={deliveryStatsByBroadcastId}
-          isRefreshing={isRefreshing || isLoadingAlerts || isLoadingBroadcasts || isLoadingSmsStats}
+          isRefreshing={isRefreshing || isLoadingAlerts || isLoadingBroadcasts || isLoadingMissingPersons || isLoadingSmsStats}
+          missingPersons={missingPersons}
           onLongPressBroadcast={loadBroadcastIntoComposer}
         />
       )}

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import { Alert } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useEffect } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import {
@@ -52,6 +53,18 @@ export function useAlertsData(isBalitaTab: boolean) {
     await syncOfflineDatasets(offlineScope, datasets);
     bumpOfflineDataGeneration();
   }
+
+  // Seed alerts and broadcasts on mount / reconnect so Mensahe tab is never empty
+  useEffect(() => {
+    if (!offlineScope || !isOnline) {
+      return;
+    }
+
+    void syncOfflineDatasets(offlineScope, ["alerts", "broadcasts"])
+      .then(() => bumpOfflineDataGeneration())
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineScope?.scopeId, isOnline]);
 
   const alertsQuery = useQuery({
     queryKey: ["offline", "alerts", offlineScope?.scopeId, offlineGeneration],

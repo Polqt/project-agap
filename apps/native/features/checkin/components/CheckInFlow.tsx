@@ -24,7 +24,6 @@ import {
   listOfflineEvacuationCenters,
 } from "@/services/offlineData";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
-import { LastSyncedBadge } from "@/shared/components/last-synced-badge";
 import { offlineDataStore } from "@/stores/offline-data-store";
 
 type Mode = "qr" | "manual";
@@ -330,13 +329,6 @@ export function CheckInFlow({ kioskMode = false }: { kioskMode?: boolean }) {
       >
         <View className="px-5">
           <Text className="text-[22px] font-bold text-slate-900">{t("checkin.title")}</Text>
-          <View className="mt-2">
-            <LastSyncedBadge
-              lastSyncedAt={syncTimestampQuery.data ?? null}
-              freshnessThresholdMinutes={15}
-              staleTresholdMinutes={45}
-            />
-          </View>
         </View>
 
         <View className="mx-5 mt-4 flex-row rounded-xl bg-slate-100 p-1">

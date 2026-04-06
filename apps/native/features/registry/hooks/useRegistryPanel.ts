@@ -97,7 +97,9 @@ export function useRegistryPanel() {
 
     void syncOfflineDatasets(offlineScope, ["registryHouseholds"])
       .then(() => bumpOfflineDataGeneration())
-      .catch(() => {});
+      .catch((error) => {
+        console.error("[Registry] Failed to sync households:", error);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineScope?.scopeId, isOnline]);
 

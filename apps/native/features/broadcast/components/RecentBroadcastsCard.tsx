@@ -2,7 +2,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { EmptyState } from "@/shared/components/ui";
 import { formatDateTime } from "@/shared/utils/date";
-import type { Alert } from "@project-agap/api/supabase";
+import type { Alert, MissingPerson } from "@project-agap/api/supabase";
 
 import type { BroadcastTimelineItem } from "../services/broadcasts";
 
@@ -19,6 +19,7 @@ type Props = {
   broadcasts: BroadcastTimelineItem[];
   deliveryStatsByBroadcastId: Map<string, DeliveryStats>;
   isRefreshing?: boolean;
+  missingPersons?: MissingPerson[];
   onLongPressBroadcast: (broadcast: BroadcastTimelineItem) => void;
 };
 
@@ -52,6 +53,7 @@ export function RecentBroadcastsCard({
   broadcasts,
   deliveryStatsByBroadcastId,
   isRefreshing,
+  missingPersons = [],
   onLongPressBroadcast,
 }: Props) {
   return (
@@ -96,6 +98,49 @@ export function RecentBroadcastsCard({
           />
         )}
       </View>
+
+      {/* Missing Persons Reports */}
+      {missingPersons.length > 0 && (
+        <View className="gap-3">
+          <Text className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+            Missing Person Reports
+          </Text>
+          <View className="gap-2.5">
+            {missingPersons
+              .filter((person) => person.status === "missing")
+              .slice(0, 5)
+              .map((person) => (
+                <View
+                  key={person.id}
+                  className="rounded-xl border border-orange-200 bg-orange-50 p-3.5"
+                >
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">
+                      Missing Person
+                    </Text>
+                    <Text className="text-[11px] text-slate-400">
+                      {formatDateTime(person.created_at)}
+                    </Text>
+                  </View>
+                  <Text className="mt-2 text-[15px] font-semibold text-slate-900">
+                    {person.full_name}
+                    {person.age ? `, ${person.age} years old` : ""}
+                  </Text>
+                  {person.last_seen_location && (
+                    <Text className="mt-1 text-[13px] text-slate-600">
+                      Last seen: {person.last_seen_location}
+                    </Text>
+                  )}
+                  {person.description && (
+                    <Text className="mt-1 text-[13px] leading-5 text-slate-600">
+                      {person.description}
+                    </Text>
+                  )}
+                </View>
+              ))}
+          </View>
+        </View>
+      )}
 
       {/* Broadcast history */}
       <View className="gap-3">

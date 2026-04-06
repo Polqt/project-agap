@@ -277,7 +277,7 @@ export async function listOfflineWelfareAssignments(scopeId: string) {
 }
 
 export async function listOfflineRegistryHouseholds(scopeId: string) {
-  return listOfflineDocuments<Household>(scopeId, OFFLINE_COLLECTIONS.registryHouseholds);
+  return listOfflineDocuments<HouseholdWithMembers>(scopeId, OFFLINE_COLLECTIONS.registryHouseholds);
 }
 
 export async function getOfflineRegistryHousehold(scopeId: string, householdId: string) {
