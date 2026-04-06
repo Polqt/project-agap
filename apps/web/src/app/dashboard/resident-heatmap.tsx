@@ -42,7 +42,21 @@ function HeatLayer({ points }: { points: ResidentHeatmapPoint[] }) {
   const map = useMap();
 
   const weightedPoints = useMemo(
-    () => points.map((point) => [point.latitude, point.longitude, 0.4] as [number, number, number]),
+    () =>
+      points
+        .filter(
+          (point) =>
+            Number.isFinite(point.latitude) &&
+            Number.isFinite(point.longitude),
+        )
+        .map(
+          (point) =>
+            [point.latitude, point.longitude, 0.9] as [
+              number,
+              number,
+              number,
+            ],
+        ),
     [points],
   );
 
@@ -52,14 +66,14 @@ function HeatLayer({ points }: { points: ResidentHeatmapPoint[] }) {
     }
 
     const layer = heatLayerFactory(weightedPoints, {
-      radius: 30,
-      blur: 22,
+      radius: 42,
+      blur: 28,
       maxZoom: 17,
-      minOpacity: 0.35,
+      minOpacity: 0.55,
       gradient: {
-        0.2: "#fef08a",
-        0.45: "#fb923c",
-        0.75: "#ef4444",
+        0.15: "#fef08a",
+        0.4: "#fdba74",
+        0.68: "#ef4444",
         1: "#7f1d1d",
       },
     });

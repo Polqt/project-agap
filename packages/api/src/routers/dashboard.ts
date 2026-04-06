@@ -10,6 +10,12 @@ type ResidentHeatmapProfile = Pick<
   "id" | "pinned_latitude" | "pinned_longitude"
 >;
 
+type ResidentHeatmapPoint = {
+  resident_id: string;
+  latitude: number;
+  longitude: number;
+};
+
 export const dashboardRouter = router({
   summary: officialProcedure
     .input(barangayIdSchema)
@@ -33,7 +39,43 @@ export const dashboardRouter = router({
       };
     }),
 
-  heatmapData: protectedProcedure
+  residentHeatmap: officialProcedure
+    .input(barangayIdSchema)
+    .query(async ({ ctx, input }) => {
+      const barangayId = getAuthorizedBarangayId(ctx.profile, input.barangayId);
+
+      const profiles =
+        getSupabaseDataOrThrow<ResidentHeatmapProfile[]>(
+          await ctx.supabase
+            .from("profiles")
+            .select("id, pinned_latitude, pinned_longitude")
+            .eq("barangay_id", barangayId)
+            .not("pinned_latitude", "is", null)
+            .not("pinned_longitude", "is", null),
+          "Failed to load resident heatmap data.",
+        ) ?? [];
+
+      const points: ResidentHeatmapPoint[] = [];
+
+      for (const profile of profiles) {
+        const latitude = Number(profile.pinned_latitude);
+        const longitude = Number(profile.pinned_longitude);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          continue;
+        }
+
+        points.push({
+          resident_id: profile.id,
+          latitude,
+          longitude,
+        });
+      }
+
+      return points;
+    }),
+
+  heatmapData: officialProcedure
     .input(barangayIdSchema)
     .query(async ({ ctx, input }) => {
       const barangayId = input.barangayId ?? getProfileBarangayIdOrThrow(ctx.profile);
