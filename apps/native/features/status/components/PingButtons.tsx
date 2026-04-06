@@ -19,6 +19,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import { formatDateTime, formatRelativeTime } from "@/shared/utils/date";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
@@ -36,7 +37,7 @@ function triggerHaptic(effect: () => Promise<unknown>) {
 export function PingButtons() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, pendingActions, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, pendingActions, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const lastPingPreview = useStore(appShellStore, (state) => state.lastStatusPing);
   const [message, setMessage] = useState("");
@@ -162,6 +163,8 @@ export function PingButtons() {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("status-ping.submit", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setFeedback(null);
 
@@ -172,8 +175,8 @@ export function PingButtons() {
     }
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
-      await saveOptimisticPing(status, payload.householdId, payload.message);
+      await queueAction(queuedAction);
+      await saveOptimisticPing(status, livePayload.householdId, livePayload.message ?? undefined);
       setLastStatusPing({
         status,
         createdAt: Date.now(),
@@ -185,17 +188,25 @@ export function PingButtons() {
     }
 
     try {
-      await submitPingMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Status ping",
+        () => submitPingMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
-        await saveOptimisticPing(status, payload.householdId, payload.message);
+        await queueAction(queuedAction);
+        await saveOptimisticPing(status, livePayload.householdId, livePayload.message ?? undefined);
         setLastStatusPing({
           status,
           createdAt: Date.now(),
           source: "queue",
         });
-        setFeedback("Connection dropped while sending. We queued your ping locally.");
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery after retries, so your ping was staged locally."
+            : "Connection dropped while sending. We queued your ping locally.",
+        );
         setMessage("");
         return;
       }
@@ -217,6 +228,8 @@ export function PingButtons() {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("status-ping.submit", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setProxyFeedback(null);
 
@@ -227,8 +240,8 @@ export function PingButtons() {
     }
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
-      await saveOptimisticPing(status, payload.householdId, payload.message);
+      await queueAction(queuedAction);
+      await saveOptimisticPing(status, livePayload.householdId, livePayload.message ?? undefined);
       setProxyFeedback("No connection right now. The proxy ping was queued and will sync on reconnect.");
       setProxyMessage("");
       setProxySearch("");
@@ -237,12 +250,20 @@ export function PingButtons() {
     }
 
     try {
-      await submitProxyPingMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Proxy status ping",
+        () => submitProxyPingMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
-        await saveOptimisticPing(status, payload.householdId, payload.message);
-        setProxyFeedback("Connection dropped while sending. We queued the proxy ping locally.");
+        await queueAction(queuedAction);
+        await saveOptimisticPing(status, livePayload.householdId, livePayload.message ?? undefined);
+        setProxyFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery after retries, so the proxy ping was staged locally."
+            : "Connection dropped while sending. We queued the proxy ping locally.",
+        );
         setProxyMessage("");
         setProxySearch("");
         setSelectedProxyHouseholdId(null);

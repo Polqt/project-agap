@@ -14,6 +14,7 @@ import {
   syncOfflineDataForProfile,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
@@ -30,7 +31,7 @@ import { offlineDataStore, bumpOfflineDataGeneration } from "@/stores/offline-da
 export function useProfilePanel() {
   const { profile, session, signOut, refreshProfile, resetPassword } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
   const [householdFeedback, setHouseholdFeedback] = useState<string | null>(null);
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
@@ -154,6 +155,8 @@ export function useProfilePanel() {
       phoneNumber: values.phoneNumber || null,
       purok: values.purok,
     };
+    const queuedAction = createQueuedAction("profile.update", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     try {
       if (!isOnline) {
@@ -166,12 +169,16 @@ export function useProfilePanel() {
           bumpOfflineDataGeneration();
         }
 
-        await queueAction(createQueuedAction("profile.update", payload, offlineScope));
+        await queueAction(queuedAction);
         setProfileFeedback("Profile update queued offline.");
         return;
       }
 
-      await profileMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Profile update",
+        () => profileMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
         if (offlineScope) {
@@ -183,8 +190,12 @@ export function useProfilePanel() {
           bumpOfflineDataGeneration();
         }
 
-        await queueAction(createQueuedAction("profile.update", payload, offlineScope));
-        setProfileFeedback("Connection dropped. Profile update queued for auto-sync.");
+        await queueAction(queuedAction);
+        setProfileFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the profile update was staged for retry."
+            : "Connection dropped. Profile update queued for auto-sync.",
+        );
         return;
       }
 
@@ -210,19 +221,29 @@ export function useProfilePanel() {
         notes: member.notes || null,
       })),
     };
+    const queuedAction = createQueuedAction("household.register", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     try {
       if (!isOnline) {
-        await queueAction(createQueuedAction("household.register", payload, offlineScope));
+        await queueAction(queuedAction);
         setHouseholdFeedback("Household details queued offline.");
         return;
       }
 
-      await householdMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Household registration",
+        () => householdMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("household.register", payload, offlineScope));
-        setHouseholdFeedback("Connection dropped. Household details queued for auto-sync.");
+        await queueAction(queuedAction);
+        setHouseholdFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so household details were staged for retry."
+            : "Connection dropped. Household details queued for auto-sync.",
+        );
         return;
       }
 

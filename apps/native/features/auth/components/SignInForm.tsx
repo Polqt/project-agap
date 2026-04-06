@@ -35,16 +35,18 @@ export function SignInForm() {
   });
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || !role || !session?.user.id) {
+    const resolvedRole = role ?? selectedRole;
+
+    if (isLoading || !isAuthenticated || !resolvedRole || !session?.user.id) {
       return;
     }
 
     let isCancelled = false;
     const userId = session.user.id;
-    const resolvedRole = role;
+    const routeRole = resolvedRole;
 
     async function routeAfterSignIn() {
-      const nextRoute = await getPostAuthRoute(userId, resolvedRole);
+      const nextRoute = await getPostAuthRoute(userId, routeRole);
 
       if (!isCancelled) {
         router.replace(nextRoute);
@@ -56,7 +58,7 @@ export function SignInForm() {
     return () => {
       isCancelled = true;
     };
-  }, [isAuthenticated, isLoading, role, router, session?.user.id]);
+  }, [isAuthenticated, isLoading, role, router, selectedRole, session?.user.id]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);

@@ -12,6 +12,7 @@ import {
   upsertOfflineRegistryHousehold,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
@@ -79,7 +80,7 @@ export function useRegistryPanel() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [filter, setFilter] = useState<RegistryFilter>("all");
@@ -142,7 +143,9 @@ export function useRegistryPanel() {
         setFeedback(`Status updated to ${variables.evacuationStatus.replaceAll("_", " ")}.`);
       },
       onError: () => {
-        void syncDatasets(["registryHouseholds", "dashboardSummary", "unaccountedHouseholds"]);
+        void syncDatasets(["registryHouseholds", "dashboardSummary", "unaccountedHouseholds"]).catch(
+          () => {},
+        );
         setFeedback("Registry status changed elsewhere. Data refreshed.");
       },
     }),
@@ -176,7 +179,9 @@ export function useRegistryPanel() {
         setFeedback("Welfare visit assigned.");
       },
       onError: () => {
-        void syncDatasets(["registryHouseholds", "welfareAssignments", "welfareDispatch"]);
+        void syncDatasets(["registryHouseholds", "welfareAssignments", "welfareDispatch"]).catch(
+          () => {},
+        );
         setFeedback("Welfare assignment changed elsewhere. Data refreshed.");
       },
     }),
@@ -189,32 +194,31 @@ export function useRegistryPanel() {
   async function assignWelfare(householdId: string) {
     const expectedUpdatedAt =
       households.find((household) => household.id === householdId)?.updated_at ?? null;
+    const queuedAction = createQueuedAction("household.assign-welfare", {
+      householdId,
+      expectedUpdatedAt,
+    }, offlineScope);
 
     if (!isOnline) {
-      await queueAction(
-        createQueuedAction("household.assign-welfare", {
-          householdId,
-          expectedUpdatedAt,
-        }, offlineScope),
-      );
+      await queueAction(queuedAction);
       setFeedback("Welfare visit queued offline.");
       return;
     }
 
     try {
-      await assignWelfareMutation.mutateAsync({
-        householdId,
-        expectedUpdatedAt,
-      });
+      await runWithNetworkResilience(
+        "Welfare assignment",
+        () => assignWelfareMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(
-          createQueuedAction("household.assign-welfare", {
-            householdId,
-            expectedUpdatedAt,
-          }, offlineScope),
+        await queueAction(queuedAction);
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the welfare visit was staged for retry."
+            : "Connection dropped. Welfare visit queued for auto-sync.",
         );
-        setFeedback("Connection dropped. Welfare visit queued for auto-sync.");
         return;
       }
 
@@ -225,35 +229,32 @@ export function useRegistryPanel() {
   async function updateStatus(householdId: string, evacuationStatus: EvacuationStatus) {
     const expectedUpdatedAt =
       households.find((household) => household.id === householdId)?.updated_at ?? null;
+    const queuedAction = createQueuedAction("household.update-status", {
+      householdId,
+      evacuationStatus,
+      expectedUpdatedAt,
+    }, offlineScope);
 
     if (!isOnline) {
-      await queueAction(
-        createQueuedAction("household.update-status", {
-          householdId,
-          evacuationStatus,
-          expectedUpdatedAt,
-        }, offlineScope),
-      );
+      await queueAction(queuedAction);
       setFeedback(`Status queued offline as ${evacuationStatus.replaceAll("_", " ")}.`);
       return;
     }
 
     try {
-      await updateStatusMutation.mutateAsync({
-        householdId,
-        evacuationStatus,
-        expectedUpdatedAt,
-      });
+      await runWithNetworkResilience(
+        "Registry status update",
+        () => updateStatusMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(
-          createQueuedAction("household.update-status", {
-            householdId,
-            evacuationStatus,
-            expectedUpdatedAt,
-          }, offlineScope),
+        await queueAction(queuedAction);
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the registry update was staged for retry."
+            : "Connection dropped. Registry update queued for auto-sync.",
         );
-        setFeedback("Connection dropped. Registry update queued for auto-sync.");
         return;
       }
 

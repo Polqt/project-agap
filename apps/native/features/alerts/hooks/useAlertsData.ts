@@ -14,6 +14,7 @@ import {
   upsertOfflineMissingPerson,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
@@ -38,7 +39,7 @@ export function useAlertsData(isBalitaTab: boolean) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const offlineScope = getOfflineScope(profile);
 
   async function syncDatasets(
@@ -137,7 +138,7 @@ export function useAlertsData(isBalitaTab: boolean) {
         void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] });
       },
       onError: (err) => {
-        void syncDatasets(["missingPersons"]);
+        void syncDatasets(["missingPersons"]).catch(() => {});
         Alert.alert(t("common.error"), getErrorMessage(err));
       },
     }),
@@ -166,7 +167,7 @@ export function useAlertsData(isBalitaTab: boolean) {
         void queryClient.invalidateQueries({ queryKey: ["trpc", "missingPersons"] });
       },
       onError: (err) => {
-        void syncDatasets(["missingPersons"]);
+        void syncDatasets(["missingPersons"]).catch(() => {});
         Alert.alert("Error", getErrorMessage(err));
       },
     }),
@@ -203,18 +204,29 @@ export function useAlertsData(isBalitaTab: boolean) {
   }
 
   async function reportMissingPerson(input: Parameters<typeof reportMutation.mutateAsync>[0]) {
+    const queuedAction = createQueuedAction("missing-person.report", input, offlineScope);
+
     if (!isOnline) {
-      await queueAction(createQueuedAction("missing-person.report", input, offlineScope));
+      await queueAction(queuedAction);
       Alert.alert(t("common.success"), "Missing-person report queued offline.");
       return;
     }
 
     try {
-      await reportMutation.mutateAsync(input);
+      await runWithNetworkResilience(
+        "Missing-person report",
+        () => reportMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("missing-person.report", input, offlineScope));
-        Alert.alert(t("common.success"), "Connection dropped. Missing-person report queued.");
+        await queueAction(queuedAction);
+        Alert.alert(
+          t("common.success"),
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the report was staged for retry."
+            : "Connection dropped. Missing-person report queued.",
+        );
         return;
       }
 
@@ -224,19 +236,29 @@ export function useAlertsData(isBalitaTab: boolean) {
 
   async function markMissingPersonFound(id: string) {
     const payload = { id };
+    const queuedAction = createQueuedAction("missing-person.mark-found", payload, offlineScope);
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("missing-person.mark-found", payload, offlineScope));
+      await queueAction(queuedAction);
       Alert.alert(t("common.success"), "Found status queued offline.");
       return;
     }
 
     try {
-      await markFoundMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Missing-person found update",
+        () => markFoundMutation.mutateAsync(queuedAction.payload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("missing-person.mark-found", payload, offlineScope));
-        Alert.alert(t("common.success"), "Connection dropped. Found status queued.");
+        await queueAction(queuedAction);
+        Alert.alert(
+          t("common.success"),
+          isWeakConnection
+            ? "Weak signal blocked live delivery, so the found update was staged for retry."
+            : "Connection dropped. Found status queued.",
+        );
         return;
       }
 

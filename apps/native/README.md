@@ -1,126 +1,79 @@
-# Native App Deployment
+# Project Agap Mobile
 
-This app is the mobile client used by residents and barangay officials.
+Project Agap Mobile is the field experience of the platform. It is the app used directly by residents, barangay officials, and response teams during emergencies, when decisions need to happen fast and connectivity cannot be assumed.
 
-## What The Judges Need
+Back to the platform overview: [Project Agap](../../README.md)  
+See the command center: [Project Agap Web Command Center](../web/README.md)
 
-For remote judging, the app must connect to a hosted backend, not your laptop.
+## Purpose
 
-Set these values in `apps/native/.env` before building:
+The mobile app is designed to keep disaster response moving at the point where information is first created: on the phone of a resident asking for help, an official checking household status, or a responder coordinating evacuation and welfare operations in the field.
 
-```bash
-EXPO_PUBLIC_SERVER_URL=https://your-app.up.railway.app
-EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-EXPO_PUBLIC_APP_ENV=production
-EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
-```
+This is not a passive companion app. It is an operational tool built for action.
 
-Use [apps/native/.env.example](/c:/Users/poyhi/project-agap/apps/native/.env.example) as the template.
+## Resident Experience
 
-## APK Build Readiness
+For residents, the app focuses on immediate reporting, guidance, and reassurance.
 
-The repo now includes [eas.json](/c:/Users/poyhi/project-agap/apps/native/eas.json) so you have a repeatable Android build profile for judging.
+- one-tap `I Am Safe` and `I Need Help` reporting
+- visibility of the latest status and sync state
+- evacuation center discovery and route guidance
+- QR and manual evacuation center check-in
+- access to active alerts and barangay broadcasts
+- map support for navigation under emergency conditions
 
-Important:
+## Official Field Experience
 
-- `apps/native/app.json` now includes an Android package ID: `com.projectagap.mobile`
-- change that package name only if you already own or use another application ID
-- after changing any public env vars, rebuild the APK
+For barangay officials, the same mobile app becomes a portable command surface.
 
-Fastest EAS build commands:
+- command dashboard with accountability indicators
+- unresolved help ping monitoring
+- registry and household evacuation status updates
+- welfare visit assignment and outcome recording
+- evacuation center open/close controls
+- center QR rotation and supply tracking
+- mobile broadcast composition
 
-```bash
-cd apps/native
-pnpm dlx eas login
-pnpm dlx eas build --platform android --profile judge
-```
+## Map And Evacuation Guidance
 
-If you need a local Android build instead of EAS:
+The map is one of the most critical parts of the mobile experience.
 
-```bash
-cd apps/native
-pnpm expo prebuild
-pnpm expo run:android --variant release
-```
+- identifies available evacuation centers
+- ranks routes toward safer destinations
+- uses traffic-aware routing when the network can support it
+- falls back to seeded barangay guidance when live routing is unavailable
+- supports cached map packs for routes, alerts, and center data
+- allows pinned home or reference location for repeated use
 
-## Important Reality Check
+The goal is not just to show a map, but to support evacuation decisions under pressure.
 
-- Offline works only after the device has synced data at least once
-- Official sign-in still needs internet unless the user already has an active saved session
-- Live external feeds are not truly offline; the app shows cached data when available
+## Offline-First And Weak-Link Ready
 
-## Fastest Safe Plan For Tomorrow
+Project Agap Mobile is built around the operational reality that disaster networks often become unstable before information stops mattering.
 
-1. Deploy the backend first
-2. Update `EXPO_PUBLIC_SERVER_URL` to the deployed URL
-3. Install the app on the phone you will hand to the judges
-4. Open the app online once and sign in
-5. Visit the important screens so data is cached:
-   - Dashboard
-   - Registry
-   - Broadcast
-   - Welfare Check
-   - Status
-   - Map
-   - Alerts
-6. Turn airplane mode on and test offline behavior
+- critical reads come from local device storage
+- major mobile actions can recover after reconnect
+- weak connectivity is treated as a live-send condition first, not an immediate failure
+- queued recovery remains available when delivery becomes impossible
+- sync freshness is visible so the user understands whether data is current, cached, or pending
 
-## Recommended Pre-Judging Test
+This means the app remains usable in the field even when connectivity is degraded, intermittent, or recovering.
 
-Resident flow:
+## Why The Mobile App Stands Out
 
-1. Sign in online
-2. Open `Status`, `Map`, `Check-In`, and `Alerts`
-3. Turn airplane mode on
-4. Send `I Am Safe` or `I Need Help`
-5. Confirm the action shows as queued
-6. Turn airplane mode off
-7. Confirm the queue flushes
+Project Agap Mobile combines several emergency functions that are often separated into different tools:
 
-Official flow:
+- resident reporting
+- official field coordination
+- mapping and evacuation guidance
+- welfare operations
+- center management
+- communication and alerts
+- offline resilience
 
-1. Sign in online
-2. Open `Dashboard`, `Registry`, `Broadcast`, and `Welfare Check`
-3. Turn airplane mode on
-4. Queue a broadcast or welfare/status action
-5. Confirm the UI reflects the queued action locally
-6. Reconnect and confirm sync
+That combination is what makes it strong for barangay-level response: one mobile experience that remains practical for both citizens and responders.
 
-## Local Development
+## Continue Exploring
 
-```bash
-pnpm run dev:native
-```
-
-For local device testing:
-
-```bash
-EXPO_PUBLIC_SERVER_URL=http://YOUR-LAPTOP-LAN-IP:3001
-```
-
-Do not use `localhost` for a physical device.
-
-## Build Notes
-
-For tomorrow, use whichever path you can complete fastest:
-
-- If you already know EAS: build a preview/release Android build
-- If you already have Android Studio working locally: build and install a release APK locally
-
-The critical requirement is not the build provider. The critical requirement is:
-
-- the app is installed on the judge device
-- it points to the hosted backend
-- you have already warmed the offline cache once while online
-
-## Final Checklist Before Submission
-
-- Hosted backend responds from outside your local network
-- Mobile app can sign in against the hosted backend
-- Resident and official accounts both work
-- Offline queue works on a real phone
-- Reconnect sync works on a real phone
-- No screen still depends on your laptop IP
-- APK was rebuilt after setting the production server URL
-- You have a backup phone or backup screen recording
+- Platform overview: [../../README.md](../../README.md)
+- Web command center: [../web/README.md](../web/README.md)

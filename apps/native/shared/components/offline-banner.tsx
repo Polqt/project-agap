@@ -9,21 +9,26 @@ export function OfflineBanner() {
   const pendingQueueCount = useStore(appShellStore, (state) => state.pendingQueueCount);
   const failedQueueCount = useStore(appShellStore, (state) => state.failedQueueCount);
   const syncStatus = useStore(appShellStore, (state) => state.syncStatus);
-  const shouldShow = !isOnline || failedQueueCount > 0 || pendingQueueCount > 0;
+  const shouldShow = !isOnline || syncStatus === "degraded" || failedQueueCount > 0 || pendingQueueCount > 0;
 
   if (!shouldShow) {
     return null;
   }
 
   const isOffline = !isOnline || syncStatus === "offline";
+  const isDegraded = syncStatus === "degraded";
   const toneClasses = isOffline
     ? "bg-amber-100 border-amber-300"
+    : isDegraded
+      ? "bg-orange-100 border-orange-300"
     : failedQueueCount > 0
       ? "bg-rose-100 border-rose-300"
       : "bg-blue-100 border-blue-300";
 
   const statusLabel = isOffline
     ? "Offline"
+    : isDegraded
+      ? "Weak link"
     : isFlushing || syncStatus === "syncing"
       ? "Syncing"
       : "Queue";

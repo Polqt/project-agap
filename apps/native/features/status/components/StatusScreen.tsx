@@ -18,6 +18,7 @@ import {
 } from "@/services/offlineData";
 import { readOfflineSyncTimestamp } from "@/services/offlineDataDb";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
@@ -37,7 +38,7 @@ export function StatusScreen() {
   const { t } = useTranslation();
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, pendingActions, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, pendingActions, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const lastPingPreview = useStore(appShellStore, (s) => s.lastStatusPing);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -118,19 +119,21 @@ export function StatusScreen() {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("status-ping.submit", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+      await queueAction(queuedAction);
       if (offlineScope) {
         await saveOfflineLatestStatusPing(offlineScope.scopeId, {
-          id: `offline-status-${Date.now()}`,
+          id: livePayload.clientMutationId ?? `offline-status-${Date.now()}`,
           barangay_id: offlineScope.barangayId,
           resident_id: offlineScope.profileId,
-          household_id: payload.householdId ?? null,
+          household_id: livePayload.householdId ?? null,
           status,
           channel: "app",
-          latitude: payload.latitude ?? null,
-          longitude: payload.longitude ?? null,
+          latitude: livePayload.latitude ?? null,
+          longitude: livePayload.longitude ?? null,
           message: null,
           is_resolved: false,
           resolved_by: null,
@@ -145,20 +148,24 @@ export function StatusScreen() {
     }
 
     try {
-      await submitMutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Resident status ping",
+        () => submitMutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+        await queueAction(queuedAction);
         if (offlineScope) {
           await saveOfflineLatestStatusPing(offlineScope.scopeId, {
-            id: `offline-status-${Date.now()}`,
+            id: livePayload.clientMutationId ?? `offline-status-${Date.now()}`,
             barangay_id: offlineScope.barangayId,
             resident_id: offlineScope.profileId,
-            household_id: payload.householdId ?? null,
+            household_id: livePayload.householdId ?? null,
             status,
             channel: "app",
-            latitude: payload.latitude ?? null,
-            longitude: payload.longitude ?? null,
+            latitude: livePayload.latitude ?? null,
+            longitude: livePayload.longitude ?? null,
             message: null,
             is_resolved: false,
             resolved_by: null,
@@ -168,7 +175,11 @@ export function StatusScreen() {
           bumpOfflineDataGeneration();
         }
         setLastStatusPing({ status, createdAt: Date.now(), source: "queue" });
-        setFeedback(t("common.queued"));
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal prevented live delivery, so the ping was stored for automatic retry."
+            : t("common.queued"),
+        );
         return;
       }
       setFeedback(getErrorMessage(error, "Unable to submit your status."));
@@ -189,6 +200,9 @@ export function StatusScreen() {
         : null;
 
   const lastStatusTone = latestPing?.status === "need_help" ? "rose" : "emerald";
+  const latestPingIsQueued =
+    Boolean(latestPing?.id?.startsWith("offline-status-")) ||
+    (queuedCount > 0 && lastPingPreview?.source === "queue");
 
   return (
     <View className="flex-1 bg-slate-50">
@@ -271,7 +285,7 @@ export function StatusScreen() {
               <View className="flex-1">
                 <Text className="text-[15px] font-bold text-slate-900">{lastStatusLabel}</Text>
                 <Text className="text-[12px] text-slate-500">
-                  {formatRelativeTime(latestPing.pinged_at)} · synced
+                  {formatRelativeTime(latestPing.pinged_at)} · {latestPingIsQueued ? "queued" : "synced"}
                 </Text>
               </View>
               <View

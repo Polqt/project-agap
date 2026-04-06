@@ -13,6 +13,7 @@ import {
   syncOfflineDatasets,
 } from "@/services/offlineData";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import { trpc } from "@/services/trpc";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useCurrentLocation } from "@/shared/hooks/useCurrentLocation";
@@ -26,7 +27,7 @@ import type { Household } from "@project-agap/api/supabase";
 export function ProxyPingSection() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const { location } = useCurrentLocation(Boolean(profile?.barangay_id));
   const offlineScope = getOfflineScope(profile);
 
@@ -76,23 +77,25 @@ export function ProxyPingSection() {
       latitude: location?.latitude,
       longitude: location?.longitude,
     };
+    const queuedAction = createQueuedAction("status-ping.submit", payload, offlineScope);
+    const livePayload = queuedAction.payload;
 
     setFeedback(null);
     void (status === "need_help" ? haptics.heavy() : haptics.light()).catch(() => {});
 
     if (!isOnline) {
-      await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+      await queueAction(queuedAction);
       if (offlineScope) {
         await saveOfflineLatestStatusPing(offlineScope.scopeId, {
-          id: `offline-proxy-status-${Date.now()}`,
+          id: livePayload.clientMutationId ?? `offline-proxy-status-${Date.now()}`,
           barangay_id: offlineScope.barangayId,
           resident_id: offlineScope.profileId,
           household_id: selectedId,
           status,
           channel: "app",
-          latitude: payload.latitude ?? null,
-          longitude: payload.longitude ?? null,
-          message: payload.message ?? null,
+          latitude: livePayload.latitude ?? null,
+          longitude: livePayload.longitude ?? null,
+          message: livePayload.message ?? null,
           is_resolved: false,
           resolved_by: null,
           resolved_at: null,
@@ -108,21 +111,25 @@ export function ProxyPingSection() {
     }
 
     try {
-      await mutation.mutateAsync(payload);
+      await runWithNetworkResilience(
+        "Proxy status ping",
+        () => mutation.mutateAsync(livePayload),
+        { isWeakConnection },
+      );
     } catch (error) {
       if (isOfflineLikeError(error)) {
-        await queueAction(createQueuedAction("status-ping.submit", payload, offlineScope));
+        await queueAction(queuedAction);
         if (offlineScope) {
           await saveOfflineLatestStatusPing(offlineScope.scopeId, {
-            id: `offline-proxy-status-${Date.now()}`,
+            id: livePayload.clientMutationId ?? `offline-proxy-status-${Date.now()}`,
             barangay_id: offlineScope.barangayId,
             resident_id: offlineScope.profileId,
             household_id: selectedId,
             status,
             channel: "app",
-            latitude: payload.latitude ?? null,
-            longitude: payload.longitude ?? null,
-            message: payload.message ?? null,
+            latitude: livePayload.latitude ?? null,
+            longitude: livePayload.longitude ?? null,
+            message: livePayload.message ?? null,
             is_resolved: false,
             resolved_by: null,
             resolved_at: null,
@@ -130,7 +137,11 @@ export function ProxyPingSection() {
           });
           bumpOfflineDataGeneration();
         }
-        setFeedback("Connection dropped. Queued locally.");
+        setFeedback(
+          isWeakConnection
+            ? "Weak signal prevented live delivery, so the proxy ping was staged for retry."
+            : "Connection dropped. Queued locally.",
+        );
         setNote("");
         setSearch("");
         setSelectedId(null);

@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import { createQueuedAction } from "@/services/offlineQueueActions";
+import { runWithNetworkResilience } from "@/services/networkResilience";
 import {
   getOfflineScope,
   listOfflineWelfareAssignments,
@@ -12,7 +13,7 @@ import {
   syncOfflineDataForProfile,
 } from "@/services/offlineData";
 import { trpc } from "@/services/trpc";
-import { getErrorMessage } from "@/shared/utils/errors";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 type WelfareOutcome = "safe" | "need_help" | "not_home" | "dispatch_again";
@@ -20,7 +21,7 @@ type WelfareOutcome = "safe" | "need_help" | "not_home" | "dispatch_again";
 export function useWelfareCheck() {
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
-  const { isOnline, queueAction } = useOfflineQueue();
+  const { isOnline, isWeakConnection, queueAction } = useOfflineQueue();
   const [hiddenHouseholdIds, setHiddenHouseholdIds] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const offlineScope = getOfflineScope(profile);
@@ -66,27 +67,41 @@ export function useWelfareCheck() {
   const recordOutcome = useCallback(
     async (householdId: string, outcome: WelfareOutcome) => {
       const household = assignmentsQuery.data?.find((entry) => entry.id === householdId);
+      const queuedAction = createQueuedAction("welfare.recordOutcome", {
+        householdId,
+        outcome,
+        expectedUpdatedAt: household?.updated_at ?? null,
+      }, offlineScope);
 
       if (!isOnline) {
-        await queueAction(
-          createQueuedAction("welfare.recordOutcome", {
-            householdId,
-            outcome,
-            expectedUpdatedAt: household?.updated_at ?? null,
-          }, offlineScope),
-        );
+        await queueAction(queuedAction);
         setHiddenHouseholdIds((prev) => [...prev, householdId]);
         setFeedback("Outcome queued offline.");
         return;
       }
 
-      await recordMutation.mutateAsync({
-        householdId,
-        outcome,
-        expectedUpdatedAt: household?.updated_at ?? null,
-      });
+      try {
+        await runWithNetworkResilience(
+          "Welfare outcome",
+          () => recordMutation.mutateAsync(queuedAction.payload),
+          { isWeakConnection },
+        );
+      } catch (error) {
+        if (isOfflineLikeError(error)) {
+          await queueAction(queuedAction);
+          setHiddenHouseholdIds((prev) => [...prev, householdId]);
+          setFeedback(
+            isWeakConnection
+              ? "Weak signal blocked live delivery, so the outcome was staged for retry."
+              : "Outcome queued offline.",
+          );
+          return;
+        }
+
+        throw error;
+      }
     },
-    [assignmentsQuery.data, isOnline, queueAction, recordMutation],
+    [assignmentsQuery.data, isOnline, isWeakConnection, offlineScope, queueAction, recordMutation],
   );
 
   return {

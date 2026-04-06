@@ -1,4 +1,5 @@
-import NetInfo from "@react-native-community/netinfo";
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
+import { AppState } from "react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
 import { OfflineQueueContext } from "@/shared/hooks/useOfflineQueue";
@@ -27,8 +28,28 @@ import type { QueuedAction } from "@/types/offline";
 export function OfflineQueueProvider({ children }: PropsWithChildren) {
   const [pendingActions, setPendingActions] = useState<QueuedAction[]>([]);
   const [isOnline, setIsOnline] = useState(true);
+  const [isWeakConnection, setIsWeakConnection] = useState(false);
   const [isFlushing, setIsFlushing] = useState(false);
   const isFlushingRef = useRef(false);
+  const isOnlineRef = useRef(true);
+  const isWeakConnectionRef = useRef(false);
+
+  const updateConnectivity = useCallback((state: NetInfoState) => {
+    const nextOnline = state.isConnected !== false;
+    const nextWeakConnection =
+      nextOnline &&
+      (state.isInternetReachable === false ||
+        (state.type === "cellular" &&
+          (state.details?.cellularGeneration === "2g" ||
+            state.details?.cellularGeneration === "3g" ||
+            state.details?.cellularGeneration == null)));
+
+    isOnlineRef.current = nextOnline;
+    isWeakConnectionRef.current = nextWeakConnection;
+    setIsOnline(nextOnline);
+    setIsWeakConnection(nextWeakConnection);
+    setSyncStatus(nextOnline ? (nextWeakConnection ? "degraded" : "online") : "offline");
+  }, []);
 
   const refreshPendingActions = useCallback(async () => {
     const actions = await listQueuedActions();
@@ -97,9 +118,11 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
       await refreshPendingActions();
       setIsFlushing(false);
       isFlushingRef.current = false;
-      setSyncStatus(isOnline ? "online" : "offline");
+      setSyncStatus(
+        isOnlineRef.current ? (isWeakConnectionRef.current ? "degraded" : "online") : "offline",
+      );
     }
-  }, [isOnline, refreshPendingActions]);
+  }, [refreshPendingActions]);
 
   const retryFailedActions = useCallback(async (actionIds?: string[]) => {
     if (actionIds && actionIds.length > 0) {
@@ -117,33 +140,58 @@ export function OfflineQueueProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     async function bootstrapQueueState() {
       await refreshPendingActions();
+      const initialState = await NetInfo.fetch();
+      const nextOnline = initialState.isConnected !== false;
+      updateConnectivity(initialState);
+
+      if (nextOnline) {
+        await flushQueue();
+      }
     }
 
     void bootstrapQueueState();
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const nextOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
-      setIsOnline(nextOnline);
-      setSyncStatus(nextOnline ? "online" : "offline");
+      const nextOnline = state.isConnected !== false;
+      updateConnectivity(state);
 
       if (nextOnline) {
         void flushQueue();
       }
     });
 
-    return unsubscribe;
-  }, [flushQueue, refreshPendingActions]);
+    const appStateSubscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState !== "active") {
+        return;
+      }
+
+      void NetInfo.fetch().then((state) => {
+        const nextOnline = state.isConnected !== false;
+        updateConnectivity(state);
+
+        if (nextOnline) {
+          void flushQueue();
+        }
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      appStateSubscription.remove();
+    };
+  }, [flushQueue, refreshPendingActions, updateConnectivity]);
 
   const value = useMemo(
     () => ({
       isOnline,
+      isWeakConnection,
       isFlushing,
       pendingActions,
       queueAction,
       flushQueue,
       retryFailedActions,
     }),
-    [flushQueue, isFlushing, isOnline, pendingActions, queueAction, retryFailedActions],
+    [flushQueue, isFlushing, isOnline, isWeakConnection, pendingActions, queueAction, retryFailedActions],
   );
 
   return <OfflineQueueContext.Provider value={value}>{children}</OfflineQueueContext.Provider>;
