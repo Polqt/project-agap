@@ -49,7 +49,13 @@ export function getProfileOrThrow(
   return profile;
 }
 
-export function getProfileBarangayIdOrThrow(profile: ContextProfile): string {
+export function getProfileBarangayIdOrThrow(
+  profile: ContextProfile | null,
+): string {
+  if (!profile) {
+    throw ApiError.forbidden("A profile is required to access this resource.");
+  }
+
   if (!profile.barangay_id) {
     throw ApiError.badRequest("Your profile is not assigned to a barangay.");
   }
