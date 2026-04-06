@@ -90,8 +90,12 @@ export function LastSyncedBadge({
           : "#6b7280";
 
   const label = lastSyncedAt
-    ? `Synced ${formatTimeAgo(lastSyncedAt)}`
-    : "Offline data";
+    ? freshness === "fresh"
+      ? `Synced ${formatTimeAgo(lastSyncedAt)}`
+      : freshness === "stale"
+        ? `Stale but usable · ${formatTimeAgo(lastSyncedAt)}`
+        : `Very stale · ${formatTimeAgo(lastSyncedAt)}`
+    : "Offline only";
 
   return (
     <View className={`flex-row items-center gap-1.5 rounded-full px-2.5 py-1 ${bgColor} ${className ?? ""}`}>

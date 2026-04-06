@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
-import type { UseMutationResult } from "@tanstack/react-query";
 
 type ReportInput = {
   fullName: string;
@@ -14,18 +13,19 @@ type ReportInput = {
 type Props = {
   visible: boolean;
   onClose: () => void;
-  reportMutation: UseMutationResult<unknown, unknown, ReportInput, unknown>;
+  onSubmit: (input: ReportInput) => Promise<void>;
+  isSubmitting: boolean;
 };
 
-export function ReportMissingModal({ visible, onClose, reportMutation }: Props) {
+export function ReportMissingModal({ visible, onClose, onSubmit, isSubmitting }: Props) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ fullName: "", age: "", lastSeenLocation: "", description: "" });
 
-  // Close and reset when mutation succeeds
   useEffect(() => {
-    if (reportMutation.isSuccess) handleClose();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportMutation.isSuccess]);
+    if (!visible) {
+      setForm({ fullName: "", age: "", lastSeenLocation: "", description: "" });
+    }
+  }, [visible]);
 
   function handleClose() {
     setForm({ fullName: "", age: "", lastSeenLocation: "", description: "" });
@@ -37,12 +37,12 @@ export function ReportMissingModal({ visible, onClose, reportMutation }: Props) 
       Alert.alert(t("common.error"), t("alerts.nameRequired"));
       return;
     }
-    reportMutation.mutate({
+    void onSubmit({
       fullName: form.fullName.trim(),
       age: form.age ? parseInt(form.age, 10) : undefined,
       lastSeenLocation: form.lastSeenLocation.trim() || undefined,
       description: form.description.trim() || undefined,
-    });
+    }).then(handleClose).catch(() => {});
   }
 
   return (
@@ -107,11 +107,11 @@ export function ReportMissingModal({ visible, onClose, reportMutation }: Props) 
 
             <Pressable
               onPress={handleSubmit}
-              disabled={reportMutation.isPending}
-              className={`items-center rounded-2xl py-4 ${reportMutation.isPending ? "bg-slate-200" : "bg-rose-600"}`}
+              disabled={isSubmitting}
+              className={`items-center rounded-2xl py-4 ${isSubmitting ? "bg-slate-200" : "bg-rose-600"}`}
             >
-              <Text className={`text-[15px] font-bold ${reportMutation.isPending ? "text-slate-400" : "text-white"}`}>
-                {reportMutation.isPending ? t("alerts.submitting") : t("alerts.submitReport")}
+              <Text className={`text-[15px] font-bold ${isSubmitting ? "text-slate-400" : "text-white"}`}>
+                {isSubmitting ? t("alerts.submitting") : t("alerts.submitReport")}
               </Text>
             </Pressable>
           </View>

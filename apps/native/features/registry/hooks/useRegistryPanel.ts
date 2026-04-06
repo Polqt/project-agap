@@ -11,7 +11,10 @@ import {
   syncOfflineDatasets,
   upsertOfflineRegistryHousehold,
 } from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { trpc } from "@/services/trpc";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import type { EvacuationStatus, Household } from "@project-agap/api/supabase";
@@ -76,6 +79,7 @@ export function useRegistryPanel() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, queueAction } = useOfflineQueue();
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [filter, setFilter] = useState<RegistryFilter>("all");
@@ -182,6 +186,81 @@ export function useRegistryPanel() {
     setExpandedHouseholdId((current) => (current === householdId ? null : householdId));
   }
 
+  async function assignWelfare(householdId: string) {
+    const expectedUpdatedAt =
+      households.find((household) => household.id === householdId)?.updated_at ?? null;
+
+    if (!isOnline) {
+      await queueAction(
+        createQueuedAction("household.assign-welfare", {
+          householdId,
+          expectedUpdatedAt,
+        }, offlineScope),
+      );
+      setFeedback("Welfare visit queued offline.");
+      return;
+    }
+
+    try {
+      await assignWelfareMutation.mutateAsync({
+        householdId,
+        expectedUpdatedAt,
+      });
+    } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(
+          createQueuedAction("household.assign-welfare", {
+            householdId,
+            expectedUpdatedAt,
+          }, offlineScope),
+        );
+        setFeedback("Connection dropped. Welfare visit queued for auto-sync.");
+        return;
+      }
+
+      setFeedback(getErrorMessage(error, "Unable to assign welfare visit."));
+    }
+  }
+
+  async function updateStatus(householdId: string, evacuationStatus: EvacuationStatus) {
+    const expectedUpdatedAt =
+      households.find((household) => household.id === householdId)?.updated_at ?? null;
+
+    if (!isOnline) {
+      await queueAction(
+        createQueuedAction("household.update-status", {
+          householdId,
+          evacuationStatus,
+          expectedUpdatedAt,
+        }, offlineScope),
+      );
+      setFeedback(`Status queued offline as ${evacuationStatus.replaceAll("_", " ")}.`);
+      return;
+    }
+
+    try {
+      await updateStatusMutation.mutateAsync({
+        householdId,
+        evacuationStatus,
+        expectedUpdatedAt,
+      });
+    } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(
+          createQueuedAction("household.update-status", {
+            householdId,
+            evacuationStatus,
+            expectedUpdatedAt,
+          }, offlineScope),
+        );
+        setFeedback("Connection dropped. Registry update queued for auto-sync.");
+        return;
+      }
+
+      setFeedback(getErrorMessage(error, "Unable to update registry status."));
+    }
+  }
+
   return {
     expandedHousehold: expandedHouseholdQuery.data ?? null,
     expandedHouseholdId,
@@ -197,18 +276,16 @@ export function useRegistryPanel() {
     setQuery,
     toggleExpandedHousehold,
     updateStatusMutation,
-    assignWelfare: (householdId: string) =>
-      assignWelfareMutation.mutateAsync({
-        householdId,
-        expectedUpdatedAt:
-          households.find((household) => household.id === householdId)?.updated_at ?? null,
-      }),
-    updateStatus: (householdId: string, evacuationStatus: EvacuationStatus) =>
-      updateStatusMutation.mutateAsync({
-        householdId,
-        evacuationStatus,
-        expectedUpdatedAt:
-          households.find((household) => household.id === householdId)?.updated_at ?? null,
-      }),
+    assignWelfare,
+    updateStatus,
+    refreshConflictData: async () => {
+      await syncDatasets([
+        "registryHouseholds",
+        "welfareAssignments",
+        "welfareDispatch",
+        "dashboardSummary",
+        "unaccountedHouseholds",
+      ]);
+    },
   };
 }

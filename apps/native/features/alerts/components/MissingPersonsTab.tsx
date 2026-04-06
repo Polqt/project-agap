@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Alert, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import type { UseMutationResult } from "@tanstack/react-query";
 
 import { formatRelativeTime } from "@/shared/utils/date";
 
@@ -17,10 +16,10 @@ type MissingPerson = {
 type Props = {
   missingPersons: MissingPerson[];
   onReportPress: () => void;
-  markFoundMutation: UseMutationResult<unknown, unknown, { id: string }, unknown>;
+  onMarkFound: (id: string) => Promise<void>;
 };
 
-export function MissingPersonsTab({ missingPersons, onReportPress, markFoundMutation }: Props) {
+export function MissingPersonsTab({ missingPersons, onReportPress, onMarkFound }: Props) {
   const { t } = useTranslation();
 
   return (
@@ -90,7 +89,7 @@ export function MissingPersonsTab({ missingPersons, onReportPress, markFoundMuta
                   t("alerts.markFoundConfirm", { name: person.full_name }),
                   [
                     { text: t("common.cancel"), style: "cancel" },
-                    { text: t("alerts.markFoundYes"), onPress: () => markFoundMutation.mutate({ id: person.id }) },
+                    { text: t("alerts.markFoundYes"), onPress: () => void onMarkFound(person.id) },
                   ],
                 );
               }}

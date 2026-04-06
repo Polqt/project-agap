@@ -13,8 +13,10 @@ import {
   syncOfflineDatasets,
   upsertOfflineMissingPerson,
 } from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { trpc } from "@/services/trpc";
-import { getErrorMessage } from "@/shared/utils/errors";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { bumpOfflineDataGeneration, offlineDataStore } from "@/stores/offline-data-store";
 
 import {
@@ -36,6 +38,7 @@ export function useAlertsData(isBalitaTab: boolean) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, queueAction } = useOfflineQueue();
   const offlineScope = getOfflineScope(profile);
 
   async function syncDatasets(
@@ -199,6 +202,48 @@ export function useAlertsData(isBalitaTab: boolean) {
     ]);
   }
 
+  async function reportMissingPerson(input: Parameters<typeof reportMutation.mutateAsync>[0]) {
+    if (!isOnline) {
+      await queueAction(createQueuedAction("missing-person.report", input, offlineScope));
+      Alert.alert(t("common.success"), "Missing-person report queued offline.");
+      return;
+    }
+
+    try {
+      await reportMutation.mutateAsync(input);
+    } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(createQueuedAction("missing-person.report", input, offlineScope));
+        Alert.alert(t("common.success"), "Connection dropped. Missing-person report queued.");
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  async function markMissingPersonFound(id: string) {
+    const payload = { id };
+
+    if (!isOnline) {
+      await queueAction(createQueuedAction("missing-person.mark-found", payload, offlineScope));
+      Alert.alert(t("common.success"), "Found status queued offline.");
+      return;
+    }
+
+    try {
+      await markFoundMutation.mutateAsync(payload);
+    } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(createQueuedAction("missing-person.mark-found", payload, offlineScope));
+        Alert.alert(t("common.success"), "Connection dropped. Found status queued.");
+        return;
+      }
+
+      throw error;
+    }
+  }
+
   return {
     alerts: alertsQuery.data ?? [],
     broadcasts: broadcastsQuery.data ?? [],
@@ -215,5 +260,7 @@ export function useAlertsData(isBalitaTab: boolean) {
     refresh,
     reportMutation,
     markFoundMutation,
+    reportMissingPerson,
+    markMissingPersonFound,
   };
 }

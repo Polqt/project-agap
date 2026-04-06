@@ -9,11 +9,14 @@ import {
   getOfflineBarangay,
   getOfflineHousehold,
   getOfflineScope,
+  patchOfflineProfile,
   saveOfflineHousehold,
   syncOfflineDataForProfile,
 } from "@/services/offlineData";
+import { createQueuedAction } from "@/services/offlineQueueActions";
 import { useSignOutRedirect } from "@/shared/hooks/useSignOutRedirect";
 import { trpc } from "@/services/trpc";
+import { useOfflineQueue } from "@/shared/hooks/useOfflineQueue";
 import {
   householdSchema,
   profileSchema,
@@ -21,12 +24,13 @@ import {
   type HouseholdMemberFormValues,
   type ProfileFormValues,
 } from "@/types/forms";
-import { getErrorMessage } from "@/shared/utils/errors";
+import { getErrorMessage, isOfflineLikeError } from "@/shared/utils/errors";
 import { offlineDataStore, bumpOfflineDataGeneration } from "@/stores/offline-data-store";
 
 export function useProfilePanel() {
   const { profile, session, signOut, refreshProfile, resetPassword } = useAuth();
   const offlineGeneration = useStore(offlineDataStore, (state) => state.generation);
+  const { isOnline, queueAction } = useOfflineQueue();
   const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
   const [householdFeedback, setHouseholdFeedback] = useState<string | null>(null);
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
@@ -145,39 +149,83 @@ export function useProfilePanel() {
 
   const handleProfileSubmit = profileForm.handleSubmit(async (values) => {
     setProfileFeedback(null);
+    const payload = {
+      fullName: values.fullName,
+      phoneNumber: values.phoneNumber || null,
+      purok: values.purok,
+    };
 
     try {
-      await profileMutation.mutateAsync({
-        fullName: values.fullName,
-        phoneNumber: values.phoneNumber || null,
-        purok: values.purok,
-      });
+      if (!isOnline) {
+        if (offlineScope) {
+          await patchOfflineProfile(offlineScope.scopeId, {
+            full_name: payload.fullName,
+            phone_number: payload.phoneNumber,
+            purok: payload.purok,
+          });
+          bumpOfflineDataGeneration();
+        }
+
+        await queueAction(createQueuedAction("profile.update", payload, offlineScope));
+        setProfileFeedback("Profile update queued offline.");
+        return;
+      }
+
+      await profileMutation.mutateAsync(payload);
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        if (offlineScope) {
+          await patchOfflineProfile(offlineScope.scopeId, {
+            full_name: payload.fullName,
+            phone_number: payload.phoneNumber,
+            purok: payload.purok,
+          });
+          bumpOfflineDataGeneration();
+        }
+
+        await queueAction(createQueuedAction("profile.update", payload, offlineScope));
+        setProfileFeedback("Connection dropped. Profile update queued for auto-sync.");
+        return;
+      }
+
       setProfileFeedback(getErrorMessage(error, "Unable to update your profile."));
     }
   });
 
   const handleHouseholdSubmit = householdForm.handleSubmit(async (values) => {
     setHouseholdFeedback(null);
+    const payload = {
+      householdHead: values.householdHead,
+      purok: values.purok,
+      address: values.address,
+      phoneNumber: values.phoneNumber || null,
+      totalMembers: Number(values.totalMembers),
+      isSmsOnly: values.isSmsOnly,
+      notes: values.notes || null,
+      vulnerabilityFlags: values.vulnerabilityFlags,
+      members: values.members.map((member: HouseholdMemberFormValues) => ({
+        fullName: member.fullName,
+        age: member.age ? Number(member.age) : null,
+        vulnerabilityFlags: member.vulnerabilityFlags,
+        notes: member.notes || null,
+      })),
+    };
 
     try {
-      await householdMutation.mutateAsync({
-        householdHead: values.householdHead,
-        purok: values.purok,
-        address: values.address,
-        phoneNumber: values.phoneNumber || null,
-        totalMembers: Number(values.totalMembers),
-        isSmsOnly: values.isSmsOnly,
-        notes: values.notes || null,
-        vulnerabilityFlags: values.vulnerabilityFlags,
-        members: values.members.map((member: HouseholdMemberFormValues) => ({
-          fullName: member.fullName,
-          age: member.age ? Number(member.age) : null,
-          vulnerabilityFlags: member.vulnerabilityFlags,
-          notes: member.notes || null,
-        })),
-      });
+      if (!isOnline) {
+        await queueAction(createQueuedAction("household.register", payload, offlineScope));
+        setHouseholdFeedback("Household details queued offline.");
+        return;
+      }
+
+      await householdMutation.mutateAsync(payload);
     } catch (error) {
+      if (isOfflineLikeError(error)) {
+        await queueAction(createQueuedAction("household.register", payload, offlineScope));
+        setHouseholdFeedback("Connection dropped. Household details queued for auto-sync.");
+        return;
+      }
+
       setHouseholdFeedback(getErrorMessage(error, "Unable to save your household."));
     }
   });

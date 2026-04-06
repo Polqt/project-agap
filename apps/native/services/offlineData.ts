@@ -18,8 +18,11 @@ import type {
   StatusPing,
   WelfareDispatchQueueItem,
 } from "@project-agap/api/supabase";
+import type { LocationPoint } from "@/types/map";
 
 import { listBroadcastsForBarangay, listOutboundSmsLogsForBarangay } from "@/features/broadcast/services/broadcasts";
+import { getConfiguredOfflineTilePack } from "@/features/map/services/offlineTileStrategy";
+import { saveOfflineMapPack } from "@/services/mapCache";
 import { trpcClient } from "@/services/trpc";
 
 import {
@@ -38,6 +41,7 @@ const AUTH_PROFILE_COLLECTION = "auth-profile";
 const OFFLINE_COLLECTIONS = {
   barangay: "barangay",
   profile: "profile",
+  pinnedLocation: "pinned-location",
   household: "household",
   evacuationCenters: "evacuation-centers",
   evacuationRoutes: "evacuation-routes",
@@ -126,6 +130,41 @@ export async function saveOfflineProfile(profile: Profile) {
 
 export async function getOfflineProfile(scopeId: string) {
   return readSingleton<Profile>(scopeId, OFFLINE_COLLECTIONS.profile);
+}
+
+export async function patchOfflineProfile(scopeId: string, patch: Partial<Profile>) {
+  const current = await getOfflineProfile(scopeId);
+
+  if (!current) {
+    return null;
+  }
+
+  const next = {
+    ...current,
+    ...patch,
+  } satisfies Profile;
+
+  await saveOfflineProfile(next);
+  return next;
+}
+
+export async function getOfflinePinnedLocation(scopeId: string) {
+  return readSingleton<{ latitude: number; longitude: number; pinnedAt: string | null } | null>(
+    scopeId,
+    OFFLINE_COLLECTIONS.pinnedLocation,
+  );
+}
+
+export async function saveOfflinePinnedLocation(
+  scopeId: string,
+  value: { latitude: number; longitude: number; pinnedAt: string | null } | null,
+) {
+  if (!value) {
+    await deleteOfflineDocument(scopeId, OFFLINE_COLLECTIONS.pinnedLocation, "singleton");
+    return;
+  }
+
+  await writeSingleton(scopeId, OFFLINE_COLLECTIONS.pinnedLocation, value);
 }
 
 export async function getOfflineBarangay(scopeId: string) {
@@ -321,6 +360,23 @@ async function markDatasetSynced(scopeId: string, dataset: string) {
   await setOfflineSyncTimestamp(scopeId, dataset);
 }
 
+export async function refreshOfflineMapPack(scope: OfflineScope) {
+  const [centers, routes, alerts] = await Promise.all([
+    listOfflineEvacuationCenters(scope.scopeId),
+    listOfflineEvacuationRoutes(scope.scopeId),
+    listOfflineAlerts(scope.scopeId),
+  ]);
+
+  await saveOfflineMapPack({
+    barangayId: scope.barangayId,
+    centers,
+    routes,
+    alerts,
+    tilePack: getConfiguredOfflineTilePack(),
+    updatedAt: Date.now(),
+  });
+}
+
 function createPendingNeedsSummary(reports: NeedsReport[], barangayName: string) {
   if (reports.length === 0) {
     return null;
@@ -340,6 +396,7 @@ export async function syncOfflineEvacuationCenters(scope: OfflineScope) {
   const centers = await trpcClient.evacuationCenters.listByBarangay.query({ barangayId: scope.barangayId });
   await replaceOfflineCollection(scope.scopeId, OFFLINE_COLLECTIONS.evacuationCenters, centers);
   await markDatasetSynced(scope.scopeId, OFFLINE_COLLECTIONS.evacuationCenters);
+  await refreshOfflineMapPack(scope);
   return centers;
 }
 
@@ -347,6 +404,7 @@ export async function syncOfflineEvacuationRoutes(scope: OfflineScope) {
   const routes = await trpcClient.evacuationRoutes.listByBarangay.query({ barangayId: scope.barangayId });
   await replaceOfflineCollection(scope.scopeId, OFFLINE_COLLECTIONS.evacuationRoutes, routes);
   await markDatasetSynced(scope.scopeId, OFFLINE_COLLECTIONS.evacuationRoutes);
+  await refreshOfflineMapPack(scope);
   return routes;
 }
 
@@ -355,6 +413,13 @@ export async function syncOfflineResidentAccess(scope: OfflineScope) {
   await saveOfflineResidentAccess(scope.scopeId, access);
   await markDatasetSynced(scope.scopeId, OFFLINE_COLLECTIONS.residentAccess);
   return access;
+}
+
+export async function syncOfflinePinnedLocation(scope: OfflineScope) {
+  const pinnedLocation = await trpcClient.profile.getPinnedLocation.query();
+  await saveOfflinePinnedLocation(scope.scopeId, pinnedLocation);
+  await markDatasetSynced(scope.scopeId, OFFLINE_COLLECTIONS.pinnedLocation);
+  return pinnedLocation;
 }
 
 export async function syncOfflineCenterSupplies(scope: OfflineScope, centerId: string) {
@@ -373,6 +438,7 @@ export async function syncOfflineAlerts(scope: OfflineScope) {
   const alerts = await trpcClient.alerts.listActive.query({ barangayId: scope.barangayId });
   await replaceOfflineCollection(scope.scopeId, OFFLINE_COLLECTIONS.alerts, alerts);
   await markDatasetSynced(scope.scopeId, OFFLINE_COLLECTIONS.alerts);
+  await refreshOfflineMapPack(scope);
   return alerts;
 }
 
@@ -476,6 +542,7 @@ async function syncResidentDatasets(scope: OfflineScope) {
     syncOfflineBarangay(scope),
     syncOfflineEvacuationCenters(scope),
     syncOfflineEvacuationRoutes(scope),
+    syncOfflinePinnedLocation(scope),
     syncOfflineResidentAccess(scope),
     syncOfflineAlerts(scope),
     syncOfflineBroadcasts(scope),
@@ -490,7 +557,7 @@ async function syncOfficialDatasets(scope: OfflineScope) {
     syncOfflineBarangay(scope),
     syncOfflineEvacuationCenters(scope),
     syncOfflineEvacuationRoutes(scope),
-    syncOfflineAllCenterSupplies(scope),
+    syncOfflinePinnedLocation(scope),
     syncOfflineResidentAccess(scope),
     syncOfflineAlerts(scope),
     syncOfflineBroadcasts(scope),
@@ -504,6 +571,7 @@ async function syncOfficialDatasets(scope: OfflineScope) {
     syncOfflineNeedsSummary(scope),
     syncOfflineSmsLogs(scope),
   ]);
+  await syncOfflineAllCenterSupplies(scope);
 }
 
 export async function syncOfflineDataForProfile(profile: Profile) {
@@ -522,6 +590,7 @@ export async function syncOfflineDataForProfile(profile: Profile) {
   }
 
   await setOfflineSyncTimestamp(scope.scopeId, "full");
+  await refreshOfflineMapPack(scope);
   return scope;
 }
 
@@ -684,6 +753,7 @@ export async function syncOfflineDatasets(
     | "household"
     | "latestStatusPing"
     | "residentAccess"
+    | "pinnedLocation"
   >,
 ) {
   const tasks = datasets.map((dataset) => {
@@ -726,6 +796,8 @@ export async function syncOfflineDatasets(
         return syncOfflineLatestStatusPing(scope);
       case "residentAccess":
         return syncOfflineResidentAccess(scope);
+      case "pinnedLocation":
+        return syncOfflinePinnedLocation(scope);
       default:
         return Promise.resolve(null);
     }

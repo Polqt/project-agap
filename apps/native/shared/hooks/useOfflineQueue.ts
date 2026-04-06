@@ -7,6 +7,7 @@ export type OfflineQueueContextValue = {
   pendingActions: QueuedAction[];
   queueAction: (action: QueuedAction) => Promise<void>;
   flushQueue: () => Promise<void>;
+  retryFailedActions: (actionIds?: string[]) => Promise<void>;
 };
 
 export const OfflineQueueContext = createContext<OfflineQueueContextValue | null>(null);

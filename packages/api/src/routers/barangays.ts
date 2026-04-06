@@ -18,6 +18,7 @@ const barangayIdSchema = z.object({
 });
 
 const residentAccessSchema = z.object({
+  clientMutationId: z.string().optional(),
   pingEnabled: z.boolean(),
   checkInEnabled: z.boolean(),
   expectedUpdatedAt: z.string().datetime({ offset: true }).nullish(),
@@ -84,7 +85,33 @@ export const barangaysRouter = router({
   setResidentAccess: officialProcedure
     .input(residentAccessSchema)
     .mutation(async ({ ctx, input }) => {
-      return await updateResidentAccess(ctx, input);
+      if (input.clientMutationId) {
+        const existingMutation = getSupabaseDataOrThrow<{ result_payload: string } | null>(
+          await ctx.supabase
+            .from("mutation_history")
+            .select("result_payload")
+            .eq("client_mutation_id", input.clientMutationId)
+            .maybeSingle(),
+          "Failed to check mutation history.",
+        );
+
+        if (existingMutation?.result_payload) {
+          return JSON.parse(existingMutation.result_payload) as ResidentAccessPayload;
+        }
+      }
+
+      const result = await updateResidentAccess(ctx, input);
+
+      if (input.clientMutationId) {
+        void ctx.supabase.from("mutation_history").insert({
+          client_mutation_id: input.clientMutationId,
+          user_id: getProfileOrThrow(ctx.profile).id,
+          mutation_type: "barangay-set-resident-access",
+          result_payload: JSON.stringify(result),
+        });
+      }
+
+      return result;
     }),
 
   getMyEmergencyMode: protectedProcedure.query(async ({ ctx }) => {

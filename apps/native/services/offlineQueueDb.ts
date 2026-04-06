@@ -105,6 +105,19 @@ export async function resetFailedQueuedActions() {
   );
 }
 
+export async function resetFailedQueuedActionsByIds(ids: string[]) {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const database = await getOfflineQueueDatabase();
+  const placeholders = ids.map(() => "?").join(", ");
+  await database.runAsync(
+    `UPDATE offline_queue SET failed_at = NULL, last_error = NULL, retries = 0 WHERE failed_at IS NOT NULL AND id IN (${placeholders})`,
+    ...ids,
+  );
+}
+
 export async function clearQueuedActions() {
   const database = await getOfflineQueueDatabase();
   await database.runAsync("DELETE FROM offline_queue");
