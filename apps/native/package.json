@@ -81,5 +81,13 @@
     "@types/node": "^24.10.0",
     "@types/react": "~19.1.0",
     "typescript": "catalog:"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "react",
+        "react-dom"
+      ]
+    }
   }
 }
