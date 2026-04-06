@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
 import * as Clipboard from "expo-clipboard";
 import { Share } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import {
@@ -95,6 +95,24 @@ export function useOfficialDashboard() {
     await syncOfflineDatasets(offlineScope, datasets);
     bumpOfflineDataGeneration();
   }
+
+  // Seed all official datasets on mount / reconnect so dashboard is never empty
+  useEffect(() => {
+    if (!offlineScope || !isOnline) {
+      return;
+    }
+
+    void syncOfflineDatasets(offlineScope, [
+      "dashboardSummary",
+      "unresolvedPings",
+      "evacuationCenters",
+      "unaccountedHouseholds",
+      "welfareDispatch",
+    ])
+      .then(() => bumpOfflineDataGeneration())
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineScope?.scopeId, isOnline]);
 
   const isLoading =
     summaryQuery.isLoading ||

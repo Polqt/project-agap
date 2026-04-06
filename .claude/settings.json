@@ -4,7 +4,8 @@
       "Bash(xargs wc:*)",
       "Bash(ls -la /c/Users/poyhi/project-agap/apps/native/features/*/hooks/)",
       "Bash(wc -l /c/Users/poyhi/project-agap/apps/native/features/profile/components/*.tsx)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(pnpm --filter native check-types)"
     ]
   }
 }

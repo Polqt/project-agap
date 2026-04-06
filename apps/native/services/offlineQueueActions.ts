@@ -1,5 +1,7 @@
 import { replayQueuedBroadcast } from "@/features/broadcast/services/broadcasts";
 import { trpcClient } from "@/services/trpc";
+import { runWithNetworkResilience } from "@/services/networkResilience";
+import { appShellStore } from "@/stores/app-shell-store";
 import type {
   BarangaySetResidentAccessQueuePayload,
   BroadcastCreateQueuePayload,
@@ -57,85 +59,69 @@ export function isExpiredQueuedAction(action: QueuedAction) {
 }
 
 export async function replayQueuedAction(action: QueuedAction) {
+  const isWeakConnection = appShellStore.state.syncStatus === "degraded";
+
+  async function run(task: () => Promise<unknown>) {
+    return runWithNetworkResilience(`Queue replay: ${action.type}`, task, { isWeakConnection });
+  }
+
   switch (action.type) {
     case "status-ping.submit":
-      await trpcClient.statusPings.submit.mutate(action.payload as StatusPingQueuePayload);
+      await run(() => trpcClient.statusPings.submit.mutate(action.payload as StatusPingQueuePayload));
       return;
     case "household.register":
-      await trpcClient.households.register.mutate(action.payload as HouseholdRegisterQueuePayload);
+      await run(() => trpcClient.households.register.mutate(action.payload as HouseholdRegisterQueuePayload));
       return;
     case "check-in.qr":
-      await trpcClient.checkIns.byQr.mutate(action.payload as CheckInQrQueuePayload);
+      await run(() => trpcClient.checkIns.byQr.mutate(action.payload as CheckInQrQueuePayload));
       return;
     case "check-in.manual":
-      await trpcClient.checkIns.manual.mutate(action.payload as CheckInManualQueuePayload);
+      await run(() => trpcClient.checkIns.manual.mutate(action.payload as CheckInManualQueuePayload));
       return;
     case "check-in.proxy":
-      await trpcClient.checkIns.proxy.mutate(action.payload as CheckInProxyQueuePayload);
+      await run(() => trpcClient.checkIns.proxy.mutate(action.payload as CheckInProxyQueuePayload));
       return;
     case "welfare.recordOutcome":
-      await trpcClient.households.recordWelfareOutcome.mutate(
-        action.payload as WelfareRecordOutcomeQueuePayload,
-      );
+      await run(() => trpcClient.households.recordWelfareOutcome.mutate(action.payload as WelfareRecordOutcomeQueuePayload));
       return;
     case "needs-report.submit":
-      await trpcClient.needsReports.submit.mutate(action.payload as NeedsReportSubmitQueuePayload);
+      await run(() => trpcClient.needsReports.submit.mutate(action.payload as NeedsReportSubmitQueuePayload));
       return;
     case "broadcast.create":
-      await replayQueuedBroadcast(action.payload as BroadcastCreateQueuePayload);
+      await run(() => replayQueuedBroadcast(action.payload as BroadcastCreateQueuePayload));
       return;
     case "household.update-status":
-      await trpcClient.households.updateStatus.mutate(
-        action.payload as HouseholdUpdateStatusQueuePayload,
-      );
+      await run(() => trpcClient.households.updateStatus.mutate(action.payload as HouseholdUpdateStatusQueuePayload));
       return;
     case "household.assign-welfare":
-      await trpcClient.households.assignWelfareVisit.mutate(
-        action.payload as HouseholdAssignWelfareQueuePayload,
-      );
+      await run(() => trpcClient.households.assignWelfareVisit.mutate(action.payload as HouseholdAssignWelfareQueuePayload));
       return;
     case "center.toggle-open":
-      await trpcClient.evacuationCenters.toggleOpen.mutate(
-        action.payload as CenterToggleOpenQueuePayload,
-      );
+      await run(() => trpcClient.evacuationCenters.toggleOpen.mutate(action.payload as CenterToggleOpenQueuePayload));
       return;
     case "center.rotate-qr":
-      await trpcClient.evacuationCenters.rotateQrToken.mutate(
-        action.payload as CenterRotateQrQueuePayload,
-      );
+      await run(() => trpcClient.evacuationCenters.rotateQrToken.mutate(action.payload as CenterRotateQrQueuePayload));
       return;
     case "center.update-supplies":
-      await trpcClient.evacuationCenters.updateSupplies.mutate(
-        action.payload as CenterUpdateSuppliesQueuePayload,
-      );
+      await run(() => trpcClient.evacuationCenters.updateSupplies.mutate(action.payload as CenterUpdateSuppliesQueuePayload));
       return;
     case "missing-person.report":
-      await trpcClient.missingPersons.report.mutate(
-        action.payload as MissingPersonReportQueuePayload,
-      );
+      await run(() => trpcClient.missingPersons.report.mutate(action.payload as MissingPersonReportQueuePayload));
       return;
     case "missing-person.mark-found":
-      await trpcClient.missingPersons.markFound.mutate(
-        action.payload as MissingPersonMarkFoundQueuePayload,
-      );
+      await run(() => trpcClient.missingPersons.markFound.mutate(action.payload as MissingPersonMarkFoundQueuePayload));
       return;
     case "profile.update":
-      await trpcClient.profile.update.mutate(action.payload as ProfileUpdateQueuePayload);
+      await run(() => trpcClient.profile.update.mutate(action.payload as ProfileUpdateQueuePayload));
       return;
     case "profile.set-pinned-location":
-      await trpcClient.profile.setPinnedLocation.mutate(
-        action.payload as ProfileSetPinnedLocationQueuePayload,
-      );
+      await run(() => trpcClient.profile.setPinnedLocation.mutate(action.payload as ProfileSetPinnedLocationQueuePayload));
       return;
     case "profile.clear-pinned-location":
-      await trpcClient.profile.clearPinnedLocation.mutate(
-        action.payload as ProfileClearPinnedLocationQueuePayload,
-      );
+      await run(() => trpcClient.profile.clearPinnedLocation.mutate(action.payload as ProfileClearPinnedLocationQueuePayload));
       return;
     case "barangay.set-resident-access":
-      await trpcClient.barangays.setResidentAccess.mutate(
-        action.payload as BarangaySetResidentAccessQueuePayload,
-      );
+      await run(() => trpcClient.barangays.setResidentAccess.mutate(action.payload as BarangaySetResidentAccessQueuePayload));
       return;
     default:
       throw new Error("Unsupported queued action.");

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "@tanstack/react-store";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/shared/hooks/useAuth";
 import {
@@ -88,6 +88,18 @@ export function useRegistryPanel() {
   const offlineScope = getOfflineScope(profile);
 
   const trimmedQuery = query.trim();
+
+  // Seed the offline store on mount / reconnect so the list is never empty
+  useEffect(() => {
+    if (!offlineScope || !isOnline) {
+      return;
+    }
+
+    void syncOfflineDatasets(offlineScope, ["registryHouseholds"])
+      .then(() => bumpOfflineDataGeneration())
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineScope?.scopeId, isOnline]);
 
   const listQuery = useQuery({
     queryKey: ["offline", "registry-households", offlineScope?.scopeId, offlineGeneration],

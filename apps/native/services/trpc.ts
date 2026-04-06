@@ -5,6 +5,10 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 
 import { getSafeSupabaseSession } from "@/services/supabase";
+import { appShellStore } from "@/stores/app-shell-store";
+
+const NORMAL_LINK_TIMEOUT_MS = 9_000;
+const WEAK_LINK_TIMEOUT_MS = 18_000;
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache(),
@@ -26,13 +30,15 @@ export const trpcClient = createTRPCClient<AppRouter>({
       url: `${env.EXPO_PUBLIC_SERVER_URL}/api/trpc`,
       maxItems: 1,
       fetch: async (url, options) => {
+        const isWeak = appShellStore.state.syncStatus === "degraded";
+        const timeoutMs = isWeak ? WEAK_LINK_TIMEOUT_MS : NORMAL_LINK_TIMEOUT_MS;
         let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
         try {
           return await Promise.race([
             fetch(url, options),
             new Promise<Response>((_, reject) => {
-              timeoutHandle = setTimeout(() => reject(new Error("Network request timed out")), 15_000);
+              timeoutHandle = setTimeout(() => reject(new Error("Network request timed out")), timeoutMs);
             }),
           ]);
         } finally {
