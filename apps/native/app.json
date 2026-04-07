@@ -61,7 +61,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "experiments": {
       "typedRoutes": true
     },
